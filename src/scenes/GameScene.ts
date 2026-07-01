@@ -145,14 +145,15 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const projectile = this.projectiles.find((candidate) => !candidate.isActive);
+    const [leftProjectile, rightProjectile] = this.projectiles.filter((candidate) => !candidate.isActive);
 
-    if (!projectile) {
+    if (!leftProjectile || !rightProjectile) {
       return;
     }
 
-    const muzzle = this.player.getMuzzlePosition();
-    projectile.spawn(muzzle.x, muzzle.y, this.player.rotation);
+    const [leftMuzzle, rightMuzzle] = this.player.getMuzzlePositions();
+    leftProjectile.spawn(leftMuzzle.x, leftMuzzle.y, this.player.rotation);
+    rightProjectile.spawn(rightMuzzle.x, rightMuzzle.y, this.player.rotation);
     this.lastFireAt = time;
   }
 

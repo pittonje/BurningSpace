@@ -42,6 +42,7 @@ export class Projectile {
     this.ageMs += deltaMs;
     this.body.x += this.velocityX * deltaSeconds;
     this.body.y += this.velocityY * deltaSeconds;
+    this.redraw();
 
     if (
       this.ageMs >= PROJECTILE_LIFETIME_MS ||
@@ -65,16 +66,32 @@ export class Projectile {
   }
 
   private redraw(): void {
+    const agePercent = Phaser.Math.Clamp(this.ageMs / PROJECTILE_LIFETIME_MS, 0, 1);
+    const alpha = 1 - agePercent * 0.28;
+    const pulse = 0.8 + Math.sin(agePercent * Math.PI * 8) * 0.08;
+
     this.body.clear();
-    this.body.lineStyle(12, 0x38bdf8, 0.18);
+    this.body.lineStyle(18, 0xef4444, 0.1 * alpha);
     this.body.beginPath();
-    this.body.moveTo(-30, 0);
-    this.body.lineTo(6, 0);
+    this.body.moveTo(-42, 0);
+    this.body.lineTo(20, 0);
     this.body.strokePath();
 
-    this.body.fillStyle(0xe0f2fe, 1);
-    this.body.fillCircle(10, 0, 4);
-    this.body.fillStyle(0x38bdf8, 0.55);
-    this.body.fillCircle(5, 0, 9);
+    this.body.lineStyle(8 * pulse, 0xff1f1f, 0.46 * alpha);
+    this.body.beginPath();
+    this.body.moveTo(-36, 0);
+    this.body.lineTo(22, 0);
+    this.body.strokePath();
+
+    this.body.lineStyle(3, 0xfff1f2, 0.92 * alpha);
+    this.body.beginPath();
+    this.body.moveTo(-24, 0);
+    this.body.lineTo(24, 0);
+    this.body.strokePath();
+
+    this.body.fillStyle(0xfff1f2, 0.95 * alpha);
+    this.body.fillCircle(25, 0, 3.5);
+    this.body.fillStyle(0xef4444, 0.48 * alpha);
+    this.body.fillCircle(20, 0, 9);
   }
 }

@@ -1,18 +1,29 @@
 import Phaser from 'phaser';
-import {
-  CENTRAL_ZONE_RADIUS,
-  GRID_STEP,
-  MAP_PADDING,
-  WORLD_HEIGHT,
-  WORLD_WIDTH
-} from '../config/gameConfig';
+import { WORLD_HEIGHT, WORLD_WIDTH } from '../config/gameConfig';
 
-type Nebula = {
-  x: number;
-  y: number;
-  radius: number;
+const STATION_COORDINATE_SIZE = 1254;
+const STATION_REFERENCE_DISPLAY_SIZE = 2050;
+const STATION_DISPLAY_SIZE = 1500;
+const STATION_EDGE_OVERHANG = 190;
+
+type StationFrame = {
+  left: number;
+  top: number;
+  size: number;
+};
+
+type FactionVisuals = {
   color: number;
-  alpha: number;
+  turretKey: string;
+};
+
+type TurretLayout = {
+  sourceX: number;
+  sourceY: number;
+  displayWidth: number;
+  baseAngle: number;
+  sweep: number;
+  delay: number;
 };
 
 export class SpaceMap {
@@ -27,463 +38,156 @@ export class SpaceMap {
 
   create(): void {
     this.createBackground();
-    this.createNebulae();
-    this.createBaseSpaceFields();
-    this.createGrid();
-    this.createBasesAndCenter();
-    this.createBorder();
+    this.createStationBases();
   }
 
   private createBackground(): void {
-    const background = this.scene.add.rectangle(
-      WORLD_WIDTH / 2,
-      WORLD_HEIGHT / 2,
-      WORLD_WIDTH,
-      WORLD_HEIGHT,
-      0x030712
-    );
-    background.setDepth(-100);
+    const background = this.scene.add.image(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 'space-background');
+    background
+      .setDepth(-100)
+      .setDisplaySize(WORLD_WIDTH, WORLD_HEIGHT);
 
-    const starfield = this.scene.add.tileSprite(
-      WORLD_WIDTH / 2,
-      WORLD_HEIGHT / 2,
-      WORLD_WIDTH,
-      WORLD_HEIGHT,
-      'starfield-tile'
-    );
-    starfield.setDepth(-95).setAlpha(0.94);
-
-    this.worldLayer.add([background, starfield]);
+    this.worldLayer.add(background);
   }
 
-  private createNebulae(): void {
-    const nebulae: Nebula[] = [
-      { x: 2450, y: 3600, radius: 900, color: 0x7c3aed, alpha: 0.08 },
-      { x: 6400, y: 5200, radius: 1200, color: 0x0891b2, alpha: 0.07 },
-      { x: 8750, y: 2700, radius: 820, color: 0xf97316, alpha: 0.045 },
-      { x: 9700, y: 8600, radius: 1040, color: 0x2563eb, alpha: 0.07 },
-      { x: 4200, y: 9450, radius: 780, color: 0x16a34a, alpha: 0.045 }
-    ];
+  private createStationBases(): void {
+    this.drawRedStation();
+    this.drawBlueStation();
+  }
 
-    const random = new Phaser.Math.RandomDataGenerator(['burning-space-nebulae']);
-    const graphics = this.scene.add.graphics();
-    graphics.setDepth(-35);
+  private drawRedStation(): void {
+    const frame = {
+      left: -STATION_EDGE_OVERHANG,
+      top: -STATION_EDGE_OVERHANG,
+      size: STATION_DISPLAY_SIZE
+    };
+    const station = this.scene.add.image(frame.left, frame.top, 'red-station-base');
+    station
+      .setDepth(-12)
+      .setOrigin(0, 0)
+      .setDisplaySize(frame.size, frame.size)
+      .setAlpha(0.98);
 
-    for (const nebula of nebulae) {
-      for (let ring = 0; ring < 16; ring += 1) {
-        const offsetX = random.realInRange(-nebula.radius * 0.35, nebula.radius * 0.35);
-        const offsetY = random.realInRange(-nebula.radius * 0.35, nebula.radius * 0.35);
-        const radius = nebula.radius * random.realInRange(0.18, 0.48);
-        const alpha = nebula.alpha * random.realInRange(0.35, 1);
+    this.worldLayer.add(station);
+    this.createStationAnimations(frame, {
+      color: 0xff3333,
+      turretKey: 'red-deck-turret'
+    }, {
+      beacon: [650, 305],
+      turrets: [
+        { sourceX: 690, sourceY: 675, displayWidth: 260, baseAngle: 0, sweep: 4, delay: 0 }
+      ]
+    });
+  }
 
-        graphics.fillStyle(nebula.color, alpha);
-        graphics.fillCircle(nebula.x + offsetX, nebula.y + offsetY, radius);
-      }
+  private drawBlueStation(): void {
+    const frame = {
+      left: WORLD_WIDTH + STATION_EDGE_OVERHANG - STATION_DISPLAY_SIZE,
+      top: WORLD_HEIGHT + STATION_EDGE_OVERHANG - STATION_DISPLAY_SIZE,
+      size: STATION_DISPLAY_SIZE
+    };
+    const station = this.scene.add.image(
+      WORLD_WIDTH + STATION_EDGE_OVERHANG,
+      WORLD_HEIGHT + STATION_EDGE_OVERHANG,
+      'blue-station-base'
+    );
+    station
+      .setDepth(-12)
+      .setOrigin(1, 1)
+      .setDisplaySize(frame.size, frame.size)
+      .setAlpha(0.98);
+
+    this.worldLayer.add(station);
+    this.createStationAnimations(frame, {
+      color: 0x12cfff,
+      turretKey: 'blue-deck-turret'
+    }, {
+      beacon: [792, 337],
+      turrets: [
+        { sourceX: 800, sourceY: 898, displayWidth: 260, baseAngle: 0, sweep: 4, delay: 240 },
+        { sourceX: 224, sourceY: 390, displayWidth: 190, baseAngle: 0, sweep: 3, delay: 860 }
+      ]
+    });
+  }
+
+  private createStationAnimations(
+    frame: StationFrame,
+    visuals: FactionVisuals,
+    layout: {
+      beacon: [number, number];
+      turrets: TurretLayout[];
     }
+  ): void {
+    this.createBeaconPulse(frame, layout.beacon[0], layout.beacon[1], visuals.color);
 
-    this.worldLayer.add(graphics);
-  }
-
-  private createBaseSpaceFields(): void {
-    this.drawBaseSpaceTexture({
-      textureKey: 'red-base-space',
-      x: 680,
-      y: 570,
-      displayWidth: 2450,
-      displayHeight: 1740,
-      alpha: 0.66,
-      angle: -8
-    });
-
-    this.drawBaseSpaceTexture({
-      textureKey: 'blue-base-space',
-      x: WORLD_WIDTH - 760,
-      y: WORLD_HEIGHT - 660,
-      displayWidth: 2550,
-      displayHeight: 1820,
-      alpha: 0.68,
-      angle: 172
+    layout.turrets.forEach((turret) => {
+      this.createDeckTurret(frame, turret, visuals.turretKey);
     });
   }
 
-  private drawBaseSpaceTexture({
-    textureKey,
-    x,
-    y,
-    displayWidth,
-    displayHeight,
-    alpha,
-    angle
-  }: {
-    textureKey: string;
-    x: number;
-    y: number;
-    displayWidth: number;
-    displayHeight: number;
-    alpha: number;
-    angle: number;
-  }): void {
-    const space = this.scene.add.image(x, y, textureKey);
-    space
-      .setDepth(-88)
-      .setDisplaySize(displayWidth, displayHeight)
-      .setAlpha(alpha)
-      .setAngle(angle)
+  private createBeaconPulse(
+    frame: StationFrame,
+    sourceX: number,
+    sourceY: number,
+    color: number
+  ): void {
+    const scale = frame.size / STATION_REFERENCE_DISPLAY_SIZE;
+    const position = this.texturePointToWorld(frame, sourceX, sourceY);
+    const pulse = this.scene.add.circle(position.x, position.y, 38 * scale, color, 0.18);
+    pulse
+      .setDepth(-5)
       .setBlendMode(Phaser.BlendModes.ADD);
 
     this.scene.tweens.add({
-      targets: space,
-      alpha: { from: alpha * 0.82, to: alpha },
-      duration: 5600,
+      targets: pulse,
+      alpha: { from: 0.08, to: 0.26 },
+      scale: { from: 0.82, to: 1.22 },
+      duration: 1250,
       ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1
+      repeat: -1,
+      yoyo: true
     });
 
-    this.worldLayer.add(space);
+    this.worldLayer.add(pulse);
   }
 
-  private createGrid(): void {
-    const graphics = this.scene.add.graphics();
-    graphics.setDepth(-25);
-    graphics.lineStyle(1, 0x1f2937, 0.38);
-
-    for (let x = GRID_STEP; x < WORLD_WIDTH; x += GRID_STEP) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    }
-
-    for (let y = GRID_STEP; y < WORLD_HEIGHT; y += GRID_STEP) {
-      graphics.lineBetween(0, y, WORLD_WIDTH, y);
-    }
-
-    graphics.lineStyle(2, 0x475569, 0.48);
-    for (let x = GRID_STEP * 3; x < WORLD_WIDTH; x += GRID_STEP * 3) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    }
-
-    for (let y = GRID_STEP * 3; y < WORLD_HEIGHT; y += GRID_STEP * 3) {
-      graphics.lineBetween(0, y, WORLD_WIDTH, y);
-    }
-
-    this.worldLayer.add(graphics);
-  }
-
-  private createBasesAndCenter(): void {
-    const graphics = this.scene.add.graphics();
-    graphics.setDepth(-10);
-
-    this.drawRedBase();
-    this.drawBlueBase();
-
-    graphics.lineStyle(3, 0xf8fafc, 0.26);
-    graphics.fillStyle(0xf8fafc, 0.035);
-    graphics.strokeCircle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, CENTRAL_ZONE_RADIUS);
-    graphics.fillCircle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, CENTRAL_ZONE_RADIUS);
-
-    graphics.lineStyle(1, 0xf8fafc, 0.24);
-    graphics.lineBetween(WORLD_WIDTH / 2 - 120, WORLD_HEIGHT / 2, WORLD_WIDTH / 2 + 120, WORLD_HEIGHT / 2);
-    graphics.lineBetween(WORLD_WIDTH / 2, WORLD_HEIGHT / 2 - 120, WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 120);
-
-    const label = this.scene.add
-      .text(WORLD_WIDTH / 2, WORLD_HEIGHT / 2 - CENTRAL_ZONE_RADIUS - 80, 'NEUTRAL CORE', {
-        color: '#e5e7eb',
-        fontFamily: 'ui-monospace, monospace',
-        fontSize: '34px',
-        letterSpacing: 2
-      })
-      .setOrigin(0.5)
-      .setAlpha(0.62)
-      .setDepth(-8);
-
-    this.worldLayer.add([graphics, label]);
-  }
-
-  private createBorder(): void {
-    const graphics = this.scene.add.graphics();
-    graphics.setDepth(-5);
-
-    graphics.lineStyle(12, 0x020617, 0.92);
-    graphics.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    graphics.lineStyle(4, 0x0f172a, 0.95);
-    graphics.strokeRect(7, 7, WORLD_WIDTH - 14, WORLD_HEIGHT - 14);
-    graphics.lineStyle(18, 0x38bdf8, 0.045);
-    graphics.strokeRect(14, 14, WORLD_WIDTH - 28, WORLD_HEIGHT - 28);
-    graphics.lineStyle(2, 0x1e3a5f, 0.34);
-    graphics.strokeRect(23, 23, WORLD_WIDTH - 46, WORLD_HEIGHT - 46);
-
-    this.worldLayer.add(graphics);
-  }
-
-  private drawRedBase(): void {
-    const sourceWidth = 1672;
-    const sourceHeight = 941;
-    const displayWidth = 1450;
-    const displayHeight = 816;
-    const imageLeft = -70;
-    const imageTop = -18;
-    const toWorld = (sourceX: number, sourceY: number): Phaser.Math.Vector2 =>
-      new Phaser.Math.Vector2(
-        imageLeft + (sourceX / sourceWidth) * displayWidth,
-        imageTop + (sourceY / sourceHeight) * displayHeight
-      );
-    const commandCore = toWorld(475, 380);
-    const beaconPad = toWorld(650, 255);
-    const beaconTop = toWorld(650, 128);
-    const glow = this.scene.add.ellipse(MAP_PADDING - 30, MAP_PADDING - 10, 1260, 710, 0xef4444, 0.065);
-    glow.setDepth(-14).setBlendMode(Phaser.BlendModes.ADD);
-
-    const base = this.scene.add.image(imageLeft, imageTop, 'red-base');
-    base
-      .setDepth(-12)
-      .setOrigin(0, 0)
+  private createDeckTurret(
+    frame: StationFrame,
+    layout: TurretLayout,
+    textureKey: string
+  ): void {
+    const scale = frame.size / STATION_REFERENCE_DISPLAY_SIZE;
+    const position = this.texturePointToWorld(frame, layout.sourceX, layout.sourceY);
+    const source = this.scene.textures.get(textureKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+    const displayWidth = layout.displayWidth * scale;
+    const displayHeight = displayWidth * (source.height / source.width);
+    const turret = this.scene.add.image(position.x, position.y, textureKey);
+    turret
+      .setDepth(-4)
+      .setOrigin(0.5, 0.58)
       .setDisplaySize(displayWidth, displayHeight)
-      .setAlpha(0.97);
+      .setAngle(layout.baseAngle);
 
-    const coreGlow = this.scene.add.circle(commandCore.x, commandCore.y, 96, 0xef4444, 0.12);
-    coreGlow.setDepth(-9).setBlendMode(Phaser.BlendModes.ADD);
-
-    const beaconBeam = this.scene.add.graphics().setDepth(-9);
-    beaconBeam.fillStyle(0xef4444, 0.2);
-    beaconBeam.fillTriangle(
-      beaconPad.x,
-      beaconPad.y,
-      beaconTop.x - 85,
-      beaconTop.y,
-      beaconTop.x + 85,
-      beaconTop.y
-    );
-    beaconBeam.setBlendMode(Phaser.BlendModes.ADD);
-
-    const beaconRings = [
-      this.scene.add.ellipse(beaconTop.x, beaconTop.y, 220, 52),
-      this.scene.add.ellipse(beaconTop.x, beaconTop.y + 62, 170, 40)
-    ];
-    for (const ring of beaconRings) {
-      ring
-        .setDepth(-8)
-        .setStrokeStyle(3, 0xef4444, 0.45)
-        .setBlendMode(Phaser.BlendModes.ADD);
-    }
-
-    const beaconCore = this.scene.add.circle(beaconPad.x, beaconPad.y - 10, 34, 0xfca5a5, 0.26);
-    beaconCore.setDepth(-8).setBlendMode(Phaser.BlendModes.ADD);
-
-    const lightPoints = [
-      { position: toWorld(215, 318), radius: 14 },
-      { position: toWorld(430, 300), radius: 13 },
-      { position: toWorld(790, 440), radius: 13 },
-      { position: toWorld(900, 545), radius: 15 },
-      { position: toWorld(525, 720), radius: 13 },
-      { position: toWorld(320, 650), radius: 14 },
-      { position: toWorld(760, 632), radius: 12 }
-    ].map((point) => {
-      const light = this.scene.add.circle(point.position.x, point.position.y, point.radius, 0xef4444, 0.22);
-      light.setDepth(-8).setBlendMode(Phaser.BlendModes.ADD);
-      return light;
-    });
+    this.worldLayer.add(turret);
 
     this.scene.tweens.add({
-      targets: glow,
-      alpha: { from: 0.035, to: 0.11 },
-      scaleX: { from: 0.98, to: 1.04 },
-      scaleY: { from: 0.98, to: 1.05 },
-      duration: 2700,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1
-    });
-
-    this.scene.tweens.add({
-      targets: coreGlow,
-      alpha: { from: 0.08, to: 0.22 },
-      scale: { from: 0.88, to: 1.18 },
-      duration: 1280,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1
-    });
-
-    this.scene.tweens.add({
-      targets: beaconBeam,
-      alpha: { from: 0.28, to: 0.72 },
-      duration: 1700,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1
-    });
-
-    this.scene.tweens.add({
-      targets: beaconRings,
-      alpha: { from: 0.34, to: 0.82 },
-      scaleX: { from: 0.9, to: 1.08 },
-      scaleY: { from: 0.9, to: 1.08 },
-      duration: 2050,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1
-    });
-
-    this.scene.tweens.add({
-      targets: beaconCore,
-      alpha: { from: 0.18, to: 0.42 },
-      scale: { from: 0.85, to: 1.25 },
-      duration: 910,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1
-    });
-
-    lightPoints.forEach((light, index) => {
-      this.scene.tweens.add({
-        targets: light,
-        alpha: { from: 0.12, to: 0.45 },
-        scale: { from: 0.72, to: 1.28 },
-        duration: 850 + index * 170,
-        delay: index * 120,
-        ease: 'Sine.easeInOut',
-        yoyo: true,
-        repeat: -1
-      });
-    });
-
-    this.worldLayer.add([glow, base, coreGlow, beaconBeam, beaconCore, ...beaconRings, ...lightPoints]);
-  }
-
-  private drawBlueBase(): void {
-    const x = WORLD_WIDTH - MAP_PADDING;
-    const y = WORLD_HEIGHT - MAP_PADDING;
-    const sourceWidth = 1535;
-    const sourceHeight = 1024;
-    const displayWidth = 1350;
-    const displayHeight = 900;
-    const imageRight = WORLD_WIDTH + 140;
-    const imageBottom = WORLD_HEIGHT + 70;
-    const imageLeft = imageRight - displayWidth;
-    const imageTop = imageBottom - displayHeight;
-    const toWorld = (sourceX: number, sourceY: number): Phaser.Math.Vector2 =>
-      new Phaser.Math.Vector2(
-        imageLeft + (sourceX / sourceWidth) * displayWidth,
-        imageTop + (sourceY / sourceHeight) * displayHeight
-      );
-    const commandCore = toWorld(1010, 570);
-    const beaconPad = toWorld(1220, 585);
-    const beaconTop = toWorld(1220, 405);
-    const glow = this.scene.add.ellipse(x + 170, y + 110, 1500, 740, 0x0ea5e9, 0.07);
-    glow.setDepth(-14).setBlendMode(Phaser.BlendModes.ADD);
-
-    const base = this.scene.add.image(imageRight, imageBottom, 'blue-base');
-    base
-      .setDepth(-12)
-      .setOrigin(1, 1)
-      .setDisplaySize(displayWidth, displayHeight)
-      .setAlpha(0.97);
-
-    const coreGlow = this.scene.add.circle(commandCore.x, commandCore.y, 96, 0x38bdf8, 0.12);
-    coreGlow.setDepth(-9).setBlendMode(Phaser.BlendModes.ADD);
-
-    const beaconBeam = this.scene.add.graphics().setDepth(-9);
-    beaconBeam.fillStyle(0x38bdf8, 0.2);
-    beaconBeam.fillTriangle(
-      beaconPad.x,
-      beaconPad.y,
-      beaconTop.x - 85,
-      beaconTop.y,
-      beaconTop.x + 85,
-      beaconTop.y
-    );
-    beaconBeam.setBlendMode(Phaser.BlendModes.ADD);
-
-    const beaconRings = [
-      this.scene.add.ellipse(beaconTop.x, beaconTop.y, 220, 52),
-      this.scene.add.ellipse(beaconTop.x, beaconTop.y + 66, 170, 40)
-    ];
-    for (const ring of beaconRings) {
-      ring
-        .setDepth(-8)
-        .setStrokeStyle(3, 0x38bdf8, 0.45)
-        .setBlendMode(Phaser.BlendModes.ADD);
-    }
-
-    const beaconCore = this.scene.add.circle(beaconPad.x, beaconPad.y - 16, 34, 0x67e8f9, 0.26);
-    beaconCore.setDepth(-8).setBlendMode(Phaser.BlendModes.ADD);
-
-    const lightPoints = [
-      { position: toWorld(610, 810), radius: 15 },
-      { position: toWorld(725, 785), radius: 12 },
-      { position: toWorld(1070, 930), radius: 14 },
-      { position: toWorld(1390, 760), radius: 12 },
-      { position: toWorld(1460, 565), radius: 16 },
-      { position: toWorld(900, 520), radius: 10 }
-    ].map((point) => {
-      const light = this.scene.add.circle(point.position.x, point.position.y, point.radius, 0x38bdf8, 0.22);
-      light.setDepth(-8).setBlendMode(Phaser.BlendModes.ADD);
-      return light;
-    });
-
-    this.scene.tweens.add({
-      targets: glow,
-      alpha: { from: 0.04, to: 0.12 },
-      scaleX: { from: 0.98, to: 1.04 },
-      scaleY: { from: 0.98, to: 1.05 },
+      targets: turret,
+      angle: {
+        from: layout.baseAngle - layout.sweep,
+        to: layout.baseAngle + layout.sweep
+      },
       duration: 2600,
+      delay: layout.delay,
       ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1
+      repeat: -1,
+      yoyo: true
     });
+  }
 
-    this.scene.tweens.add({
-      targets: coreGlow,
-      alpha: { from: 0.08, to: 0.22 },
-      scale: { from: 0.88, to: 1.18 },
-      duration: 1350,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1
-    });
-
-    this.scene.tweens.add({
-      targets: beaconBeam,
-      alpha: { from: 0.28, to: 0.72 },
-      duration: 1800,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1
-    });
-
-    this.scene.tweens.add({
-      targets: beaconRings,
-      alpha: { from: 0.34, to: 0.82 },
-      scaleX: { from: 0.9, to: 1.08 },
-      scaleY: { from: 0.9, to: 1.08 },
-      duration: 2100,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1
-    });
-
-    this.scene.tweens.add({
-      targets: beaconCore,
-      alpha: { from: 0.18, to: 0.42 },
-      scale: { from: 0.85, to: 1.25 },
-      duration: 950,
-      ease: 'Sine.easeInOut',
-      yoyo: true,
-      repeat: -1
-    });
-
-    lightPoints.forEach((light, index) => {
-      this.scene.tweens.add({
-        targets: light,
-        alpha: { from: 0.12, to: 0.45 },
-        scale: { from: 0.72, to: 1.28 },
-        duration: 900 + index * 180,
-        delay: index * 130,
-        ease: 'Sine.easeInOut',
-        yoyo: true,
-        repeat: -1
-      });
-    });
-
-    this.worldLayer.add([glow, base, coreGlow, beaconBeam, beaconCore, ...beaconRings, ...lightPoints]);
+  private texturePointToWorld(frame: StationFrame, sourceX: number, sourceY: number): Phaser.Math.Vector2 {
+    return new Phaser.Math.Vector2(
+      frame.left + (sourceX / STATION_COORDINATE_SIZE) * frame.size,
+      frame.top + (sourceY / STATION_COORDINATE_SIZE) * frame.size
+    );
   }
 }
