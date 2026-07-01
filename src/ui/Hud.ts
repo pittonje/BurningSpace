@@ -13,13 +13,15 @@ export type HudState = {
   x: number;
   y: number;
   speed: number;
+  health: number;
+  maxHealth: number;
   weaponCooldownRemainingMs: number;
   fps: number;
 };
 
 const PANEL_MARGIN = 18;
 const PANEL_WIDTH = 360;
-const PANEL_HEIGHT = 204;
+const PANEL_HEIGHT = 220;
 
 export class Hud {
   private readonly scene: Phaser.Scene;
@@ -27,6 +29,7 @@ export class Hud {
   private readonly panel: Phaser.GameObjects.Graphics;
   private readonly titleText: Phaser.GameObjects.Text;
   private readonly statusText: Phaser.GameObjects.Text;
+  private readonly healthBar: Phaser.GameObjects.Graphics;
   private readonly controlsText: Phaser.GameObjects.Text;
   private readonly minimap: Phaser.GameObjects.Graphics;
   private readonly bigMap: Phaser.GameObjects.Graphics;
@@ -41,6 +44,7 @@ export class Hud {
     this.panel = scene.add.graphics();
     this.titleText = scene.add.text(0, 0, 'BurningSpace', this.titleStyle());
     this.statusText = scene.add.text(0, 0, '', this.statusStyle());
+    this.healthBar = scene.add.graphics();
     this.controlsText = scene.add.text(0, 0, 'WASD move\nMouse aim / LMB fire\nM map / F1 debug\nP admin', {
       color: '#cbd5e1',
       fontFamily: 'ui-monospace, monospace',
@@ -51,7 +55,7 @@ export class Hud {
     this.minimap = scene.add.graphics();
     this.bigMap = scene.add.graphics().setScrollFactor(0).setDepth(999).setVisible(false);
 
-    this.container.add([this.panel, this.titleText, this.statusText, this.controlsText, this.minimap]);
+    this.container.add([this.panel, this.titleText, this.statusText, this.healthBar, this.controlsText, this.minimap]);
     this.layout();
   }
 
@@ -78,7 +82,7 @@ export class Hud {
       `Speed ${formatInteger(state.speed)} u/s`,
       `Coords ${formatInteger(state.x)} : ${formatInteger(state.y)}`,
       `Weapon ${ready ? 'READY' : `${Math.round(cooldownPercent * 100)}%`}`,
-      'Hull 100 / 100'
+      `HP: ${Math.ceil(state.health)} / ${state.maxHealth}`
     ];
 
     if (this.debugVisible) {
@@ -87,6 +91,7 @@ export class Hud {
 
     this.statusText.setText(lines.join('\n'));
     this.drawPanel();
+    this.drawHealthBar(state.health, state.maxHealth);
     this.drawMinimap(state);
     this.drawBigMap(state);
   }
@@ -99,7 +104,8 @@ export class Hud {
     this.drawPanel();
     this.titleText.setPosition(14, 10);
     this.statusText.setPosition(14, 38);
-    this.controlsText.setPosition(14, 126);
+    this.healthBar.setPosition(14, 120);
+    this.controlsText.setPosition(14, 146);
     this.minimap.setPosition(200, 32);
     this.drawBigMapLabels();
   }
@@ -119,6 +125,21 @@ export class Hud {
     this.panel.fillRoundedRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT, 8);
     this.panel.lineStyle(1, 0x38bdf8, 0.32);
     this.panel.strokeRoundedRect(0.5, 0.5, PANEL_WIDTH - 1, PANEL_HEIGHT - 1, 8);
+  }
+
+  private drawHealthBar(health: number, maxHealth: number): void {
+    const width = 156;
+    const height = 9;
+    const percent = Phaser.Math.Clamp(health / maxHealth, 0, 1);
+    const fillColor = percent > 0.55 ? 0x22c55e : percent > 0.25 ? 0xfacc15 : 0xef4444;
+
+    this.healthBar.clear();
+    this.healthBar.fillStyle(0x020617, 0.86);
+    this.healthBar.fillRoundedRect(0, 0, width, height, 3);
+    this.healthBar.fillStyle(fillColor, 0.95);
+    this.healthBar.fillRoundedRect(1, 1, Math.max(0, (width - 2) * percent), height - 2, 3);
+    this.healthBar.lineStyle(1, 0xe2e8f0, 0.32);
+    this.healthBar.strokeRoundedRect(0, 0, width, height, 3);
   }
 
   private drawMinimap(state: HudState): void {

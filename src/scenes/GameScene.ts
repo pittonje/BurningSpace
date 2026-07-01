@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import {
   CAMERA_LERP,
   CAMERA_ZOOM,
+  ASTEROID_COLLISION_DAMAGE,
+  ASTEROID_PROJECTILE_DAMAGE,
   FIRE_COOLDOWN_MS,
   PLAYER_SPAWN_X,
   PLAYER_SPAWN_Y,
@@ -11,8 +13,10 @@ import {
 } from '../config/gameConfig';
 import { PlayerShip, type MovementInput } from '../entities/PlayerShip';
 import { Projectile } from '../entities/Projectile';
+import { AsteroidManager } from '../systems/AsteroidManager';
 import { AdminPanel } from '../ui/AdminPanel';
 import { Hud } from '../ui/Hud';
+import { circlesOverlap } from '../utils/math';
 import { SpaceMap } from '../world/SpaceMap';
 
 export class GameScene extends Phaser.Scene {
@@ -27,7 +31,10 @@ export class GameScene extends Phaser.Scene {
   private player?: PlayerShip;
   private hud?: Hud;
   private adminPanel?: AdminPanel;
+  private asteroidManager?: AsteroidManager;
   private projectiles: Projectile[] = [];
+  private playerAsteroidContacts = new Set<number>();
+  private nextPlayerAsteroidContacts = new Set<number>();
   private lastFireAt = -FIRE_COOLDOWN_MS;
   private debugVisible = false;
 
@@ -45,6 +52,8 @@ export class GameScene extends Phaser.Scene {
 
     this.player = new PlayerShip(this, PLAYER_SPAWN_X, PLAYER_SPAWN_Y);
     this.projectiles = Array.from({ length: PROJECTILE_POOL_SIZE }, () => new Projectile(this));
+    this.asteroidManager = new AsteroidManager(this);
+    this.asteroidManager.createInitialField(this.player.x, this.player.y);
     this.hud = new Hud(this);
     this.adminPanel = new AdminPanel(this, this.player.speedLimit, (speedLimit) => {
       this.player?.setSpeedLimit(speedLimit);
@@ -65,10 +74,14 @@ export class GameScene extends Phaser.Scene {
     const deltaSeconds = deltaMs / 1000;
     const adminPanelOpen = Boolean(this.adminPanel?.isVisible);
     const pointerWorld = adminPanelOpen ? this.getCurrentFacingPoint() : this.getPointerWorldPosition();
+    const movementInput = adminPanelOpen || !this.player.isAlive
+      ? this.getDisabledMovementInput()
+      : this.getMovementInput();
 
-    this.player.update(adminPanelOpen ? this.getDisabledMovementInput() : this.getMovementInput(), pointerWorld, deltaSeconds);
+    this.player.update(movementInput, pointerWorld, deltaSeconds);
 
     if (
+      this.player.isAlive &&
       !adminPanelOpen &&
       this.input.activePointer.leftButtonDown() &&
       !this.adminPanel?.blocksPointer()
@@ -80,12 +93,17 @@ export class GameScene extends Phaser.Scene {
       projectile.update(deltaSeconds, deltaMs);
     }
 
+    this.asteroidManager?.update(deltaSeconds);
+    this.handleProjectileAsteroidCollisions();
+    this.handlePlayerAsteroidCollisions();
     this.updateCamera(deltaSeconds);
 
     this.hud.update({
       x: this.player.x,
       y: this.player.y,
       speed: this.player.speed,
+      health: this.player.health,
+      maxHealth: this.player.maxHealth,
       weaponCooldownRemainingMs: Math.max(0, FIRE_COOLDOWN_MS - (time - this.lastFireAt)),
       fps: this.game.loop.actualFps
     });
@@ -141,7 +159,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private tryFire(time: number): void {
-    if (!this.player || time - this.lastFireAt < FIRE_COOLDOWN_MS) {
+    if (!this.player || !this.player.isAlive || time - this.lastFireAt < FIRE_COOLDOWN_MS) {
       return;
     }
 
@@ -155,6 +173,83 @@ export class GameScene extends Phaser.Scene {
     leftProjectile.spawn(leftMuzzle.x, leftMuzzle.y, this.player.rotation);
     rightProjectile.spawn(rightMuzzle.x, rightMuzzle.y, this.player.rotation);
     this.lastFireAt = time;
+  }
+
+  private handleProjectileAsteroidCollisions(): void {
+    if (!this.asteroidManager || !this.player) {
+      return;
+    }
+
+    for (const projectile of this.projectiles) {
+      if (!projectile.isActive) {
+        continue;
+      }
+
+      for (const asteroid of this.asteroidManager.activeAsteroids) {
+        if (
+          !asteroid.isAlive ||
+          !circlesOverlap(
+            projectile.x,
+            projectile.y,
+            projectile.collisionRadius,
+            asteroid.x,
+            asteroid.y,
+            asteroid.radius
+          )
+        ) {
+          continue;
+        }
+
+        projectile.despawn();
+        asteroid.takeDamage(ASTEROID_PROJECTILE_DAMAGE);
+
+        if (!asteroid.isAlive) {
+          this.asteroidManager.scheduleRespawn(asteroid, () => ({
+            x: this.player?.x ?? PLAYER_SPAWN_X,
+            y: this.player?.y ?? PLAYER_SPAWN_Y
+          }));
+        }
+
+        break;
+      }
+    }
+  }
+
+  private handlePlayerAsteroidCollisions(): void {
+    if (!this.asteroidManager || !this.player || !this.player.isAlive) {
+      this.playerAsteroidContacts.clear();
+      this.nextPlayerAsteroidContacts.clear();
+      return;
+    }
+
+    this.nextPlayerAsteroidContacts.clear();
+
+    for (const asteroid of this.asteroidManager.activeAsteroids) {
+      if (!asteroid.isAlive) {
+        continue;
+      }
+
+      const combinedRadius = this.player.collisionRadius + asteroid.radius;
+
+      if (!circlesOverlap(this.player.x, this.player.y, this.player.collisionRadius, asteroid.x, asteroid.y, asteroid.radius)) {
+        continue;
+      }
+
+      this.nextPlayerAsteroidContacts.add(asteroid.id);
+      this.player.separateFrom(asteroid.x, asteroid.y, combinedRadius);
+
+      if (!this.playerAsteroidContacts.has(asteroid.id)) {
+        const damaged = this.player.takeDamage(ASTEROID_COLLISION_DAMAGE);
+
+        if (damaged) {
+          this.cameras.main.shake(120, 0.004);
+        }
+      }
+    }
+
+    const previousContacts = this.playerAsteroidContacts;
+    this.playerAsteroidContacts = this.nextPlayerAsteroidContacts;
+    this.nextPlayerAsteroidContacts = previousContacts;
   }
 
   private updateCamera(deltaSeconds: number): void {
@@ -195,6 +290,7 @@ export class GameScene extends Phaser.Scene {
     if (this.keyF1 && Phaser.Input.Keyboard.JustDown(this.keyF1)) {
       this.debugVisible = !this.debugVisible;
       this.hud?.setDebugVisible(this.debugVisible);
+      this.asteroidManager?.setDebugVisible(this.debugVisible);
     }
   }
 

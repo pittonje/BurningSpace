@@ -1,11 +1,18 @@
 import Phaser from 'phaser';
 import {
   PLAYER_ACCELERATION,
+  PLAYER_COLLISION_RADIUS,
   PLAYER_DRAG,
+  PLAYER_HEALTH_REGEN_PER_SECOND,
   PLAYER_MAX_SPEED,
+  PLAYER_MAX_HEALTH,
+  PLAYER_RESPAWN_DELAY_MS,
+  PLAYER_RESPAWN_INVULNERABILITY_MS,
   PLAYER_ROTATION_SMOOTHING,
   WORLD_HEIGHT,
-  WORLD_WIDTH
+  WORLD_WIDTH,
+  PLAYER_SPAWN_X,
+  PLAYER_SPAWN_Y
 } from '../config/gameConfig';
 import { approachZero, clamp, magnitude, normalizeVector, shortestAngleStep } from '../utils/math';
 
@@ -17,6 +24,7 @@ export type MovementInput = {
 };
 
 export class PlayerShip {
+  private readonly scene: Phaser.Scene;
   private readonly container: Phaser.GameObjects.Container;
   private readonly shipSprite: Phaser.GameObjects.Image;
   private readonly engineGlow: Phaser.GameObjects.Graphics;
@@ -29,8 +37,12 @@ export class PlayerShip {
   private enginePower = 0;
   private enginePhase = 0;
   private bank = 0;
+  private healthValue = PLAYER_MAX_HEALTH;
+  private alive = true;
+  private invulnerableUntil = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
+    this.scene = scene;
     this.engineGlow = scene.add.graphics();
     this.engineGlow.setBlendMode(Phaser.BlendModes.ADD);
 
@@ -67,12 +79,39 @@ export class PlayerShip {
     return this.maxSpeed;
   }
 
+  get health(): number {
+    return this.healthValue;
+  }
+
+  get maxHealth(): number {
+    return PLAYER_MAX_HEALTH;
+  }
+
+  get isAlive(): boolean {
+    return this.alive;
+  }
+
+  get isInvulnerable(): boolean {
+    return this.scene.time.now < this.invulnerableUntil;
+  }
+
+  get collisionRadius(): number {
+    return PLAYER_COLLISION_RADIUS;
+  }
+
   setSpeedLimit(speedLimit: number): void {
     this.maxSpeed = Math.max(1, speedLimit);
     this.limitSpeed();
   }
 
   update(input: MovementInput, targetWorld: Phaser.Math.Vector2, deltaSeconds: number): void {
+    if (!this.alive) {
+      return;
+    }
+
+    this.regenerate(deltaSeconds);
+    this.updateInvulnerabilityVisual();
+
     const inputX = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const inputY = (input.down ? 1 : 0) - (input.up ? 1 : 0);
     const thrust = normalizeVector(inputX, inputY);
@@ -123,6 +162,65 @@ export class PlayerShip {
     this.redraw();
   }
 
+  takeDamage(amount: number): boolean {
+    if (!this.alive || this.isInvulnerable) {
+      return false;
+    }
+
+    this.healthValue = Math.max(0, this.healthValue - amount);
+    this.flashDamage();
+
+    if (this.healthValue <= 0) {
+      this.die();
+    }
+
+    return true;
+  }
+
+  heal(amount: number): void {
+    if (!this.alive) {
+      return;
+    }
+
+    this.healthValue = Math.min(PLAYER_MAX_HEALTH, this.healthValue + amount);
+  }
+
+  respawn(): void {
+    this.alive = true;
+    this.healthValue = PLAYER_MAX_HEALTH;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.container.setPosition(PLAYER_SPAWN_X, PLAYER_SPAWN_Y);
+    this.container.setVisible(true);
+    this.container.setAlpha(1);
+    this.invulnerableUntil = this.scene.time.now + PLAYER_RESPAWN_INVULNERABILITY_MS;
+  }
+
+  separateFrom(worldX: number, worldY: number, minDistance: number): void {
+    if (!this.alive) {
+      return;
+    }
+
+    const dx = this.container.x - worldX;
+    const dy = this.container.y - worldY;
+    const distance = Math.max(0.001, Math.hypot(dx, dy));
+    const penetration = minDistance - distance;
+
+    if (penetration <= 0) {
+      return;
+    }
+
+    const push = Math.min(36, penetration * 0.45);
+    const normalX = dx / distance;
+    const normalY = dy / distance;
+    this.container.setPosition(
+      clamp(this.container.x + normalX * push, 0, WORLD_WIDTH),
+      clamp(this.container.y + normalY * push, 0, WORLD_HEIGHT)
+    );
+    this.velocityX = approachZero(this.velocityX, Math.abs(this.velocityX) * 0.28 + 18);
+    this.velocityY = approachZero(this.velocityY, Math.abs(this.velocityY) * 0.28 + 18);
+  }
+
   getMuzzlePosition(offset = 74): Phaser.Math.Vector2 {
     return this.localToWorld(offset, 0);
   }
@@ -145,6 +243,77 @@ export class PlayerShip {
     const scale = this.maxSpeed / currentSpeed;
     this.velocityX *= scale;
     this.velocityY *= scale;
+  }
+
+  private regenerate(deltaSeconds: number): void {
+    if (this.healthValue >= PLAYER_MAX_HEALTH) {
+      return;
+    }
+
+    this.healthValue = Math.min(
+      PLAYER_MAX_HEALTH,
+      this.healthValue + PLAYER_HEALTH_REGEN_PER_SECOND * deltaSeconds
+    );
+  }
+
+  private die(): void {
+    if (!this.alive) {
+      return;
+    }
+
+    this.alive = false;
+    this.velocityX = 0;
+    this.velocityY = 0;
+    this.enginePower = 0;
+    this.createDeathEffect();
+    this.container.setVisible(false);
+
+    this.scene.time.delayedCall(PLAYER_RESPAWN_DELAY_MS, () => {
+      this.respawn();
+    });
+  }
+
+  private flashDamage(): void {
+    this.scene.tweens.add({
+      targets: this.shipSprite,
+      alpha: { from: 0.45, to: 1 },
+      duration: 120,
+      ease: 'Sine.easeOut'
+    });
+  }
+
+  private createDeathEffect(): void {
+    const burst = this.scene.add.graphics();
+    burst.setDepth(24);
+    burst.setPosition(this.container.x, this.container.y);
+    burst.setBlendMode(Phaser.BlendModes.ADD);
+    burst.fillStyle(0xfff1f2, 0.9);
+    burst.fillCircle(0, 0, 18);
+    burst.lineStyle(5, 0xef4444, 0.62);
+    burst.strokeCircle(0, 0, 44);
+    burst.lineStyle(2, 0xf97316, 0.74);
+    burst.strokeCircle(0, 0, 70);
+
+    this.scene.tweens.add({
+      targets: burst,
+      alpha: 0,
+      scale: 2.1,
+      duration: 460,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        burst.destroy();
+      }
+    });
+  }
+
+  private updateInvulnerabilityVisual(): void {
+    if (!this.isInvulnerable) {
+      this.container.setAlpha(1);
+      return;
+    }
+
+    const pulse = 0.62 + Math.sin(this.scene.time.now * 0.018) * 0.22;
+    this.container.setAlpha(pulse);
   }
 
   private redraw(): void {

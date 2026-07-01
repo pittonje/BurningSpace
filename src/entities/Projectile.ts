@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   PROJECTILE_LIFETIME_MS,
+  PROJECTILE_COLLISION_RADIUS,
   PROJECTILE_SPEED,
   WORLD_HEIGHT,
   WORLD_WIDTH
@@ -21,6 +22,18 @@ export class Projectile {
 
   get isActive(): boolean {
     return this.active;
+  }
+
+  get x(): number {
+    return this.body.x;
+  }
+
+  get y(): number {
+    return this.body.y;
+  }
+
+  get collisionRadius(): number {
+    return PROJECTILE_COLLISION_RADIUS;
   }
 
   spawn(x: number, y: number, angle: number): void {
