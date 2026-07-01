@@ -11,6 +11,7 @@ import {
 } from '../config/gameConfig';
 import { PlayerShip, type MovementInput } from '../entities/PlayerShip';
 import { Projectile } from '../entities/Projectile';
+import { AdminPanel } from '../ui/AdminPanel';
 import { Hud } from '../ui/Hud';
 import { SpaceMap } from '../world/SpaceMap';
 
@@ -21,9 +22,11 @@ export class GameScene extends Phaser.Scene {
   private keyS?: Phaser.Input.Keyboard.Key;
   private keyD?: Phaser.Input.Keyboard.Key;
   private keyM?: Phaser.Input.Keyboard.Key;
+  private keyP?: Phaser.Input.Keyboard.Key;
   private keyF1?: Phaser.Input.Keyboard.Key;
   private player?: PlayerShip;
   private hud?: Hud;
+  private adminPanel?: AdminPanel;
   private projectiles: Projectile[] = [];
   private lastFireAt = -FIRE_COOLDOWN_MS;
   private debugVisible = false;
@@ -43,6 +46,9 @@ export class GameScene extends Phaser.Scene {
     this.player = new PlayerShip(this, PLAYER_SPAWN_X, PLAYER_SPAWN_Y);
     this.projectiles = Array.from({ length: PROJECTILE_POOL_SIZE }, () => new Projectile(this));
     this.hud = new Hud(this);
+    this.adminPanel = new AdminPanel(this, this.player.speedLimit, (speedLimit) => {
+      this.player?.setSpeedLimit(speedLimit);
+    });
 
     this.setupInput();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
@@ -54,12 +60,19 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.updateToggles();
+
     const deltaSeconds = deltaMs / 1000;
-    const pointerWorld = this.getPointerWorldPosition();
+    const adminPanelOpen = Boolean(this.adminPanel?.isVisible);
+    const pointerWorld = adminPanelOpen ? this.getCurrentFacingPoint() : this.getPointerWorldPosition();
 
-    this.player.update(this.getMovementInput(), pointerWorld, deltaSeconds);
+    this.player.update(adminPanelOpen ? this.getDisabledMovementInput() : this.getMovementInput(), pointerWorld, deltaSeconds);
 
-    if (this.input.activePointer.leftButtonDown()) {
+    if (
+      !adminPanelOpen &&
+      this.input.activePointer.leftButtonDown() &&
+      !this.adminPanel?.blocksPointer()
+    ) {
       this.tryFire(time);
     }
 
@@ -68,7 +81,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.updateCamera(deltaSeconds);
-    this.updateToggles();
 
     this.hud.update({
       x: this.player.x,
@@ -90,6 +102,7 @@ export class GameScene extends Phaser.Scene {
     this.keyS = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyM = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+    this.keyP = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
     this.keyF1 = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F1);
   }
 
@@ -102,9 +115,29 @@ export class GameScene extends Phaser.Scene {
     };
   }
 
+  private getDisabledMovementInput(): MovementInput {
+    return {
+      up: false,
+      down: false,
+      left: false,
+      right: false
+    };
+  }
+
   private getPointerWorldPosition(): Phaser.Math.Vector2 {
     const pointer = this.input.activePointer;
     return this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+  }
+
+  private getCurrentFacingPoint(): Phaser.Math.Vector2 {
+    if (!this.player) {
+      return new Phaser.Math.Vector2(0, 0);
+    }
+
+    return new Phaser.Math.Vector2(
+      this.player.x + Math.cos(this.player.rotation),
+      this.player.y + Math.sin(this.player.rotation)
+    );
   }
 
   private tryFire(time: number): void {
@@ -146,6 +179,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateToggles(): void {
+    if (this.keyP && Phaser.Input.Keyboard.JustDown(this.keyP)) {
+      this.adminPanel?.toggle();
+    }
+
+    if (this.adminPanel?.isVisible) {
+      return;
+    }
+
     if (this.keyM && Phaser.Input.Keyboard.JustDown(this.keyM)) {
       this.hud?.toggleBigMap();
     }
@@ -158,6 +199,7 @@ export class GameScene extends Phaser.Scene {
 
   private handleResize(): void {
     this.hud?.layout();
+    this.adminPanel?.layout();
     this.updateCamera(1 / 60);
   }
 }

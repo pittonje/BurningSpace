@@ -17,6 +17,10 @@ export type HudState = {
   fps: number;
 };
 
+const PANEL_MARGIN = 18;
+const PANEL_WIDTH = 360;
+const PANEL_HEIGHT = 204;
+
 export class Hud {
   private readonly scene: Phaser.Scene;
   private readonly container: Phaser.GameObjects.Container;
@@ -32,12 +36,12 @@ export class Hud {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.container = scene.add.container(18, 18).setScrollFactor(0).setDepth(1000);
+    this.container = scene.add.container(0, 0).setScrollFactor(0).setDepth(1000);
 
     this.panel = scene.add.graphics();
     this.titleText = scene.add.text(0, 0, 'BurningSpace', this.titleStyle());
     this.statusText = scene.add.text(0, 0, '', this.statusStyle());
-    this.controlsText = scene.add.text(0, 0, 'WASD move\nMouse aim / LMB fire\nM map / F1 debug', {
+    this.controlsText = scene.add.text(0, 0, 'WASD move\nMouse aim / LMB fire\nM map / F1 debug\nP admin', {
       color: '#cbd5e1',
       fontFamily: 'ui-monospace, monospace',
       fontSize: '13px',
@@ -88,6 +92,10 @@ export class Hud {
   }
 
   layout(): void {
+    this.container.setPosition(
+      PANEL_MARGIN,
+      Math.max(PANEL_MARGIN, this.scene.scale.height - PANEL_HEIGHT - PANEL_MARGIN)
+    );
     this.drawPanel();
     this.titleText.setPosition(14, 10);
     this.statusText.setPosition(14, 38);
@@ -108,9 +116,9 @@ export class Hud {
   private drawPanel(): void {
     this.panel.clear();
     this.panel.fillStyle(0x020617, 0.68);
-    this.panel.fillRoundedRect(0, 0, 360, 188, 8);
+    this.panel.fillRoundedRect(0, 0, PANEL_WIDTH, PANEL_HEIGHT, 8);
     this.panel.lineStyle(1, 0x38bdf8, 0.32);
-    this.panel.strokeRoundedRect(0.5, 0.5, 359, 187, 8);
+    this.panel.strokeRoundedRect(0.5, 0.5, PANEL_WIDTH - 1, PANEL_HEIGHT - 1, 8);
   }
 
   private drawMinimap(state: HudState): void {

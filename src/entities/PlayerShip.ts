@@ -22,6 +22,7 @@ export class PlayerShip {
   private velocityX = 0;
   private velocityY = 0;
   private thrusting = false;
+  private maxSpeed = PLAYER_MAX_SPEED;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.engineGlow = scene.add.graphics();
@@ -51,17 +52,27 @@ export class PlayerShip {
     return magnitude(this.velocityX, this.velocityY);
   }
 
+  get speedLimit(): number {
+    return this.maxSpeed;
+  }
+
+  setSpeedLimit(speedLimit: number): void {
+    this.maxSpeed = Math.max(1, speedLimit);
+    this.limitSpeed();
+  }
+
   update(input: MovementInput, targetWorld: Phaser.Math.Vector2, deltaSeconds: number): void {
     const inputX = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     const inputY = (input.down ? 1 : 0) - (input.up ? 1 : 0);
     const thrust = normalizeVector(inputX, inputY);
     this.thrusting = thrust.lengthSq() > 0;
+    const speedScale = Math.max(1, Math.sqrt(this.maxSpeed / PLAYER_MAX_SPEED));
 
     if (this.thrusting) {
-      this.velocityX += thrust.x * PLAYER_ACCELERATION * deltaSeconds;
-      this.velocityY += thrust.y * PLAYER_ACCELERATION * deltaSeconds;
+      this.velocityX += thrust.x * PLAYER_ACCELERATION * speedScale * deltaSeconds;
+      this.velocityY += thrust.y * PLAYER_ACCELERATION * speedScale * deltaSeconds;
     } else {
-      const dragAmount = PLAYER_DRAG * deltaSeconds;
+      const dragAmount = PLAYER_DRAG * speedScale * deltaSeconds;
       this.velocityX = approachZero(this.velocityX, dragAmount);
       this.velocityY = approachZero(this.velocityY, dragAmount);
     }
@@ -106,11 +117,11 @@ export class PlayerShip {
   private limitSpeed(): void {
     const currentSpeed = this.speed;
 
-    if (currentSpeed <= PLAYER_MAX_SPEED) {
+    if (currentSpeed <= this.maxSpeed) {
       return;
     }
 
-    const scale = PLAYER_MAX_SPEED / currentSpeed;
+    const scale = this.maxSpeed / currentSpeed;
     this.velocityX *= scale;
     this.velocityY *= scale;
   }
