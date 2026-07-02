@@ -1,4 +1,5 @@
-import { Client, Room } from 'colyseus.js';
+import { Client, Room, getStateCallbacks } from 'colyseus.js';
+import type { MapSchema } from '@colyseus/schema';
 import {
   ClientMessages,
   ServerMessages,
@@ -14,7 +15,7 @@ import {
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type Unsubscribe = () => void;
 
-interface ParticipantSchema {
+interface ParticipantStateSchema {
   sessionId: string;
   nickname: string;
   mode: JoinMode;
@@ -23,15 +24,8 @@ interface ParticipantSchema {
   profileReady: boolean;
 }
 
-interface ParticipantMapSchema {
-  forEach(callback: (participant: ParticipantSchema, sessionId: string) => void): void;
-  onAdd(callback: (participant: ParticipantSchema, sessionId: string) => void, triggerAll?: boolean): Unsubscribe;
-  onChange(callback: (participant: ParticipantSchema, sessionId: string) => void): Unsubscribe;
-  onRemove(callback: (participant: ParticipantSchema, sessionId: string) => void): Unsubscribe;
-}
-
 interface BattleStateSchema {
-  participants: ParticipantMapSchema;
+  participants: MapSchema<ParticipantStateSchema, string>;
   roomCreatedAt: number;
 }
 
@@ -41,19 +35,21 @@ export interface ConnectionState {
   roomInfo?: RoomInfoMessage;
 }
 
+type StateCallbacks = ReturnType<typeof getStateCallbacks<BattleStateSchema>>;
 type ParticipantCallback = (participant: RoomParticipant) => void;
 type RemovedParticipantCallback = (sessionId: string) => void;
 type ConnectionStateCallback = (state: ConnectionState) => void;
 
 const DEFAULT_SERVER_URL = 'http://localhost:2567';
+const importMetaEnv = (import.meta as ImportMeta & { env?: { DEV?: boolean; VITE_SERVER_URL?: string } }).env;
+const isDev = Boolean(importMetaEnv?.DEV);
 
 function getServerUrl(): string {
-  const env = (import.meta as ImportMeta & { env?: { VITE_SERVER_URL?: string } }).env;
-  const envUrl = env?.VITE_SERVER_URL;
+  const envUrl = importMetaEnv?.VITE_SERVER_URL;
   return typeof envUrl === 'string' && envUrl.trim().length > 0 ? envUrl.trim() : DEFAULT_SERVER_URL;
 }
 
-function toParticipant(schema: ParticipantSchema): RoomParticipant {
+function toParticipant(schema: ParticipantStateSchema): RoomParticipant {
   return {
     sessionId: schema.sessionId,
     nickname: schema.nickname,
@@ -76,6 +72,7 @@ export class NetworkClient {
   private readonly participantRemovedCallbacks = new Set<RemovedParticipantCallback>();
   private readonly connectionCallbacks = new Set<ConnectionStateCallback>();
   private readonly roomDisposers: Unsubscribe[] = [];
+  private readonly participantDisposers = new Map<string, Unsubscribe>();
 
   get currentParticipants(): RoomParticipant[] {
     return Array.from(this.participants.values()).sort((left, right) => left.connectedAt - right.connectedAt);
@@ -146,6 +143,7 @@ export class NetworkClient {
       const room = await this.client.joinOrCreate<BattleStateSchema>('battle');
       this.room = room;
       this.registerRoomListeners(room);
+      this.registerParticipantListeners(room);
       this.setConnectionState('connected');
     } catch (error) {
       this.room = undefined;
@@ -156,15 +154,8 @@ export class NetworkClient {
   }
 
   private registerRoomListeners(room: Room<BattleStateSchema>): void {
-    const handleInitialState = (state: BattleStateSchema): void => {
-      this.registerParticipantListeners(state.participants);
-    };
-
-    room.onStateChange.once(handleInitialState);
-
-    room.onMessage<ProfileAcceptedMessage>(ServerMessages.PROFILE_ACCEPTED, (message) => {
+    room.onMessage<ProfileAcceptedMessage>(ServerMessages.PROFILE_ACCEPTED, () => {
       this.setConnectionState('connected', undefined, this.roomInfo);
-      this.upsertParticipant(message, 'changed');
     });
 
     room.onMessage<ProfileRejectedMessage>(ServerMessages.PROFILE_REJECTED, (message) => {
@@ -189,16 +180,21 @@ export class NetworkClient {
     });
   }
 
-  private registerParticipantListeners(participants: ParticipantMapSchema): void {
+  private registerParticipantListeners(room: Room<BattleStateSchema>): void {
+    const $ = getStateCallbacks(room);
+    const participantsCallbacks = $(room.state).participants;
+
     this.roomDisposers.push(
-      participants.onAdd((participant) => {
+      participantsCallbacks.onAdd((participant, sessionId) => {
+        this.registerParticipantChangeListener($, participant, sessionId);
         this.upsertParticipant(toParticipant(participant), 'added');
+        this.logParticipantEvent('added', sessionId);
       }, true),
-      participants.onChange((participant) => {
-        this.upsertParticipant(toParticipant(participant), 'changed');
-      }),
-      participants.onRemove((participant, sessionId) => {
+      participantsCallbacks.onRemove((_participant, sessionId) => {
+        this.removeParticipantChangeListener(sessionId);
         this.participants.delete(sessionId);
+        this.logParticipantEvent('removed', sessionId);
+
         for (const callback of this.participantRemovedCallbacks) {
           callback(sessionId);
         }
@@ -206,9 +202,42 @@ export class NetworkClient {
     );
   }
 
+  private registerParticipantChangeListener(
+    $: StateCallbacks,
+    participant: ParticipantStateSchema,
+    sessionId: string
+  ): void {
+    this.removeParticipantChangeListener(sessionId);
+
+    const dispose = $(participant).onChange(() => {
+      this.upsertParticipant(toParticipant(participant), 'changed');
+      this.logParticipantEvent('changed', sessionId);
+    });
+
+    this.participantDisposers.set(sessionId, dispose);
+  }
+
+  private removeParticipantChangeListener(sessionId: string): void {
+    const dispose = this.participantDisposers.get(sessionId);
+
+    if (dispose) {
+      dispose();
+      this.participantDisposers.delete(sessionId);
+    }
+  }
+
+  private logParticipantEvent(event: 'added' | 'changed' | 'removed', sessionId: string): void {
+    if (isDev) {
+      console.debug(`[NetworkClient] participant ${event} ${sessionId}`);
+    }
+  }
+
   private upsertParticipant(participant: RoomParticipant, event: 'added' | 'changed'): void {
+    const alreadyKnown = this.participants.has(participant.sessionId);
     this.participants.set(participant.sessionId, participant);
-    const callbacks = event === 'added' ? this.participantAddedCallbacks : this.participantChangedCallbacks;
+    const callbacks = event === 'added' && !alreadyKnown
+      ? this.participantAddedCallbacks
+      : this.participantChangedCallbacks;
 
     for (const callback of callbacks) {
       callback(participant);
@@ -218,6 +247,7 @@ export class NetworkClient {
   private clearParticipants(): void {
     const sessionIds = Array.from(this.participants.keys());
     this.participants.clear();
+    this.clearParticipantChangeListeners();
 
     for (const sessionId of sessionIds) {
       for (const callback of this.participantRemovedCallbacks) {
@@ -226,11 +256,20 @@ export class NetworkClient {
     }
   }
 
+  private clearParticipantChangeListeners(): void {
+    for (const dispose of this.participantDisposers.values()) {
+      dispose();
+    }
+
+    this.participantDisposers.clear();
+  }
+
   private clearRoomListeners(): void {
     for (const dispose of this.roomDisposers.splice(0)) {
       dispose();
     }
 
+    this.clearParticipantChangeListeners();
     this.room?.removeAllListeners();
   }
 
