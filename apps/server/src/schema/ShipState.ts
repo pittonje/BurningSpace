@@ -12,7 +12,13 @@ export const ShipState = schema(
     velocityX: { type: 'number', default: 0 },
     velocityY: { type: 'number', default: 0 },
     lastProcessedInput: { type: 'number', default: 0 },
-    active: { type: 'boolean', default: true }
+    active: { type: 'boolean', default: true },
+    health: { type: 'number', default: 100 },
+    maxHealth: { type: 'number', default: 100 },
+    alive: { type: 'boolean', default: true },
+    respawnAt: { type: 'number', default: 0 },
+    invulnerableUntil: { type: 'number', default: 0 },
+    lastDamageAt: { type: 'number', default: 0 }
   },
   'ShipState'
 );

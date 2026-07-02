@@ -2,19 +2,34 @@ import { Client, Room } from 'colyseus';
 import {
   ClientMessages,
   MAX_ROOM_CLIENTS,
+  NETWORK_MAX_ACTIVE_PROJECTILES_PER_SHIP,
+  NETWORK_PROJECTILE_DAMAGE,
+  NETWORK_PROJECTILE_MAX_RANGE,
+  NETWORK_PROJECTILE_MUZZLE_OFFSET,
+  NETWORK_PROJECTILE_RADIUS,
+  NETWORK_PROJECTILE_SPEED,
+  NETWORK_SHIP_MAX_HEALTH,
+  NETWORK_SHIP_RADIUS,
   NETWORK_TICK_INTERVAL_MS,
+  NETWORK_WEAPON_FIRE_INTERVAL_MS,
   ServerMessages,
+  WORLD_HEIGHT,
+  WORLD_WIDTH,
   type Faction,
+  type HitEventMessage,
   type JoinMode,
   type JoinRequest,
   type PlayerInputMessage,
   type ProfileAcceptedMessage,
   type ProfileRejectedMessage,
-  type RoomInfoMessage
+  type RoomInfoMessage,
+  type ShipDestroyedMessage
 } from '@burningspace/shared';
 import { BattleState } from '../schema/BattleState.js';
 import { ParticipantState } from '../schema/ParticipantState.js';
+import { ProjectileState } from '../schema/ProjectileState.js';
 import { ShipState } from '../schema/ShipState.js';
+import { applyDamage, canDamageShip, respawnShip, segmentCircleIntersectionT } from '../systems/combat.js';
 import { getFactionSpawnPosition } from '../systems/spawn.js';
 import { simulateShipMovement } from '../systems/shipMovement.js';
 import { validateNickname } from '../validation/nickname.js';
@@ -24,8 +39,35 @@ type ProfileValidationResult =
   | { ok: true; profile: Required<Pick<JoinRequest, 'nickname' | 'mode'>> & { faction?: Faction } }
   | { ok: false; reason: string };
 
+interface WeaponRuntimeState {
+  lastShotAt: number;
+}
+
+interface TestShipPositionMessage {
+  x: number;
+  y: number;
+  rotation?: number;
+}
+
+const TEST_SET_SHIP_POSITION_MESSAGE = '__testSetShipPosition';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isTestShipPositionMessage(value: unknown): value is TestShipPositionMessage {
+  return (
+    isRecord(value) &&
+    typeof value.x === 'number' &&
+    Number.isFinite(value.x) &&
+    typeof value.y === 'number' &&
+    Number.isFinite(value.y) &&
+    (value.rotation === undefined || (typeof value.rotation === 'number' && Number.isFinite(value.rotation)))
+  );
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function validateProfile(message: unknown): ProfileValidationResult {
@@ -69,7 +111,9 @@ function validateProfile(message: unknown): ProfileValidationResult {
 export class BattleRoom extends Room<BattleState> {
   maxClients = MAX_ROOM_CLIENTS;
   private readonly inputs = new Map<string, PlayerInputMessage>();
+  private readonly weapons = new Map<string, WeaponRuntimeState>();
   private readonly lastInputReceivedAt = new Map<string, number>();
+  private nextProjectileId = 1;
 
   onCreate(): void {
     this.setState(new BattleState());
@@ -79,6 +123,13 @@ export class BattleRoom extends Room<BattleState> {
     this.onMessage<unknown>(ClientMessages.PLAYER_INPUT, (client, message) => {
       this.handlePlayerInput(client, message);
     });
+
+    if (process.env.NODE_ENV !== 'production') {
+      this.onMessage<unknown>(TEST_SET_SHIP_POSITION_MESSAGE, (client, message) => {
+        this.handleTestSetShipPosition(client, message);
+      });
+    }
+
     this.setSimulationInterval((deltaTimeMs) => {
       this.updateSimulation(deltaTimeMs);
     }, NETWORK_TICK_INTERVAL_MS);
@@ -105,6 +156,7 @@ export class BattleRoom extends Room<BattleState> {
     this.state.participants.delete(client.sessionId);
     this.removeShip(client.sessionId);
     this.inputs.delete(client.sessionId);
+    this.weapons.delete(client.sessionId);
     this.lastInputReceivedAt.delete(client.sessionId);
     this.sendRoomInfo();
 
@@ -170,7 +222,6 @@ export class BattleRoom extends Room<BattleState> {
 
     if (existingShip && existingShip.faction === faction) {
       existingShip.nickname = nickname;
-      existingShip.active = true;
       return;
     }
 
@@ -191,9 +242,16 @@ export class BattleRoom extends Room<BattleState> {
     ship.velocityY = 0;
     ship.lastProcessedInput = 0;
     ship.active = true;
+    ship.maxHealth = NETWORK_SHIP_MAX_HEALTH;
+    ship.health = NETWORK_SHIP_MAX_HEALTH;
+    ship.alive = true;
+    ship.respawnAt = 0;
+    ship.invulnerableUntil = 0;
+    ship.lastDamageAt = 0;
 
     this.state.ships.set(sessionId, ship);
     this.inputs.set(sessionId, createNeutralInput());
+    this.weapons.set(sessionId, { lastShotAt: -Infinity });
 
     if (!existingShip) {
       console.log(`[BattleRoom] ship created sessionId=${sessionId} faction=${faction}`);
@@ -207,11 +265,15 @@ export class BattleRoom extends Room<BattleState> {
 
     this.state.ships.delete(sessionId);
     this.inputs.delete(sessionId);
+    this.weapons.delete(sessionId);
+    this.removeProjectilesOwnedBy(sessionId);
     console.log(`[BattleRoom] ship removed sessionId=${sessionId}`);
   }
 
   private handlePlayerInput(client: Client, message: unknown): void {
-    if (!this.state.ships.has(client.sessionId)) {
+    const ship = this.state.ships.get(client.sessionId);
+
+    if (!ship) {
       return;
     }
 
@@ -228,7 +290,7 @@ export class BattleRoom extends Room<BattleState> {
       return;
     }
 
-    const previousSequence = this.inputs.get(client.sessionId)?.sequence ?? 0;
+    const previousSequence = this.inputs.get(client.sessionId)?.sequence ?? ship.lastProcessedInput;
     const validation = validatePlayerInputMessage(message, previousSequence);
 
     if (!validation.ok) {
@@ -239,16 +301,220 @@ export class BattleRoom extends Room<BattleState> {
     this.inputs.set(client.sessionId, validation.input);
   }
 
+  private handleTestSetShipPosition(client: Client, message: unknown): void {
+    if (process.env.NODE_ENV === 'production' || !isTestShipPositionMessage(message)) {
+      return;
+    }
+
+    const ship = this.state.ships.get(client.sessionId);
+
+    if (!ship || !ship.alive) {
+      return;
+    }
+
+    ship.x = clamp(message.x, NETWORK_SHIP_RADIUS, WORLD_WIDTH - NETWORK_SHIP_RADIUS);
+    ship.y = clamp(message.y, NETWORK_SHIP_RADIUS, WORLD_HEIGHT - NETWORK_SHIP_RADIUS);
+    ship.rotation = message.rotation ?? ship.rotation;
+    ship.velocityX = 0;
+    ship.velocityY = 0;
+  }
+
   private updateSimulation(deltaTimeMs: number): void {
+    const now = Date.now();
     const deltaSeconds = Math.min(deltaTimeMs / 1000, 0.1);
 
     this.state.ships.forEach((ship, sessionId) => {
+      if (!ship.alive) {
+        this.tryRespawnShip(ship, sessionId, now);
+        return;
+      }
+
       if (!ship.active) {
         return;
       }
 
       const input = this.inputs.get(sessionId) ?? createNeutralInput(ship.lastProcessedInput);
       simulateShipMovement(ship, input, deltaSeconds);
+      this.tryFireProjectile(ship, input, now);
     });
+
+    this.updateProjectiles(deltaSeconds, now);
+  }
+
+  private tryFireProjectile(ship: ShipState, input: PlayerInputMessage, now: number): void {
+    if (!input.shooting || !ship.alive || !ship.active) {
+      return;
+    }
+
+    const weapon = this.weapons.get(ship.ownerSessionId) ?? { lastShotAt: -Infinity };
+
+    if (now - weapon.lastShotAt < NETWORK_WEAPON_FIRE_INTERVAL_MS) {
+      this.weapons.set(ship.ownerSessionId, weapon);
+      return;
+    }
+
+    if (this.countActiveProjectilesForOwner(ship.ownerSessionId) >= NETWORK_MAX_ACTIVE_PROJECTILES_PER_SHIP) {
+      this.weapons.set(ship.ownerSessionId, weapon);
+      return;
+    }
+
+    const projectileId = `projectile-${this.nextProjectileId}`;
+    this.nextProjectileId += 1;
+    const muzzleX = ship.x + Math.cos(ship.rotation) * NETWORK_PROJECTILE_MUZZLE_OFFSET;
+    const muzzleY = ship.y + Math.sin(ship.rotation) * NETWORK_PROJECTILE_MUZZLE_OFFSET;
+    const projectile = new ProjectileState();
+    projectile.id = projectileId;
+    projectile.ownerSessionId = ship.ownerSessionId;
+    projectile.faction = ship.faction;
+    projectile.x = muzzleX;
+    projectile.y = muzzleY;
+    projectile.previousX = muzzleX;
+    projectile.previousY = muzzleY;
+    projectile.velocityX = Math.cos(ship.rotation) * NETWORK_PROJECTILE_SPEED;
+    projectile.velocityY = Math.sin(ship.rotation) * NETWORK_PROJECTILE_SPEED;
+    projectile.rotation = ship.rotation;
+    projectile.spawnX = muzzleX;
+    projectile.spawnY = muzzleY;
+    projectile.distanceTraveled = 0;
+    projectile.active = true;
+    projectile.createdAt = now;
+    this.state.projectiles.set(projectileId, projectile);
+    weapon.lastShotAt = now;
+    this.weapons.set(ship.ownerSessionId, weapon);
+  }
+
+  private countActiveProjectilesForOwner(ownerSessionId: string): number {
+    let count = 0;
+
+    this.state.projectiles.forEach((projectile) => {
+      if (projectile.ownerSessionId === ownerSessionId && projectile.active) {
+        count += 1;
+      }
+    });
+
+    return count;
+  }
+
+  private updateProjectiles(deltaSeconds: number, now: number): void {
+    const projectileIdsToRemove: string[] = [];
+
+    this.state.projectiles.forEach((projectile, projectileId) => {
+      projectile.previousX = projectile.x;
+      projectile.previousY = projectile.y;
+      projectile.x += projectile.velocityX * deltaSeconds;
+      projectile.y += projectile.velocityY * deltaSeconds;
+      projectile.distanceTraveled += Math.hypot(
+        projectile.x - projectile.previousX,
+        projectile.y - projectile.previousY
+      );
+
+      if (
+        projectile.distanceTraveled >= NETWORK_PROJECTILE_MAX_RANGE ||
+        projectile.x < 0 ||
+        projectile.y < 0 ||
+        projectile.x > WORLD_WIDTH ||
+        projectile.y > WORLD_HEIGHT
+      ) {
+        projectileIdsToRemove.push(projectileId);
+        return;
+      }
+
+      const hit = this.findProjectileHit(projectile, now);
+
+      if (!hit) {
+        return;
+      }
+
+      const target = this.state.ships.get(hit.shipId);
+
+      if (!target) {
+        return;
+      }
+
+      const killed = applyDamage(target, NETWORK_PROJECTILE_DAMAGE, now);
+      this.broadcast(ServerMessages.HIT_EVENT, {
+        projectileId,
+        targetShipId: hit.shipId,
+        x: hit.x,
+        y: hit.y,
+        damage: NETWORK_PROJECTILE_DAMAGE
+      } satisfies HitEventMessage);
+      projectileIdsToRemove.push(projectileId);
+
+      if (killed) {
+        this.inputs.set(hit.shipId, createNeutralInput(target.lastProcessedInput));
+        this.weapons.set(hit.shipId, { lastShotAt: now });
+        this.broadcast(ServerMessages.SHIP_DESTROYED, {
+          shipId: hit.shipId,
+          x: target.x,
+          y: target.y,
+          respawnAt: target.respawnAt
+        } satisfies ShipDestroyedMessage);
+      }
+    });
+
+    for (const projectileId of projectileIdsToRemove) {
+      this.state.projectiles.delete(projectileId);
+    }
+  }
+
+  private findProjectileHit(projectile: ProjectileState, now: number): { shipId: string; x: number; y: number } | undefined {
+    let best: { shipId: string; t: number } | undefined;
+
+    this.state.ships.forEach((ship, shipId) => {
+      if (!canDamageShip(ship, projectile.ownerSessionId, projectile.faction, now)) {
+        return;
+      }
+
+      const hit = segmentCircleIntersectionT(
+        projectile.previousX,
+        projectile.previousY,
+        projectile.x,
+        projectile.y,
+        ship.x,
+        ship.y,
+        NETWORK_PROJECTILE_RADIUS + NETWORK_SHIP_RADIUS
+      );
+
+      if (!hit.hit || (best && hit.t >= best.t)) {
+        return;
+      }
+
+      best = { shipId, t: hit.t };
+    });
+
+    if (!best) {
+      return undefined;
+    }
+
+    return {
+      shipId: best.shipId,
+      x: projectile.previousX + (projectile.x - projectile.previousX) * best.t,
+      y: projectile.previousY + (projectile.y - projectile.previousY) * best.t
+    };
+  }
+
+  private tryRespawnShip(ship: ShipState, sessionId: string, now: number): void {
+    if (ship.respawnAt <= 0 || now < ship.respawnAt) {
+      return;
+    }
+
+    respawnShip(ship, now);
+    this.inputs.set(sessionId, createNeutralInput(ship.lastProcessedInput));
+    this.weapons.set(sessionId, { lastShotAt: -Infinity });
+  }
+
+  private removeProjectilesOwnedBy(ownerSessionId: string): void {
+    const projectileIds: string[] = [];
+
+    this.state.projectiles.forEach((projectile, projectileId) => {
+      if (projectile.ownerSessionId === ownerSessionId) {
+        projectileIds.push(projectileId);
+      }
+    });
+
+    for (const projectileId of projectileIds) {
+      this.state.projectiles.delete(projectileId);
+    }
   }
 }

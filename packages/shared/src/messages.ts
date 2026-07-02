@@ -8,7 +8,9 @@ export const ClientMessages = {
 export const ServerMessages = {
   PROFILE_ACCEPTED: 'profileAccepted',
   PROFILE_REJECTED: 'profileRejected',
-  ROOM_INFO: 'roomInfo'
+  ROOM_INFO: 'roomInfo',
+  HIT_EVENT: 'hitEvent',
+  SHIP_DESTROYED: 'shipDestroyed'
 } as const;
 
 export type ClientMessageType = (typeof ClientMessages)[keyof typeof ClientMessages];
@@ -40,6 +42,30 @@ export interface ShipSnapshot {
   velocityY: number;
   lastProcessedInput: number;
   active: boolean;
+  health: number;
+  maxHealth: number;
+  alive: boolean;
+  respawnAt: number;
+  invulnerableUntil: number;
+  lastDamageAt: number;
+}
+
+export interface ProjectileSnapshot {
+  id: string;
+  ownerSessionId: string;
+  faction: Faction;
+  x: number;
+  y: number;
+  previousX: number;
+  previousY: number;
+  velocityX: number;
+  velocityY: number;
+  rotation: number;
+  spawnX: number;
+  spawnY: number;
+  distanceTraveled: number;
+  active: boolean;
+  createdAt: number;
 }
 
 export interface ProfileAcceptedMessage extends RoomParticipant {}
@@ -54,11 +80,27 @@ export interface RoomInfoMessage {
   maxClients: number;
 }
 
+export interface HitEventMessage {
+  projectileId: string;
+  targetShipId: string;
+  x: number;
+  y: number;
+  damage: number;
+}
+
+export interface ShipDestroyedMessage {
+  shipId: string;
+  x: number;
+  y: number;
+  respawnAt: number;
+}
+
 export interface PlayerInputMessage {
   up: boolean;
   down: boolean;
   left: boolean;
   right: boolean;
   aimAngle: number;
+  shooting: boolean;
   sequence: number;
 }

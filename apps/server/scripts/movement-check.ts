@@ -58,6 +58,7 @@ function neutralInput(sequence: number): PlayerInputMessage {
     left: false,
     right: false,
     aimAngle: 0,
+    shooting: false,
     sequence
   };
 }

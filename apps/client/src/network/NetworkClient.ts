@@ -4,13 +4,16 @@ import {
   ClientMessages,
   ServerMessages,
   type Faction,
+  type HitEventMessage,
   type JoinMode,
   type JoinRequest,
   type PlayerInputMessage,
+  type ProjectileSnapshot,
   type ProfileAcceptedMessage,
   type ProfileRejectedMessage,
   type RoomInfoMessage,
   type RoomParticipant,
+  type ShipDestroyedMessage,
   type ShipSnapshot
 } from '@burningspace/shared';
 
@@ -26,12 +29,6 @@ interface ParticipantStateSchema {
   profileReady: boolean;
 }
 
-interface BattleStateSchema {
-  participants: MapSchema<ParticipantStateSchema, string>;
-  ships: MapSchema<ShipStateSchema, string>;
-  roomCreatedAt: number;
-}
-
 interface ShipStateSchema {
   id: string;
   ownerSessionId: string;
@@ -44,6 +41,37 @@ interface ShipStateSchema {
   velocityY: number;
   lastProcessedInput: number;
   active: boolean;
+  health: number;
+  maxHealth: number;
+  alive: boolean;
+  respawnAt: number;
+  invulnerableUntil: number;
+  lastDamageAt: number;
+}
+
+interface ProjectileStateSchema {
+  id: string;
+  ownerSessionId: string;
+  faction: Faction;
+  x: number;
+  y: number;
+  previousX: number;
+  previousY: number;
+  velocityX: number;
+  velocityY: number;
+  rotation: number;
+  spawnX: number;
+  spawnY: number;
+  distanceTraveled: number;
+  active: boolean;
+  createdAt: number;
+}
+
+interface BattleStateSchema {
+  participants: MapSchema<ParticipantStateSchema, string>;
+  ships: MapSchema<ShipStateSchema, string>;
+  projectiles: MapSchema<ProjectileStateSchema, string>;
+  roomCreatedAt: number;
 }
 
 export interface ConnectionState {
@@ -57,6 +85,10 @@ type ParticipantCallback = (participant: RoomParticipant) => void;
 type RemovedParticipantCallback = (sessionId: string) => void;
 type ShipCallback = (ship: ShipSnapshot) => void;
 type RemovedShipCallback = (shipId: string) => void;
+type ProjectileCallback = (projectile: ProjectileSnapshot) => void;
+type RemovedProjectileCallback = (projectileId: string) => void;
+type HitEventCallback = (message: HitEventMessage) => void;
+type ShipDestroyedCallback = (message: ShipDestroyedMessage) => void;
 type ConnectionStateCallback = (state: ConnectionState) => void;
 
 const DEFAULT_SERVER_URL = 'http://localhost:2567';
@@ -90,7 +122,33 @@ function toShipSnapshot(schema: ShipStateSchema): ShipSnapshot {
     velocityX: schema.velocityX,
     velocityY: schema.velocityY,
     lastProcessedInput: schema.lastProcessedInput,
-    active: schema.active
+    active: schema.active,
+    health: schema.health,
+    maxHealth: schema.maxHealth,
+    alive: schema.alive,
+    respawnAt: schema.respawnAt,
+    invulnerableUntil: schema.invulnerableUntil,
+    lastDamageAt: schema.lastDamageAt
+  };
+}
+
+function toProjectileSnapshot(schema: ProjectileStateSchema): ProjectileSnapshot {
+  return {
+    id: schema.id,
+    ownerSessionId: schema.ownerSessionId,
+    faction: schema.faction,
+    x: schema.x,
+    y: schema.y,
+    previousX: schema.previousX,
+    previousY: schema.previousY,
+    velocityX: schema.velocityX,
+    velocityY: schema.velocityY,
+    rotation: schema.rotation,
+    spawnX: schema.spawnX,
+    spawnY: schema.spawnY,
+    distanceTraveled: schema.distanceTraveled,
+    active: schema.active,
+    createdAt: schema.createdAt
   };
 }
 
@@ -104,16 +162,23 @@ export class NetworkClient {
   private connectingPromise?: Promise<void>;
   private readonly participants = new Map<string, RoomParticipant>();
   private readonly ships = new Map<string, ShipSnapshot>();
+  private readonly projectiles = new Map<string, ProjectileSnapshot>();
   private readonly participantAddedCallbacks = new Set<ParticipantCallback>();
   private readonly participantChangedCallbacks = new Set<ParticipantCallback>();
   private readonly participantRemovedCallbacks = new Set<RemovedParticipantCallback>();
   private readonly shipAddedCallbacks = new Set<ShipCallback>();
   private readonly shipChangedCallbacks = new Set<ShipCallback>();
   private readonly shipRemovedCallbacks = new Set<RemovedShipCallback>();
+  private readonly projectileAddedCallbacks = new Set<ProjectileCallback>();
+  private readonly projectileChangedCallbacks = new Set<ProjectileCallback>();
+  private readonly projectileRemovedCallbacks = new Set<RemovedProjectileCallback>();
+  private readonly hitEventCallbacks = new Set<HitEventCallback>();
+  private readonly shipDestroyedCallbacks = new Set<ShipDestroyedCallback>();
   private readonly connectionCallbacks = new Set<ConnectionStateCallback>();
   private readonly roomDisposers: Unsubscribe[] = [];
   private readonly participantDisposers = new Map<string, Unsubscribe>();
   private readonly shipDisposers = new Map<string, Unsubscribe>();
+  private readonly projectileDisposers = new Map<string, Unsubscribe>();
 
   get currentParticipants(): RoomParticipant[] {
     return Array.from(this.participants.values()).sort((left, right) => left.connectedAt - right.connectedAt);
@@ -121,6 +186,10 @@ export class NetworkClient {
 
   get currentShips(): ShipSnapshot[] {
     return Array.from(this.ships.values()).sort((left, right) => left.ownerSessionId.localeCompare(right.ownerSessionId));
+  }
+
+  get currentProjectiles(): ProjectileSnapshot[] {
+    return Array.from(this.projectiles.values()).sort((left, right) => left.createdAt - right.createdAt);
   }
 
   get profile(): ProfileAcceptedMessage | undefined {
@@ -163,6 +232,10 @@ export class NetworkClient {
     this.room.send(ClientMessages.PLAYER_INPUT, input);
   }
 
+  sendDiagnosticShipPosition(x: number, y: number, rotation?: number): void {
+    this.room?.send('__testSetShipPosition', { x, y, rotation });
+  }
+
   async disconnect(): Promise<void> {
     const room = this.room;
 
@@ -172,6 +245,7 @@ export class NetworkClient {
     this.acceptedProfile = undefined;
     this.clearParticipants();
     this.clearShips();
+    this.clearProjectiles();
 
     if (room) {
       await room.leave(true);
@@ -210,6 +284,31 @@ export class NetworkClient {
     return () => this.shipRemovedCallbacks.delete(callback);
   }
 
+  onProjectileAdded(callback: ProjectileCallback): Unsubscribe {
+    this.projectileAddedCallbacks.add(callback);
+    return () => this.projectileAddedCallbacks.delete(callback);
+  }
+
+  onProjectileChanged(callback: ProjectileCallback): Unsubscribe {
+    this.projectileChangedCallbacks.add(callback);
+    return () => this.projectileChangedCallbacks.delete(callback);
+  }
+
+  onProjectileRemoved(callback: RemovedProjectileCallback): Unsubscribe {
+    this.projectileRemovedCallbacks.add(callback);
+    return () => this.projectileRemovedCallbacks.delete(callback);
+  }
+
+  onHitEvent(callback: HitEventCallback): Unsubscribe {
+    this.hitEventCallbacks.add(callback);
+    return () => this.hitEventCallbacks.delete(callback);
+  }
+
+  onShipDestroyed(callback: ShipDestroyedCallback): Unsubscribe {
+    this.shipDestroyedCallbacks.add(callback);
+    return () => this.shipDestroyedCallbacks.delete(callback);
+  }
+
   onConnectionStateChanged(callback: ConnectionStateCallback): Unsubscribe {
     this.connectionCallbacks.add(callback);
     callback(this.getConnectionState());
@@ -223,12 +322,14 @@ export class NetworkClient {
       this.registerRoomListeners(room);
       this.registerParticipantListeners(room);
       this.registerShipListeners(room);
+      this.registerProjectileListeners(room);
       this.setConnectionState('connected');
     } catch (error) {
       this.room = undefined;
       this.clearRoomListeners();
       this.clearParticipants();
       this.clearShips();
+      this.clearProjectiles();
       this.setConnectionState('error', error instanceof Error ? error.message : 'Connection failed.');
     }
   }
@@ -248,6 +349,18 @@ export class NetworkClient {
       this.emitConnectionState();
     });
 
+    room.onMessage<HitEventMessage>(ServerMessages.HIT_EVENT, (message) => {
+      for (const callback of this.hitEventCallbacks) {
+        callback(message);
+      }
+    });
+
+    room.onMessage<ShipDestroyedMessage>(ServerMessages.SHIP_DESTROYED, (message) => {
+      for (const callback of this.shipDestroyedCallbacks) {
+        callback(message);
+      }
+    });
+
     room.onError((code, message) => {
       this.setConnectionState('error', message ?? `Room error ${code}.`, this.roomInfo);
     });
@@ -259,6 +372,7 @@ export class NetworkClient {
       this.acceptedProfile = undefined;
       this.clearParticipants();
       this.clearShips();
+      this.clearProjectiles();
       this.setConnectionState(code === 1000 ? 'disconnected' : 'error', code === 1000 ? undefined : `Disconnected (${code}).`);
     });
   }
@@ -307,6 +421,26 @@ export class NetworkClient {
     );
   }
 
+  private registerProjectileListeners(room: Room<BattleStateSchema>): void {
+    const $ = getStateCallbacks(room);
+    const projectilesCallbacks = $(room.state).projectiles;
+
+    this.roomDisposers.push(
+      projectilesCallbacks.onAdd((projectile, projectileId) => {
+        this.registerProjectileChangeListener($, projectile, projectileId);
+        this.upsertProjectile(toProjectileSnapshot(projectile), 'added');
+      }, true),
+      projectilesCallbacks.onRemove((_projectile, projectileId) => {
+        this.removeProjectileChangeListener(projectileId);
+        this.projectiles.delete(projectileId);
+
+        for (const callback of this.projectileRemovedCallbacks) {
+          callback(projectileId);
+        }
+      })
+    );
+  }
+
   private registerShipChangeListener(
     $: StateCallbacks,
     ship: ShipStateSchema,
@@ -327,6 +461,29 @@ export class NetworkClient {
     if (dispose) {
       dispose();
       this.shipDisposers.delete(shipId);
+    }
+  }
+
+  private registerProjectileChangeListener(
+    $: StateCallbacks,
+    projectile: ProjectileStateSchema,
+    projectileId: string
+  ): void {
+    this.removeProjectileChangeListener(projectileId);
+
+    const dispose = $(projectile).onChange(() => {
+      this.upsertProjectile(toProjectileSnapshot(projectile), 'changed');
+    });
+
+    this.projectileDisposers.set(projectileId, dispose);
+  }
+
+  private removeProjectileChangeListener(projectileId: string): void {
+    const dispose = this.projectileDisposers.get(projectileId);
+
+    if (dispose) {
+      dispose();
+      this.projectileDisposers.delete(projectileId);
     }
   }
 
@@ -414,12 +571,44 @@ export class NetworkClient {
     }
   }
 
+  private upsertProjectile(projectile: ProjectileSnapshot, event: 'added' | 'changed'): void {
+    const alreadyKnown = this.projectiles.has(projectile.id);
+    this.projectiles.set(projectile.id, projectile);
+    const callbacks = event === 'added' && !alreadyKnown
+      ? this.projectileAddedCallbacks
+      : this.projectileChangedCallbacks;
+
+    for (const callback of callbacks) {
+      callback(projectile);
+    }
+  }
+
+  private clearProjectiles(): void {
+    const projectileIds = Array.from(this.projectiles.keys());
+    this.projectiles.clear();
+    this.clearProjectileChangeListeners();
+
+    for (const projectileId of projectileIds) {
+      for (const callback of this.projectileRemovedCallbacks) {
+        callback(projectileId);
+      }
+    }
+  }
+
   private clearShipChangeListeners(): void {
     for (const dispose of this.shipDisposers.values()) {
       dispose();
     }
 
     this.shipDisposers.clear();
+  }
+
+  private clearProjectileChangeListeners(): void {
+    for (const dispose of this.projectileDisposers.values()) {
+      dispose();
+    }
+
+    this.projectileDisposers.clear();
   }
 
   private clearParticipantChangeListeners(): void {
@@ -437,6 +626,7 @@ export class NetworkClient {
 
     this.clearParticipantChangeListeners();
     this.clearShipChangeListeners();
+    this.clearProjectileChangeListeners();
     this.room?.removeAllListeners();
   }
 

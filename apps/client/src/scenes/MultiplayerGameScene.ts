@@ -3,6 +3,7 @@ import {
   CAMERA_LERP,
   CAMERA_ZOOM
 } from '../config/gameConfig';
+import { NetworkProjectileView } from '../entities/NetworkProjectileView';
 import { NetworkShipView } from '../entities/NetworkShipView';
 import { networkClient } from '../network/networkSession';
 import type { ConnectionState, Unsubscribe } from '../network/NetworkClient';
@@ -10,25 +11,34 @@ import { SpaceMap } from '../world/SpaceMap';
 import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
+  type HitEventMessage,
   type PlayerInputMessage,
+  type ProjectileSnapshot,
   type ShipSnapshot
 } from '@burningspace/shared';
 
 const INPUT_SEND_INTERVAL_MS = 50;
-const SPECTATOR_CAMERA_SPEED = 900;
+const SPECTATOR_CAMERA_ACCELERATION = 7200;
+const SPECTATOR_CAMERA_DECELERATION = 9000;
+const SPECTATOR_CAMERA_MAX_SPEED = 9500;
 
 export class MultiplayerGameScene extends Phaser.Scene {
   private keyW?: Phaser.Input.Keyboard.Key;
   private keyA?: Phaser.Input.Keyboard.Key;
   private keyS?: Phaser.Input.Keyboard.Key;
   private keyD?: Phaser.Input.Keyboard.Key;
+  private keySpace?: Phaser.Input.Keyboard.Key;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyEsc?: Phaser.Input.Keyboard.Key;
   private hudText?: Phaser.GameObjects.Text;
+  private respawnText?: Phaser.GameObjects.Text;
   private readonly shipViews = new Map<string, NetworkShipView>();
+  private readonly projectileViews = new Map<string, NetworkProjectileView>();
   private readonly disposers: Unsubscribe[] = [];
   private inputAccumulatorMs = 0;
   private inputSequence = 0;
+  private spectatorCameraVelocityX = 0;
+  private spectatorCameraVelocityY = 0;
   private connectionState: ConnectionState = { status: 'disconnected' };
 
   constructor() {
@@ -71,6 +81,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
     this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.keyS = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    this.keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.keyEsc = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
     this.cursors = this.input.keyboard.createCursorKeys();
     this.game.events.on(Phaser.Core.Events.BLUR, this.handleFocusLost, this);
@@ -88,6 +99,18 @@ export class MultiplayerGameScene extends Phaser.Scene {
     });
     this.hudText.setScrollFactor(0);
     this.hudText.setDepth(100);
+    this.respawnText = this.add.text(0, 0, '', {
+      align: 'center',
+      color: '#f8fafc',
+      fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+      fontSize: '22px',
+      stroke: '#020617',
+      strokeThickness: 6
+    });
+    this.respawnText.setOrigin(0.5);
+    this.respawnText.setScrollFactor(0);
+    this.respawnText.setDepth(101);
+    this.respawnText.setVisible(false);
     this.layoutHud();
   }
 
@@ -103,13 +126,26 @@ export class MultiplayerGameScene extends Phaser.Scene {
       }),
       networkClient.onShipAdded((ship) => this.addOrUpdateShip(ship)),
       networkClient.onShipChanged((ship) => this.addOrUpdateShip(ship)),
-      networkClient.onShipRemoved((shipId) => this.removeShip(shipId))
+      networkClient.onShipRemoved((shipId) => this.removeShip(shipId)),
+      networkClient.onProjectileAdded((projectile) => this.addOrUpdateProjectile(projectile)),
+      networkClient.onProjectileChanged((projectile) => this.addOrUpdateProjectile(projectile)),
+      networkClient.onProjectileRemoved((projectileId) => this.removeProjectile(projectileId)),
+      networkClient.onHitEvent((message) => this.createHitEffect(message)),
+      networkClient.onShipDestroyed((message) => {
+        if (message.shipId === networkClient.getSessionId()) {
+          this.cameras.main.shake(180, 0.004);
+        }
+      })
     );
   }
 
   private rebuildShipViews(): void {
     for (const ship of networkClient.currentShips) {
       this.addOrUpdateShip(ship);
+    }
+
+    for (const projectile of networkClient.currentProjectiles) {
+      this.addOrUpdateProjectile(projectile);
     }
   }
 
@@ -130,8 +166,28 @@ export class MultiplayerGameScene extends Phaser.Scene {
     this.shipViews.delete(shipId);
   }
 
+  private addOrUpdateProjectile(projectile: ProjectileSnapshot): void {
+    const view = this.projectileViews.get(projectile.id);
+
+    if (view) {
+      view.updateTarget(projectile);
+      return;
+    }
+
+    this.projectileViews.set(projectile.id, new NetworkProjectileView(this, projectile));
+  }
+
+  private removeProjectile(projectileId: string): void {
+    this.projectileViews.get(projectileId)?.destroy();
+    this.projectileViews.delete(projectileId);
+  }
+
   private updateViews(deltaSeconds: number): void {
     for (const view of this.shipViews.values()) {
+      view.update(deltaSeconds);
+    }
+
+    for (const view of this.projectileViews.values()) {
       view.update(deltaSeconds);
     }
   }
@@ -165,6 +221,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
       left: Boolean(this.keyA?.isDown || this.cursors?.left.isDown),
       right: Boolean(this.keyD?.isDown || this.cursors?.right.isDown),
       aimAngle: Phaser.Math.Angle.Between(originX, originY, pointerWorld.x, pointerWorld.y),
+      shooting: Boolean(ownShip?.alive && (pointer.leftButtonDown() || this.keySpace?.isDown)),
       sequence: this.inputSequence
     };
   }
@@ -181,6 +238,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
       left: false,
       right: false,
       aimAngle: this.getOwnShipSnapshot()?.rotation ?? 0,
+      shooting: false,
       sequence: this.inputSequence
     });
   }
@@ -189,6 +247,8 @@ export class MultiplayerGameScene extends Phaser.Scene {
     const ownShip = this.getOwnShipSnapshot();
 
     if (ownShip) {
+      this.spectatorCameraVelocityX = 0;
+      this.spectatorCameraVelocityY = 0;
       const camera = this.cameras.main;
       const lerp = 1 - Math.pow(1 - CAMERA_LERP, deltaSeconds * 60);
       camera.centerOn(
@@ -206,21 +266,49 @@ export class MultiplayerGameScene extends Phaser.Scene {
     const inputY = (this.keyS?.isDown || this.cursors?.down.isDown ? 1 : 0) - (this.keyW?.isDown || this.cursors?.up.isDown ? 1 : 0);
     const length = Math.hypot(inputX, inputY);
 
-    if (length <= 0) {
-      return;
+    if (length > 0) {
+      this.spectatorCameraVelocityX += (inputX / length) * SPECTATOR_CAMERA_ACCELERATION * deltaSeconds;
+      this.spectatorCameraVelocityY += (inputY / length) * SPECTATOR_CAMERA_ACCELERATION * deltaSeconds;
+    } else {
+      const speed = Math.hypot(this.spectatorCameraVelocityX, this.spectatorCameraVelocityY);
+      const nextSpeed = Math.max(0, speed - SPECTATOR_CAMERA_DECELERATION * deltaSeconds);
+
+      if (nextSpeed <= 0 || speed <= 0) {
+        this.spectatorCameraVelocityX = 0;
+        this.spectatorCameraVelocityY = 0;
+      } else {
+        const decelerationScale = nextSpeed / speed;
+        this.spectatorCameraVelocityX *= decelerationScale;
+        this.spectatorCameraVelocityY *= decelerationScale;
+      }
+    }
+
+    const velocityLength = Math.hypot(this.spectatorCameraVelocityX, this.spectatorCameraVelocityY);
+
+    if (velocityLength > SPECTATOR_CAMERA_MAX_SPEED) {
+      const speedScale = SPECTATOR_CAMERA_MAX_SPEED / velocityLength;
+      this.spectatorCameraVelocityX *= speedScale;
+      this.spectatorCameraVelocityY *= speedScale;
     }
 
     const camera = this.cameras.main;
-    const nextX = Phaser.Math.Clamp(
-      camera.midPoint.x + (inputX / length) * SPECTATOR_CAMERA_SPEED * deltaSeconds,
-      camera.width / camera.zoom / 2,
-      WORLD_WIDTH - camera.width / camera.zoom / 2
-    );
-    const nextY = Phaser.Math.Clamp(
-      camera.midPoint.y + (inputY / length) * SPECTATOR_CAMERA_SPEED * deltaSeconds,
-      camera.height / camera.zoom / 2,
-      WORLD_HEIGHT - camera.height / camera.zoom / 2
-    );
+    const minX = camera.width / camera.zoom / 2;
+    const maxX = WORLD_WIDTH - minX;
+    const minY = camera.height / camera.zoom / 2;
+    const maxY = WORLD_HEIGHT - minY;
+    const rawNextX = camera.midPoint.x + this.spectatorCameraVelocityX * deltaSeconds;
+    const rawNextY = camera.midPoint.y + this.spectatorCameraVelocityY * deltaSeconds;
+    const nextX = Phaser.Math.Clamp(rawNextX, minX, maxX);
+    const nextY = Phaser.Math.Clamp(rawNextY, minY, maxY);
+
+    if (nextX !== rawNextX) {
+      this.spectatorCameraVelocityX = 0;
+    }
+
+    if (nextY !== rawNextY) {
+      this.spectatorCameraVelocityY = 0;
+    }
+
     camera.centerOn(nextX, nextY);
   }
 
@@ -235,19 +323,68 @@ export class MultiplayerGameScene extends Phaser.Scene {
     }
 
     const profile = networkClient.profile;
+    const ownShip = this.getOwnShipSnapshot();
     const factionLabel = profile?.mode === 'player' ? profile.faction ?? '-' : 'spectator';
+    const hpLabel = ownShip ? `${Math.ceil(ownShip.health)} / ${ownShip.maxHealth}` : '-';
     this.hudText.setText([
       `Status: ${this.connectionState.status}`,
       `Nickname: ${profile?.nickname ?? '-'}`,
       `Mode: ${factionLabel}`,
+      `HP: ${hpLabel}`,
       `Ships: ${networkClient.currentShips.length}`,
+      `Projectiles: ${networkClient.currentProjectiles.length}`,
       `Participants: ${networkClient.currentParticipants.length}`,
-      profile?.mode === 'player' ? 'WASD - movement | Mouse - aim | Esc - lobby' : 'WASD - free camera | Esc - lobby'
+      profile?.mode === 'player' ? 'WASD - movement | Mouse - aim | LMB/Space - fire | Esc - lobby' : 'WASD - free camera | Esc - lobby'
     ]);
+
+    this.updateRespawnOverlay(ownShip);
   }
 
   private layoutHud(): void {
     this.hudText?.setPosition(16, 14);
+    this.respawnText?.setPosition(this.scale.width / 2, this.scale.height * 0.42);
+  }
+
+  private updateRespawnOverlay(ownShip: ShipSnapshot | undefined): void {
+    if (!this.respawnText) {
+      return;
+    }
+
+    if (!ownShip || ownShip.alive) {
+      this.respawnText.setVisible(false);
+      return;
+    }
+
+    const seconds = Math.max(0, Math.ceil((ownShip.respawnAt - Date.now()) / 1000));
+    this.respawnText.setText(`DESTROYED\nRESPAWN IN ${seconds}s`);
+    this.respawnText.setVisible(true);
+  }
+
+  private createHitEffect(message: HitEventMessage): void {
+    const ring = this.add.circle(message.x, message.y, 8, 0xffffff, 0);
+    ring.setStrokeStyle(2, 0xffffff, 0.9);
+    ring.setDepth(31);
+
+    const flash = this.add.circle(message.x, message.y, 10, 0x93c5fd, 0.35);
+    flash.setBlendMode(Phaser.BlendModes.ADD);
+    flash.setDepth(30);
+
+    this.tweens.add({
+      targets: ring,
+      radius: 42,
+      alpha: 0,
+      duration: 220,
+      ease: 'Cubic.easeOut',
+      onComplete: () => ring.destroy()
+    });
+    this.tweens.add({
+      targets: flash,
+      radius: 36,
+      alpha: 0,
+      duration: 180,
+      ease: 'Cubic.easeOut',
+      onComplete: () => flash.destroy()
+    });
   }
 
   private handleFocusLost = (): void => {
@@ -271,7 +408,12 @@ export class MultiplayerGameScene extends Phaser.Scene {
       view.destroy();
     }
 
+    for (const view of this.projectileViews.values()) {
+      view.destroy();
+    }
+
     this.shipViews.clear();
+    this.projectileViews.clear();
     this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutHud, this);
     this.game.events.off(Phaser.Core.Events.BLUR, this.handleFocusLost, this);
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);

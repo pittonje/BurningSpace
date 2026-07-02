@@ -16,6 +16,7 @@ export function createNeutralInput(sequence = 0): PlayerInputMessage {
     left: false,
     right: false,
     aimAngle: 0,
+    shooting: false,
     sequence
   };
 }
@@ -36,6 +37,10 @@ export function validatePlayerInputMessage(value: unknown, previousSequence: num
 
   if (typeof value.aimAngle !== 'number' || !Number.isFinite(value.aimAngle)) {
     return { ok: false, reason: 'aimAngle must be finite.' };
+  }
+
+  if (typeof value.shooting !== 'boolean') {
+    return { ok: false, reason: 'shooting must be boolean.' };
   }
 
   if (
@@ -59,6 +64,7 @@ export function validatePlayerInputMessage(value: unknown, previousSequence: num
       left: value.left,
       right: value.right,
       aimAngle: normalizeAngle(value.aimAngle),
+      shooting: value.shooting,
       sequence: value.sequence
     }
   };

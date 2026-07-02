@@ -23,6 +23,8 @@ async function main(): Promise<void> {
   const firstEvents: string[] = [];
   const secondEvents: string[] = [];
   const shipEvents: string[] = [];
+  const projectileEvents: string[] = [];
+  const hitEvents: string[] = [];
 
   first.onParticipantAdded((participant) => firstEvents.push(`add:${participant.nickname}`));
   first.onParticipantChanged((participant) => firstEvents.push(`change:${participant.nickname}`));
@@ -33,6 +35,10 @@ async function main(): Promise<void> {
   first.onShipAdded((ship) => shipEvents.push(`ship-add:${ship.nickname}`));
   first.onShipChanged((ship) => shipEvents.push(`ship-change:${ship.nickname}`));
   first.onShipRemoved((shipId) => shipEvents.push(`ship-remove:${shipId}`));
+  first.onProjectileAdded((projectile) => projectileEvents.push(`projectile-add:${projectile.id}`));
+  first.onProjectileChanged((projectile) => projectileEvents.push(`projectile-change:${projectile.id}`));
+  first.onProjectileRemoved((projectileId) => projectileEvents.push(`projectile-remove:${projectileId}`));
+  first.onHitEvent((message) => hitEvents.push(`hit:${message.targetShipId}:${message.damage}`));
 
   await first.connect();
   await second.connect();
@@ -72,6 +78,7 @@ async function main(): Promise<void> {
     left: false,
     right: true,
     aimAngle: 0,
+    shooting: false,
     sequence: 1
   });
 
@@ -86,6 +93,7 @@ async function main(): Promise<void> {
     left: false,
     right: false,
     aimAngle: 0,
+    shooting: false,
     sequence: 2
   });
 
@@ -105,6 +113,7 @@ async function main(): Promise<void> {
     left: false,
     right: false,
     aimAngle: 0,
+    shooting: false,
     sequence: 1
   });
 
@@ -113,6 +122,53 @@ async function main(): Promise<void> {
   if (spectator.currentShips.some((ship) => ship.ownerSessionId === spectator.getSessionId())) {
     throw new Error('Spectator unexpectedly received a ship.');
   }
+
+  const combatRedX = 5000;
+  const combatRedY = 5000;
+  const combatBlueX = 5600;
+  const combatBlueY = 5000;
+  first.sendDiagnosticShipPosition(combatRedX, combatRedY, 0);
+  second.sendDiagnosticShipPosition(combatBlueX, combatBlueY, Math.PI);
+
+  await waitFor(() => {
+    const red = spectator.currentShips.find((ship) => ship.ownerSessionId === first.getSessionId());
+    const blue = spectator.currentShips.find((ship) => ship.ownerSessionId === second.getSessionId());
+    return Boolean(
+      red &&
+      blue &&
+      Math.abs(red.x - combatRedX) < 2 &&
+      Math.abs(red.y - combatRedY) < 2 &&
+      Math.abs(blue.x - combatBlueX) < 2 &&
+      Math.abs(blue.y - combatBlueY) < 2
+    );
+  }, 'diagnostic ship positioning');
+
+  first.sendPlayerInput({
+    up: false,
+    down: false,
+    left: false,
+    right: false,
+    aimAngle: 0,
+    shooting: true,
+    sequence: 3
+  });
+
+  await waitFor(() => first.currentProjectiles.length > 0 || projectileEvents.some((event) => event.startsWith('projectile-add')), 'projectile creation');
+
+  await waitFor(() => {
+    const blue = first.currentShips.find((ship) => ship.ownerSessionId === second.getSessionId());
+    return Boolean(blue && blue.health < blue.maxHealth);
+  }, 'server-authoritative projectile damage');
+
+  first.sendPlayerInput({
+    up: false,
+    down: false,
+    left: false,
+    right: false,
+    aimAngle: 0,
+    shooting: false,
+    sequence: 4
+  });
 
   await second.disconnect();
 
@@ -135,7 +191,9 @@ async function main(): Promise<void> {
     ok: true,
     firstEvents,
     secondEvents,
-    shipEvents
+    shipEvents,
+    projectileEvents,
+    hitEvents
   }, null, 2));
 }
 
