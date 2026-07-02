@@ -6,13 +6,12 @@ import {
 import { NetworkProjectileView } from '../entities/NetworkProjectileView';
 import { NetworkShipView } from '../entities/NetworkShipView';
 import { networkClient } from '../network/networkSession';
-import type { ConnectionState, Unsubscribe } from '../network/NetworkClient';
+import type { ConnectionState, PlayerInputPayload, Unsubscribe } from '../network/NetworkClient';
 import { SpaceMap } from '../world/SpaceMap';
 import {
   WORLD_HEIGHT,
   WORLD_WIDTH,
   type HitEventMessage,
-  type PlayerInputMessage,
   type ProjectileSnapshot,
   type ShipSnapshot
 } from '@burningspace/shared';
@@ -36,7 +35,6 @@ export class MultiplayerGameScene extends Phaser.Scene {
   private readonly projectileViews = new Map<string, NetworkProjectileView>();
   private readonly disposers: Unsubscribe[] = [];
   private inputAccumulatorMs = 0;
-  private inputSequence = 0;
   private spectatorCameraVelocityX = 0;
   private spectatorCameraVelocityY = 0;
   private connectionState: ConnectionState = { status: 'disconnected' };
@@ -183,8 +181,10 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   private updateViews(deltaSeconds: number): void {
+    const serverNowMs = networkClient.getEstimatedServerTime();
+
     for (const view of this.shipViews.values()) {
-      view.update(deltaSeconds);
+      view.update(deltaSeconds, serverNowMs);
     }
 
     for (const view of this.projectileViews.values()) {
@@ -207,13 +207,12 @@ export class MultiplayerGameScene extends Phaser.Scene {
     networkClient.sendPlayerInput(this.createPlayerInput());
   }
 
-  private createPlayerInput(): PlayerInputMessage {
+  private createPlayerInput(): PlayerInputPayload {
     const pointer = this.input.activePointer;
     const pointerWorld = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const ownShip = this.getOwnShipSnapshot();
     const originX = ownShip?.x ?? this.cameras.main.midPoint.x;
     const originY = ownShip?.y ?? this.cameras.main.midPoint.y;
-    this.inputSequence += 1;
 
     return {
       up: Boolean(this.keyW?.isDown || this.cursors?.up.isDown),
@@ -221,8 +220,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
       left: Boolean(this.keyA?.isDown || this.cursors?.left.isDown),
       right: Boolean(this.keyD?.isDown || this.cursors?.right.isDown),
       aimAngle: Phaser.Math.Angle.Between(originX, originY, pointerWorld.x, pointerWorld.y),
-      shooting: Boolean(ownShip?.alive && (pointer.leftButtonDown() || this.keySpace?.isDown)),
-      sequence: this.inputSequence
+      shooting: Boolean(ownShip?.alive && (pointer.leftButtonDown() || this.keySpace?.isDown))
     };
   }
 
@@ -231,15 +229,13 @@ export class MultiplayerGameScene extends Phaser.Scene {
       return;
     }
 
-    this.inputSequence += 1;
     networkClient.sendPlayerInput({
       up: false,
       down: false,
       left: false,
       right: false,
       aimAngle: this.getOwnShipSnapshot()?.rotation ?? 0,
-      shooting: false,
-      sequence: this.inputSequence
+      shooting: false
     });
   }
 
@@ -250,10 +246,13 @@ export class MultiplayerGameScene extends Phaser.Scene {
       this.spectatorCameraVelocityX = 0;
       this.spectatorCameraVelocityY = 0;
       const camera = this.cameras.main;
+      const ownShipView = this.shipViews.get(ownShip.id);
+      const targetX = ownShipView?.getDisplayX() ?? ownShip.x;
+      const targetY = ownShipView?.getDisplayY() ?? ownShip.y;
       const lerp = 1 - Math.pow(1 - CAMERA_LERP, deltaSeconds * 60);
       camera.centerOn(
-        Phaser.Math.Linear(camera.midPoint.x, ownShip.x, lerp),
-        Phaser.Math.Linear(camera.midPoint.y, ownShip.y, lerp)
+        Phaser.Math.Linear(camera.midPoint.x, targetX, lerp),
+        Phaser.Math.Linear(camera.midPoint.y, targetY, lerp)
       );
       return;
     }
@@ -313,8 +312,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   private getOwnShipSnapshot(): ShipSnapshot | undefined {
-    const sessionId = networkClient.getSessionId();
-    return networkClient.currentShips.find((ship) => ship.ownerSessionId === sessionId);
+    return networkClient.getOwnShipSnapshot();
   }
 
   private updateHud(): void {
@@ -355,7 +353,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
       return;
     }
 
-    const seconds = Math.max(0, Math.ceil((ownShip.respawnAt - Date.now()) / 1000));
+    const seconds = Math.max(0, Math.ceil((ownShip.respawnAt - networkClient.getEstimatedServerTime()) / 1000));
     this.respawnText.setText(`DESTROYED\nRESPAWN IN ${seconds}s`);
     this.respawnText.setVisible(true);
   }

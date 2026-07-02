@@ -1,7 +1,9 @@
+import { performance } from 'node:perf_hooks';
 import { Client, Room } from 'colyseus';
 import {
   ClientMessages,
   MAX_ROOM_CLIENTS,
+  NETWORK_INPUT_TIMEOUT_MS,
   NETWORK_MAX_ACTIVE_PROJECTILES_PER_SHIP,
   NETWORK_PROJECTILE_DAMAGE,
   NETWORK_PROJECTILE_MAX_RANGE,
@@ -43,31 +45,8 @@ interface WeaponRuntimeState {
   lastShotAt: number;
 }
 
-interface TestShipPositionMessage {
-  x: number;
-  y: number;
-  rotation?: number;
-}
-
-const TEST_SET_SHIP_POSITION_MESSAGE = '__testSetShipPosition';
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isTestShipPositionMessage(value: unknown): value is TestShipPositionMessage {
-  return (
-    isRecord(value) &&
-    typeof value.x === 'number' &&
-    Number.isFinite(value.x) &&
-    typeof value.y === 'number' &&
-    Number.isFinite(value.y) &&
-    (value.rotation === undefined || (typeof value.rotation === 'number' && Number.isFinite(value.rotation)))
-  );
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 function validateProfile(message: unknown): ProfileValidationResult {
@@ -124,12 +103,6 @@ export class BattleRoom extends Room<BattleState> {
       this.handlePlayerInput(client, message);
     });
 
-    if (process.env.NODE_ENV !== 'production') {
-      this.onMessage<unknown>(TEST_SET_SHIP_POSITION_MESSAGE, (client, message) => {
-        this.handleTestSetShipPosition(client, message);
-      });
-    }
-
     this.setSimulationInterval((deltaTimeMs) => {
       this.updateSimulation(deltaTimeMs);
     }, NETWORK_TICK_INTERVAL_MS);
@@ -182,9 +155,21 @@ export class BattleRoom extends Room<BattleState> {
       return;
     }
 
+    const requestedFaction = validation.profile.faction ?? '';
+
+    if (
+      participant.profileReady &&
+      (participant.mode !== validation.profile.mode || participant.faction !== requestedFaction)
+    ) {
+      client.send(ServerMessages.PROFILE_REJECTED, {
+        reason: 'Disconnect before changing mode or faction.'
+      } satisfies ProfileRejectedMessage);
+      return;
+    }
+
     participant.nickname = validation.profile.nickname;
     participant.mode = validation.profile.mode;
-    participant.faction = validation.profile.faction ?? '';
+    participant.faction = requestedFaction;
     participant.profileReady = true;
 
     if (validation.profile.mode === 'player' && validation.profile.faction) {
@@ -213,7 +198,8 @@ export class BattleRoom extends Room<BattleState> {
     this.broadcast(ServerMessages.ROOM_INFO, {
       roomId: this.roomId,
       connectedClients: this.clients.length,
-      maxClients: this.maxClients
+      maxClients: this.maxClients,
+      serverTime: Date.now()
     } satisfies RoomInfoMessage);
   }
 
@@ -266,7 +252,7 @@ export class BattleRoom extends Room<BattleState> {
     this.state.ships.delete(sessionId);
     this.inputs.delete(sessionId);
     this.weapons.delete(sessionId);
-    this.removeProjectilesOwnedBy(sessionId);
+    this.lastInputReceivedAt.delete(sessionId);
     console.log(`[BattleRoom] ship removed sessionId=${sessionId}`);
   }
 
@@ -283,8 +269,8 @@ export class BattleRoom extends Room<BattleState> {
       return;
     }
 
-    const now = Date.now();
-    const lastReceivedAt = this.lastInputReceivedAt.get(client.sessionId) ?? 0;
+    const now = performance.now();
+    const lastReceivedAt = this.lastInputReceivedAt.get(client.sessionId) ?? -Infinity;
 
     if (now - lastReceivedAt < 10) {
       return;
@@ -301,31 +287,14 @@ export class BattleRoom extends Room<BattleState> {
     this.inputs.set(client.sessionId, validation.input);
   }
 
-  private handleTestSetShipPosition(client: Client, message: unknown): void {
-    if (process.env.NODE_ENV === 'production' || !isTestShipPositionMessage(message)) {
-      return;
-    }
-
-    const ship = this.state.ships.get(client.sessionId);
-
-    if (!ship || !ship.alive) {
-      return;
-    }
-
-    ship.x = clamp(message.x, NETWORK_SHIP_RADIUS, WORLD_WIDTH - NETWORK_SHIP_RADIUS);
-    ship.y = clamp(message.y, NETWORK_SHIP_RADIUS, WORLD_HEIGHT - NETWORK_SHIP_RADIUS);
-    ship.rotation = message.rotation ?? ship.rotation;
-    ship.velocityX = 0;
-    ship.velocityY = 0;
-  }
-
   private updateSimulation(deltaTimeMs: number): void {
-    const now = Date.now();
+    const runtimeNow = performance.now();
+    const wallNow = Date.now();
     const deltaSeconds = Math.min(deltaTimeMs / 1000, 0.1);
 
     this.state.ships.forEach((ship, sessionId) => {
       if (!ship.alive) {
-        this.tryRespawnShip(ship, sessionId, now);
+        this.tryRespawnShip(ship, sessionId, wallNow);
         return;
       }
 
@@ -333,22 +302,41 @@ export class BattleRoom extends Room<BattleState> {
         return;
       }
 
-      const input = this.inputs.get(sessionId) ?? createNeutralInput(ship.lastProcessedInput);
+      const input = this.getRuntimeInput(sessionId, ship, runtimeNow);
       simulateShipMovement(ship, input, deltaSeconds);
-      this.tryFireProjectile(ship, input, now);
+      this.tryFireProjectile(ship, input, runtimeNow, wallNow);
     });
 
-    this.updateProjectiles(deltaSeconds, now);
+    this.updateProjectiles(deltaSeconds, wallNow, runtimeNow);
   }
 
-  private tryFireProjectile(ship: ShipState, input: PlayerInputMessage, now: number): void {
+  private getRuntimeInput(sessionId: string, ship: ShipState, now: number): PlayerInputMessage {
+    const input = this.inputs.get(sessionId) ?? createNeutralInput(ship.lastProcessedInput);
+    const lastReceivedAt = this.lastInputReceivedAt.get(sessionId) ?? -Infinity;
+
+    if (now - lastReceivedAt <= NETWORK_INPUT_TIMEOUT_MS) {
+      return input;
+    }
+
+    return {
+      ...createNeutralInput(input.sequence),
+      aimAngle: input.aimAngle
+    };
+  }
+
+  private tryFireProjectile(
+    ship: ShipState,
+    input: PlayerInputMessage,
+    runtimeNow: number,
+    wallNow: number
+  ): void {
     if (!input.shooting || !ship.alive || !ship.active) {
       return;
     }
 
     const weapon = this.weapons.get(ship.ownerSessionId) ?? { lastShotAt: -Infinity };
 
-    if (now - weapon.lastShotAt < NETWORK_WEAPON_FIRE_INTERVAL_MS) {
+    if (runtimeNow - weapon.lastShotAt < NETWORK_WEAPON_FIRE_INTERVAL_MS) {
       this.weapons.set(ship.ownerSessionId, weapon);
       return;
     }
@@ -377,9 +365,9 @@ export class BattleRoom extends Room<BattleState> {
     projectile.spawnY = muzzleY;
     projectile.distanceTraveled = 0;
     projectile.active = true;
-    projectile.createdAt = now;
+    projectile.createdAt = wallNow;
     this.state.projectiles.set(projectileId, projectile);
-    weapon.lastShotAt = now;
+    weapon.lastShotAt = runtimeNow;
     this.weapons.set(ship.ownerSessionId, weapon);
   }
 
@@ -395,7 +383,7 @@ export class BattleRoom extends Room<BattleState> {
     return count;
   }
 
-  private updateProjectiles(deltaSeconds: number, now: number): void {
+  private updateProjectiles(deltaSeconds: number, wallNow: number, runtimeNow: number): void {
     const projectileIdsToRemove: string[] = [];
 
     this.state.projectiles.forEach((projectile, projectileId) => {
@@ -419,7 +407,7 @@ export class BattleRoom extends Room<BattleState> {
         return;
       }
 
-      const hit = this.findProjectileHit(projectile, now);
+      const hit = this.findProjectileHit(projectile, wallNow);
 
       if (!hit) {
         return;
@@ -431,7 +419,7 @@ export class BattleRoom extends Room<BattleState> {
         return;
       }
 
-      const killed = applyDamage(target, NETWORK_PROJECTILE_DAMAGE, now);
+      const killed = applyDamage(target, NETWORK_PROJECTILE_DAMAGE, wallNow);
       this.broadcast(ServerMessages.HIT_EVENT, {
         projectileId,
         targetShipId: hit.shipId,
@@ -443,7 +431,7 @@ export class BattleRoom extends Room<BattleState> {
 
       if (killed) {
         this.inputs.set(hit.shipId, createNeutralInput(target.lastProcessedInput));
-        this.weapons.set(hit.shipId, { lastShotAt: now });
+        this.weapons.set(hit.shipId, { lastShotAt: runtimeNow });
         this.broadcast(ServerMessages.SHIP_DESTROYED, {
           shipId: hit.shipId,
           x: target.x,
@@ -494,27 +482,13 @@ export class BattleRoom extends Room<BattleState> {
     };
   }
 
-  private tryRespawnShip(ship: ShipState, sessionId: string, now: number): void {
-    if (ship.respawnAt <= 0 || now < ship.respawnAt) {
+  private tryRespawnShip(ship: ShipState, sessionId: string, wallNow: number): void {
+    if (ship.respawnAt <= 0 || wallNow < ship.respawnAt) {
       return;
     }
 
-    respawnShip(ship, now);
+    respawnShip(ship, wallNow);
     this.inputs.set(sessionId, createNeutralInput(ship.lastProcessedInput));
     this.weapons.set(sessionId, { lastShotAt: -Infinity });
-  }
-
-  private removeProjectilesOwnedBy(ownerSessionId: string): void {
-    const projectileIds: string[] = [];
-
-    this.state.projectiles.forEach((projectile, projectileId) => {
-      if (projectile.ownerSessionId === ownerSessionId) {
-        projectileIds.push(projectileId);
-      }
-    });
-
-    for (const projectileId of projectileIds) {
-      this.state.projectiles.delete(projectileId);
-    }
   }
 }

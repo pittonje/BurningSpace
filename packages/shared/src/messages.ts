@@ -78,6 +78,7 @@ export interface RoomInfoMessage {
   roomId: string;
   connectedClients: number;
   maxClients: number;
+  serverTime: number;
 }
 
 export interface HitEventMessage {

@@ -10,6 +10,8 @@ const HEALTH_BAR_HEIGHT = 6;
 export class NetworkShipView {
   private readonly scene: Phaser.Scene;
   private readonly container: Phaser.GameObjects.Container;
+  private readonly shipContainer: Phaser.GameObjects.Container;
+  private readonly hudContainer: Phaser.GameObjects.Container;
   private readonly sprite: Phaser.GameObjects.Image;
   private readonly label: Phaser.GameObjects.Text;
   private readonly selfMarker: Phaser.GameObjects.Arc;
@@ -54,15 +56,11 @@ export class NetworkShipView {
     this.healthFill = scene.add.rectangle(-HEALTH_BAR_WIDTH / 2, -70, HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT, 0x22c55e, 0.95);
     this.healthFill.setOrigin(0, 0.5);
 
-    this.container = scene.add.container(ship.x, ship.y, [
-      this.selfMarker,
-      this.sprite,
-      this.label,
-      this.healthBack,
-      this.healthFill
-    ]);
+    this.shipContainer = scene.add.container(0, 0, [this.selfMarker, this.sprite]);
+    this.shipContainer.setRotation(ship.rotation);
+    this.hudContainer = scene.add.container(0, 0, [this.label, this.healthBack, this.healthFill]);
+    this.container = scene.add.container(ship.x, ship.y, [this.shipContainer, this.hudContainer]);
     this.container.setDepth(isOwnShip ? 24 : 22);
-    this.container.setRotation(ship.rotation);
     this.updateHealthBar();
     this.updateAliveVisibility();
   }
@@ -72,6 +70,14 @@ export class NetworkShipView {
   }
 
   get y(): number {
+    return this.container.y;
+  }
+
+  getDisplayX(): number {
+    return this.container.x;
+  }
+
+  getDisplayY(): number {
     return this.container.y;
   }
 
@@ -97,23 +103,23 @@ export class NetworkShipView {
 
     if (distance > SNAP_DISTANCE) {
       this.container.setPosition(ship.x, ship.y);
-      this.container.setRotation(ship.rotation);
+      this.shipContainer.setRotation(ship.rotation);
     }
 
     this.updateHealthBar();
     this.updateAliveVisibility();
   }
 
-  update(deltaSeconds: number): void {
+  update(deltaSeconds: number, serverNowMs: number): void {
     const positionAlpha = 1 - Math.exp(-POSITION_SMOOTHING * deltaSeconds);
     const rotationAlpha = 1 - Math.exp(-ROTATION_SMOOTHING * deltaSeconds);
     this.container.x = Phaser.Math.Linear(this.container.x, this.targetX, positionAlpha);
     this.container.y = Phaser.Math.Linear(this.container.y, this.targetY, positionAlpha);
 
-    const rotationDelta = Phaser.Math.Angle.Wrap(this.targetRotation - this.container.rotation);
-    this.container.rotation = Phaser.Math.Angle.Wrap(this.container.rotation + rotationDelta * rotationAlpha);
+    const rotationDelta = Phaser.Math.Angle.Wrap(this.targetRotation - this.shipContainer.rotation);
+    this.shipContainer.rotation = Phaser.Math.Angle.Wrap(this.shipContainer.rotation + rotationDelta * rotationAlpha);
 
-    if (this.alive && Date.now() < this.invulnerableUntil) {
+    if (this.alive && serverNowMs < this.invulnerableUntil) {
       this.container.setAlpha(0.54 + Math.sin(this.scene.time.now * 0.018) * 0.22);
     } else {
       this.container.setAlpha(1);

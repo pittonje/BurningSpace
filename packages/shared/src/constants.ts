@@ -4,6 +4,7 @@ export const MAX_ROOM_CLIENTS = 40;
 
 export const NETWORK_TICK_RATE = 20;
 export const NETWORK_TICK_INTERVAL_MS = 1000 / NETWORK_TICK_RATE;
+export const NETWORK_INPUT_TIMEOUT_MS = 300;
 
 export const WORLD_WIDTH = 12000;
 export const WORLD_HEIGHT = 12000;

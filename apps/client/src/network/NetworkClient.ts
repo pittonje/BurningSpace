@@ -19,6 +19,7 @@ import {
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type Unsubscribe = () => void;
+export type PlayerInputPayload = Omit<PlayerInputMessage, 'sequence'>;
 
 interface ParticipantStateSchema {
   sessionId: string;
@@ -77,7 +78,13 @@ interface BattleStateSchema {
 export interface ConnectionState {
   status: ConnectionStatus;
   error?: string;
+  profileError?: string;
   roomInfo?: RoomInfoMessage;
+}
+
+export interface NetworkClientOptions {
+  roomName?: string;
+  serverUrl?: string;
 }
 
 type StateCallbacks = ReturnType<typeof getStateCallbacks<BattleStateSchema>>;
@@ -153,13 +160,17 @@ function toProjectileSnapshot(schema: ProjectileStateSchema): ProjectileSnapshot
 }
 
 export class NetworkClient {
-  private readonly client = new Client(getServerUrl());
+  private readonly client: Client;
+  private readonly roomName: string;
   private room?: Room<BattleStateSchema>;
   private status: ConnectionStatus = 'disconnected';
   private error?: string;
+  private profileError?: string;
   private roomInfo?: RoomInfoMessage;
   private acceptedProfile?: ProfileAcceptedMessage;
   private connectingPromise?: Promise<void>;
+  private inputSequence = 0;
+  private serverClockOffsetMs = 0;
   private readonly participants = new Map<string, RoomParticipant>();
   private readonly ships = new Map<string, ShipSnapshot>();
   private readonly projectiles = new Map<string, ProjectileSnapshot>();
@@ -180,6 +191,11 @@ export class NetworkClient {
   private readonly shipDisposers = new Map<string, Unsubscribe>();
   private readonly projectileDisposers = new Map<string, Unsubscribe>();
 
+  constructor(options: NetworkClientOptions = {}) {
+    this.client = new Client(options.serverUrl ?? getServerUrl());
+    this.roomName = options.roomName ?? 'battle';
+  }
+
   get currentParticipants(): RoomParticipant[] {
     return Array.from(this.participants.values()).sort((left, right) => left.connectedAt - right.connectedAt);
   }
@@ -198,6 +214,15 @@ export class NetworkClient {
 
   getSessionId(): string | undefined {
     return this.room?.sessionId;
+  }
+
+  getOwnShipSnapshot(): ShipSnapshot | undefined {
+    const sessionId = this.getSessionId();
+    return sessionId ? this.ships.get(sessionId) : undefined;
+  }
+
+  getEstimatedServerTime(): number {
+    return Date.now() + this.serverClockOffsetMs;
   }
 
   async connect(): Promise<void> {
@@ -221,19 +246,27 @@ export class NetworkClient {
       return;
     }
 
+    this.profileError = undefined;
+    this.emitConnectionState();
     this.room.send(ClientMessages.SET_PROFILE, profile);
   }
 
-  sendPlayerInput(input: PlayerInputMessage): void {
+  sendPlayerInput(input: PlayerInputPayload): void {
     if (!this.room || this.acceptedProfile?.mode !== 'player') {
       return;
     }
 
-    this.room.send(ClientMessages.PLAYER_INPUT, input);
-  }
+    const ownShip = this.getOwnShipSnapshot();
 
-  sendDiagnosticShipPosition(x: number, y: number, rotation?: number): void {
-    this.room?.send('__testSetShipPosition', { x, y, rotation });
+    if (ownShip) {
+      this.inputSequence = Math.max(this.inputSequence, ownShip.lastProcessedInput);
+    }
+
+    this.inputSequence += 1;
+    this.room.send(ClientMessages.PLAYER_INPUT, {
+      ...input,
+      sequence: this.inputSequence
+    });
   }
 
   async disconnect(): Promise<void> {
@@ -243,6 +276,9 @@ export class NetworkClient {
     this.room = undefined;
     this.roomInfo = undefined;
     this.acceptedProfile = undefined;
+    this.profileError = undefined;
+    this.inputSequence = 0;
+    this.serverClockOffsetMs = 0;
     this.clearParticipants();
     this.clearShips();
     this.clearProjectiles();
@@ -317,7 +353,7 @@ export class NetworkClient {
 
   private async connectInternal(): Promise<void> {
     try {
-      const room = await this.client.joinOrCreate<BattleStateSchema>('battle');
+      const room = await this.client.joinOrCreate<BattleStateSchema>(this.roomName);
       this.room = room;
       this.registerRoomListeners(room);
       this.registerParticipantListeners(room);
@@ -327,6 +363,7 @@ export class NetworkClient {
     } catch (error) {
       this.room = undefined;
       this.clearRoomListeners();
+      this.profileError = undefined;
       this.clearParticipants();
       this.clearShips();
       this.clearProjectiles();
@@ -337,15 +374,18 @@ export class NetworkClient {
   private registerRoomListeners(room: Room<BattleStateSchema>): void {
     room.onMessage<ProfileAcceptedMessage>(ServerMessages.PROFILE_ACCEPTED, (message) => {
       this.acceptedProfile = message;
+      this.profileError = undefined;
       this.setConnectionState('connected', undefined, this.roomInfo);
     });
 
     room.onMessage<ProfileRejectedMessage>(ServerMessages.PROFILE_REJECTED, (message) => {
-      this.setConnectionState('error', message.reason, this.roomInfo);
+      this.profileError = message.reason;
+      this.emitConnectionState();
     });
 
     room.onMessage<RoomInfoMessage>(ServerMessages.ROOM_INFO, (message) => {
       this.roomInfo = message;
+      this.serverClockOffsetMs = message.serverTime - Date.now();
       this.emitConnectionState();
     });
 
@@ -370,6 +410,9 @@ export class NetworkClient {
       this.room = undefined;
       this.roomInfo = undefined;
       this.acceptedProfile = undefined;
+      this.profileError = undefined;
+      this.inputSequence = 0;
+      this.serverClockOffsetMs = 0;
       this.clearParticipants();
       this.clearShips();
       this.clearProjectiles();
@@ -550,6 +593,11 @@ export class NetworkClient {
   private upsertShip(ship: ShipSnapshot, event: 'added' | 'changed'): void {
     const alreadyKnown = this.ships.has(ship.id);
     this.ships.set(ship.id, ship);
+
+    if (ship.ownerSessionId === this.getSessionId()) {
+      this.inputSequence = Math.max(this.inputSequence, ship.lastProcessedInput);
+    }
+
     const callbacks = event === 'added' && !alreadyKnown
       ? this.shipAddedCallbacks
       : this.shipChangedCallbacks;
@@ -641,6 +689,7 @@ export class NetworkClient {
     return {
       status: this.status,
       error: this.error,
+      profileError: this.profileError,
       roomInfo: this.roomInfo
     };
   }

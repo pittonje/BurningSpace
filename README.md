@@ -68,7 +68,7 @@ BattleRoom синхронизирует через Colyseus Schema:
 - `ships` - серверные корабли игроков;
 - `projectiles` - серверные снаряды.
 
-Клиент отправляет только `playerInput`: движение, `aimAngle`, `shooting` и `sequence`. Сервер сам считает движение, создает снаряды, двигает их с фиксированной скоростью, проверяет swept circle collision, запрещает friendly fire и self-hit, применяет урон, рассылает hit/death events и выполняет respawn.
+Клиентская сцена отправляет только состояние ввода: движение, `aimAngle` и `shooting`. `NetworkClient` добавляет monotonically increasing `sequence`, а сервер сам считает движение, создает снаряды, двигает их с фиксированной скоростью, проверяет swept circle collision, запрещает friendly fire и self-hit, применяет урон, рассылает hit/death events и выполняет respawn.
 
 Текущие сетевые правила:
 
@@ -82,6 +82,16 @@ BattleRoom синхронизирует через Colyseus Schema:
 - снаряды не наносят урон владельцу и союзникам.
 
 Локальная сцена `GameScene` не использует эту сетевую механику. Астероиды, NPC, базы, runtime balance и админ-панель остаются частью локального прототипа.
+
+## Multiplayer Combat Lifecycle Hardening
+
+- Input sequence хранится в `NetworkClient`, поэтому переход `MultiplayerGameScene -> NetworkTestScene -> MultiplayerGameScene` не сбрасывает управление.
+- Stale input автоматически нейтрализуется сервером через `NETWORK_INPUT_TIMEOUT_MS`: корабль перестает ускоряться и стрелять, если новые input-сообщения не приходят.
+- `mode` и `faction` фиксируются после первого принятого профиля до disconnect; менять можно только nickname.
+- Ошибка валидации профиля отделена от connection error: соединение остается `connected`, а UI показывает profile error отдельно.
+- Уже выпущенные `ProjectileState` переживают disconnect владельца и удаляются только по попаданию, дальности или выходу за границы мира.
+- Клиент хранит `serverClockOffsetMs` из `roomInfo.serverTime` и использует оценку серверного времени для respawn countdown и invulnerability visual.
+- Test teleport удалён из обычной `BattleRoom`; lifecycle-проверки используют отдельную `TestBattleRoom`, не зарегистрированную в production entrypoint.
 
 ## Управление
 
@@ -116,7 +126,7 @@ npx tsx apps/server/scripts/combat-check.ts
 npx tsx apps/client/scripts/network-client-callback-check.ts
 ```
 
-`network-client-callback-check.ts` требует запущенный сервер. Скрипт подключает двух игроков и spectator, проверяет синхронизацию участников/кораблей, создает серверный снаряд через обычный input и убеждается, что HP цели уменьшается через Schema.
+`network-client-callback-check.ts` сам запускает test-only Colyseus room, подключает двух игроков и spectator, проверяет синхронизацию участников/кораблей, profile lifecycle, stale input timeout, death/respawn, invulnerability и то, что снаряды переживают disconnect владельца.
 
 ## Текущий статус
 
