@@ -168,6 +168,9 @@ export class AdminPanel {
   refresh(): void {
     for (const [key, input] of this.inputs) {
       const [section, field] = key.split('.');
+      if (!section || !field) {
+        continue;
+      }
       const value = this.readValue(section, field);
       input.value = typeof value === 'boolean' ? String(value) : String(Math.round(value * 100) / 100);
       input.checked = Boolean(value);

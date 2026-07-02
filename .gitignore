@@ -1,9 +1,17 @@
 node_modules/
 dist/
+apps/*/dist/
+packages/*/dist/
 .vite/
+apps/client/.vite/
 *.local
+.env
+.env.*
+!.env.example
 vite-dev*.log
 .vite-dev*.log
+.server-dev*.log
+.client-dev*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

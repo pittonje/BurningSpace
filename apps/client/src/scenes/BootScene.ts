@@ -15,6 +15,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.scene.start('GameScene');
+    this.scene.start('NetworkTestScene');
   }
 }

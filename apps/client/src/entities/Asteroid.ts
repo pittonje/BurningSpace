@@ -126,10 +126,20 @@ export class Asteroid {
     this.body.fillStyle(baseColor, 0.98);
     this.body.lineStyle(2, edgeColor, 0.72);
     this.body.beginPath();
-    this.body.moveTo(this.points[0].x, this.points[0].y);
+    const firstPoint = this.points[0];
+
+    if (!firstPoint) {
+      return;
+    }
+
+    this.body.moveTo(firstPoint.x, firstPoint.y);
 
     for (let i = 1; i < this.points.length; i += 1) {
-      this.body.lineTo(this.points[i].x, this.points[i].y);
+      const point = this.points[i];
+
+      if (point) {
+        this.body.lineTo(point.x, point.y);
+      }
     }
 
     this.body.closePath();

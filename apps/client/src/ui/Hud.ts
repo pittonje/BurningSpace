@@ -284,6 +284,10 @@ export class Hud {
   private positionBigMapLabels(x: number, y: number, size: number): void {
     const [redLabel, centerLabel, blueLabel, closeLabel] = this.bigMapLabels;
 
+    if (!redLabel || !centerLabel || !blueLabel || !closeLabel) {
+      return;
+    }
+
     redLabel.setPosition(x + 18, y + 18);
     centerLabel.setPosition(x + size / 2 - centerLabel.width / 2, y + size / 2 + 16);
     blueLabel.setPosition(x + size - blueLabel.width - 18, y + size - 38);
