@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { Faction, JoinMode, JoinRequest, RoomParticipant } from '@burningspace/shared';
 import { NetworkClient, type ConnectionState, type Unsubscribe } from '../network/NetworkClient';
+import { networkClient } from '../network/networkSession';
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
   tagName: K,
@@ -32,17 +33,20 @@ export class NetworkTestScene extends Phaser.Scene {
   private factionField?: HTMLLabelElement;
   private connectButton?: HTMLButtonElement;
   private applyButton?: HTMLButtonElement;
+  private enterMultiplayerButton?: HTMLButtonElement;
   private disconnectButton?: HTMLButtonElement;
   private participantsList?: HTMLUListElement;
   private connectionState: ConnectionState = { status: 'disconnected' };
   private readonly disposers: Unsubscribe[] = [];
+  private keepConnectionOnShutdown = false;
 
   constructor() {
     super('NetworkTestScene');
   }
 
   create(): void {
-    this.network = new NetworkClient();
+    this.network = networkClient;
+    this.keepConnectionOnShutdown = false;
     this.createUi();
     this.bindNetwork();
     this.render();
@@ -86,11 +90,12 @@ export class NetworkTestScene extends Phaser.Scene {
 
     this.connectButton = createElement('button', 'network-test__button', 'Connect');
     this.applyButton = createElement('button', 'network-test__button', 'Apply profile');
+    this.enterMultiplayerButton = createElement('button', 'network-test__button', 'Enter multiplayer');
     this.disconnectButton = createElement('button', 'network-test__button', 'Disconnect');
     const openLocalButton = createElement('button', 'network-test__button network-test__button--secondary', 'Open local prototype');
 
     const buttons = createElement('div', 'network-test__buttons');
-    buttons.append(this.connectButton, this.applyButton, this.disconnectButton, openLocalButton);
+    buttons.append(this.connectButton, this.applyButton, this.enterMultiplayerButton, this.disconnectButton, openLocalButton);
 
     const participantsTitle = createElement('h2', 'network-test__subtitle', 'Participants');
     this.participantsList = createElement('ul', 'network-test__participants');
@@ -106,6 +111,10 @@ export class NetworkTestScene extends Phaser.Scene {
       });
     });
     this.applyButton.addEventListener('click', () => this.network?.setProfile(this.getProfile()));
+    this.enterMultiplayerButton.addEventListener('click', () => {
+      this.keepConnectionOnShutdown = true;
+      this.scene.start('MultiplayerGameScene');
+    });
     this.disconnectButton.addEventListener('click', () => {
       void this.network?.disconnect();
     });
@@ -189,6 +198,10 @@ export class NetworkTestScene extends Phaser.Scene {
       this.applyButton.disabled = !connected || connecting;
     }
 
+    if (this.enterMultiplayerButton) {
+      this.enterMultiplayerButton.disabled = !this.network?.profile || !connected || connecting;
+    }
+
     if (this.disconnectButton) {
       this.disconnectButton.disabled = !connected || connecting;
     }
@@ -236,7 +249,9 @@ export class NetworkTestScene extends Phaser.Scene {
       dispose();
     }
 
-    void this.network?.disconnect();
+    if (!this.keepConnectionOnShutdown) {
+      void this.network?.disconnect();
+    }
     this.root?.remove();
     this.root = undefined;
     this.network = undefined;

@@ -1,5 +1,14 @@
-export const WORLD_WIDTH = 12000;
-export const WORLD_HEIGHT = 12000;
+import {
+  BLUE_BASE_X as SHARED_BLUE_BASE_X,
+  BLUE_BASE_Y as SHARED_BLUE_BASE_Y,
+  RED_BASE_X as SHARED_RED_BASE_X,
+  RED_BASE_Y as SHARED_RED_BASE_Y,
+  WORLD_HEIGHT as SHARED_WORLD_HEIGHT,
+  WORLD_WIDTH as SHARED_WORLD_WIDTH
+} from '@burningspace/shared';
+
+export const WORLD_WIDTH = SHARED_WORLD_WIDTH;
+export const WORLD_HEIGHT = SHARED_WORLD_HEIGHT;
 
 export const PLAYER_MAX_SPEED = 500;
 export const PLAYER_ACCELERATION = 900;
@@ -20,12 +29,12 @@ export const PROJECTILE_COLLISION_RADIUS = 18;
 export const CAMERA_LERP = 0.12;
 export const CAMERA_ZOOM = 0.86;
 
-export const PLAYER_SPAWN_X = 760;
-export const PLAYER_SPAWN_Y = 760;
+export const PLAYER_SPAWN_X = SHARED_RED_BASE_X;
+export const PLAYER_SPAWN_Y = SHARED_RED_BASE_Y;
 export const RED_BASE_X = PLAYER_SPAWN_X;
 export const RED_BASE_Y = PLAYER_SPAWN_Y;
-export const BLUE_BASE_SPAWN_X = WORLD_WIDTH - 760;
-export const BLUE_BASE_SPAWN_Y = WORLD_HEIGHT - 760;
+export const BLUE_BASE_SPAWN_X = SHARED_BLUE_BASE_X;
+export const BLUE_BASE_SPAWN_Y = SHARED_BLUE_BASE_Y;
 export const BLUE_BASE_X = BLUE_BASE_SPAWN_X;
 export const BLUE_BASE_Y = BLUE_BASE_SPAWN_Y;
 

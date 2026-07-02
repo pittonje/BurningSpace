@@ -1,7 +1,8 @@
 import type { Faction, JoinMode } from './factions.js';
 
 export const ClientMessages = {
-  SET_PROFILE: 'setProfile'
+  SET_PROFILE: 'setProfile',
+  PLAYER_INPUT: 'playerInput'
 } as const;
 
 export const ServerMessages = {
@@ -27,6 +28,20 @@ export interface RoomParticipant {
   connectedAt: number;
 }
 
+export interface ShipSnapshot {
+  id: string;
+  ownerSessionId: string;
+  nickname: string;
+  faction: Faction;
+  x: number;
+  y: number;
+  rotation: number;
+  velocityX: number;
+  velocityY: number;
+  lastProcessedInput: number;
+  active: boolean;
+}
+
 export interface ProfileAcceptedMessage extends RoomParticipant {}
 
 export interface ProfileRejectedMessage {
@@ -45,6 +60,5 @@ export interface PlayerInputMessage {
   left: boolean;
   right: boolean;
   aimAngle: number;
-  shooting: boolean;
   sequence: number;
 }
