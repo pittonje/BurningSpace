@@ -5,6 +5,9 @@ import {
   ASTEROID_COLLISION_DAMAGE,
   ASTEROID_PROJECTILE_DAMAGE,
   FIRE_COOLDOWN_MS,
+  NPC_ASTEROID_COLLISION_DAMAGE,
+  NPC_PLAYER_COLLISION_DAMAGE,
+  PLAYER_PROJECTILE_DAMAGE_TO_NPC,
   PLAYER_SPAWN_X,
   PLAYER_SPAWN_Y,
   PROJECTILE_POOL_SIZE,
@@ -14,6 +17,7 @@ import {
 import { PlayerShip, type MovementInput } from '../entities/PlayerShip';
 import { Projectile } from '../entities/Projectile';
 import { AsteroidManager } from '../systems/AsteroidManager';
+import { NpcManager } from '../systems/NpcManager';
 import { AdminPanel } from '../ui/AdminPanel';
 import { Hud } from '../ui/Hud';
 import { circlesOverlap } from '../utils/math';
@@ -32,9 +36,13 @@ export class GameScene extends Phaser.Scene {
   private hud?: Hud;
   private adminPanel?: AdminPanel;
   private asteroidManager?: AsteroidManager;
+  private npcManager?: NpcManager;
   private projectiles: Projectile[] = [];
   private playerAsteroidContacts = new Set<number>();
   private nextPlayerAsteroidContacts = new Set<number>();
+  private npcAsteroidContacts = new Set<number>();
+  private nextNpcAsteroidContacts = new Set<number>();
+  private playerNpcContact = false;
   private lastFireAt = -FIRE_COOLDOWN_MS;
   private debugVisible = false;
 
@@ -54,6 +62,7 @@ export class GameScene extends Phaser.Scene {
     this.projectiles = Array.from({ length: PROJECTILE_POOL_SIZE }, () => new Projectile(this));
     this.asteroidManager = new AsteroidManager(this);
     this.asteroidManager.createInitialField(this.player.x, this.player.y);
+    this.npcManager = new NpcManager(this);
     this.hud = new Hud(this);
     this.adminPanel = new AdminPanel(this, this.player.speedLimit, (speedLimit) => {
       this.player?.setSpeedLimit(speedLimit);
@@ -94,8 +103,13 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.asteroidManager?.update(deltaSeconds);
+    this.npcManager?.update(time, deltaMs, this.player, this.asteroidManager?.activeAsteroids ?? []);
+    this.handlePlayerProjectileNpcCollisions();
+    this.handleNpcProjectileCollisions();
     this.handleProjectileAsteroidCollisions();
     this.handlePlayerAsteroidCollisions();
+    this.handleNpcAsteroidCollisions();
+    this.handlePlayerNpcCollision();
     this.updateCamera(deltaSeconds);
 
     this.hud.update({
@@ -104,6 +118,13 @@ export class GameScene extends Phaser.Scene {
       speed: this.player.speed,
       health: this.player.health,
       maxHealth: this.player.maxHealth,
+      npc: this.npcManager
+        ? {
+            x: this.npcManager.ship.x,
+            y: this.npcManager.ship.y,
+            isAlive: this.npcManager.ship.isAlive
+          }
+        : undefined,
       weaponCooldownRemainingMs: Math.max(0, FIRE_COOLDOWN_MS - (time - this.lastFireAt)),
       fps: this.game.loop.actualFps
     });
@@ -215,6 +236,73 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private handlePlayerProjectileNpcCollisions(): void {
+    if (!this.npcManager || !this.npcManager.ship.isAlive) {
+      return;
+    }
+
+    const npc = this.npcManager.ship;
+
+    for (const projectile of this.projectiles) {
+      if (
+        !projectile.isActive ||
+        !circlesOverlap(projectile.x, projectile.y, projectile.collisionRadius, npc.x, npc.y, npc.collisionRadius)
+      ) {
+        continue;
+      }
+
+      projectile.despawn();
+      npc.takeDamage(PLAYER_PROJECTILE_DAMAGE_TO_NPC);
+    }
+  }
+
+  private handleNpcProjectileCollisions(): void {
+    if (!this.npcManager || !this.player || !this.asteroidManager) {
+      return;
+    }
+
+    for (const projectile of this.npcManager.projectiles) {
+      if (!projectile.isActive) {
+        continue;
+      }
+
+      if (
+        this.player.isAlive &&
+        circlesOverlap(projectile.x, projectile.y, projectile.collisionRadius, this.player.x, this.player.y, this.player.collisionRadius)
+      ) {
+        const damaged = this.player.takeDamage(projectile.damage);
+        projectile.despawn();
+
+        if (damaged) {
+          this.cameras.main.shake(90, 0.0025);
+        }
+
+        continue;
+      }
+
+      for (const asteroid of this.asteroidManager.activeAsteroids) {
+        if (
+          !asteroid.isAlive ||
+          !circlesOverlap(projectile.x, projectile.y, projectile.collisionRadius, asteroid.x, asteroid.y, asteroid.radius)
+        ) {
+          continue;
+        }
+
+        projectile.despawn();
+        asteroid.takeDamage(projectile.damage);
+
+        if (!asteroid.isAlive) {
+          this.asteroidManager.scheduleRespawn(asteroid, () => ({
+            x: this.player?.x ?? PLAYER_SPAWN_X,
+            y: this.player?.y ?? PLAYER_SPAWN_Y
+          }));
+        }
+
+        break;
+      }
+    }
+  }
+
   private handlePlayerAsteroidCollisions(): void {
     if (!this.asteroidManager || !this.player || !this.player.isAlive) {
       this.playerAsteroidContacts.clear();
@@ -250,6 +338,70 @@ export class GameScene extends Phaser.Scene {
     const previousContacts = this.playerAsteroidContacts;
     this.playerAsteroidContacts = this.nextPlayerAsteroidContacts;
     this.nextPlayerAsteroidContacts = previousContacts;
+  }
+
+  private handleNpcAsteroidCollisions(): void {
+    if (!this.asteroidManager || !this.npcManager || !this.npcManager.ship.isAlive) {
+      this.npcAsteroidContacts.clear();
+      this.nextNpcAsteroidContacts.clear();
+      return;
+    }
+
+    const npc = this.npcManager.ship;
+    this.nextNpcAsteroidContacts.clear();
+
+    for (const asteroid of this.asteroidManager.activeAsteroids) {
+      if (!asteroid.isAlive) {
+        continue;
+      }
+
+      const combinedRadius = npc.collisionRadius + asteroid.radius;
+
+      if (!circlesOverlap(npc.x, npc.y, npc.collisionRadius, asteroid.x, asteroid.y, asteroid.radius)) {
+        continue;
+      }
+
+      this.nextNpcAsteroidContacts.add(asteroid.id);
+      npc.separateFrom(asteroid.x, asteroid.y, combinedRadius);
+
+      if (!this.npcAsteroidContacts.has(asteroid.id)) {
+        npc.takeDamage(NPC_ASTEROID_COLLISION_DAMAGE);
+      }
+    }
+
+    const previousContacts = this.npcAsteroidContacts;
+    this.npcAsteroidContacts = this.nextNpcAsteroidContacts;
+    this.nextNpcAsteroidContacts = previousContacts;
+  }
+
+  private handlePlayerNpcCollision(): void {
+    if (!this.player || !this.player.isAlive || !this.npcManager?.ship.isAlive) {
+      this.playerNpcContact = false;
+      return;
+    }
+
+    const npc = this.npcManager.ship;
+    const combinedRadius = this.player.collisionRadius + npc.collisionRadius;
+    const touching = circlesOverlap(this.player.x, this.player.y, this.player.collisionRadius, npc.x, npc.y, npc.collisionRadius);
+
+    if (!touching) {
+      this.playerNpcContact = false;
+      return;
+    }
+
+    this.player.separateFrom(npc.x, npc.y, combinedRadius);
+    npc.separateFrom(this.player.x, this.player.y, combinedRadius);
+
+    if (!this.playerNpcContact) {
+      const playerDamaged = this.player.takeDamage(NPC_PLAYER_COLLISION_DAMAGE);
+      const npcDamaged = npc.takeDamage(NPC_PLAYER_COLLISION_DAMAGE);
+
+      if (playerDamaged || npcDamaged) {
+        this.cameras.main.shake(110, 0.003);
+      }
+    }
+
+    this.playerNpcContact = true;
   }
 
   private updateCamera(deltaSeconds: number): void {
@@ -291,6 +443,7 @@ export class GameScene extends Phaser.Scene {
       this.debugVisible = !this.debugVisible;
       this.hud?.setDebugVisible(this.debugVisible);
       this.asteroidManager?.setDebugVisible(this.debugVisible);
+      this.npcManager?.setDebugVisible(this.debugVisible);
     }
   }
 

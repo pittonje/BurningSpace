@@ -15,6 +15,11 @@ export type HudState = {
   speed: number;
   health: number;
   maxHealth: number;
+  npc?: {
+    x: number;
+    y: number;
+    isAlive: boolean;
+  };
   weaponCooldownRemainingMs: number;
   fps: number;
 };
@@ -146,6 +151,8 @@ export class Hud {
     const size = 142;
     const playerX = (state.x / WORLD_WIDTH) * size;
     const playerY = (state.y / WORLD_HEIGHT) * size;
+    const npcX = state.npc ? (state.npc.x / WORLD_WIDTH) * size : 0;
+    const npcY = state.npc ? (state.npc.y / WORLD_HEIGHT) * size : 0;
 
     this.minimap.clear();
     this.minimap.fillStyle(0x020617, 0.82);
@@ -153,7 +160,7 @@ export class Hud {
     this.minimap.lineStyle(1, 0x94a3b8, 0.55);
     this.minimap.strokeRect(0, 0, size, size);
 
-    this.drawMapMarkers(this.minimap, 0, 0, size, playerX, playerY);
+    this.drawMapMarkers(this.minimap, 0, 0, size, playerX, playerY, state.npc?.isAlive ? { x: npcX, y: npcY } : undefined);
   }
 
   private drawBigMap(state: HudState): void {
@@ -168,6 +175,8 @@ export class Hud {
     const y = (height - mapSize) / 2;
     const playerX = x + (state.x / WORLD_WIDTH) * mapSize;
     const playerY = y + (state.y / WORLD_HEIGHT) * mapSize;
+    const npcX = state.npc ? x + (state.npc.x / WORLD_WIDTH) * mapSize : 0;
+    const npcY = state.npc ? y + (state.npc.y / WORLD_HEIGHT) * mapSize : 0;
 
     this.bigMap.clear();
     this.bigMap.fillStyle(0x020617, 0.82);
@@ -177,7 +186,15 @@ export class Hud {
     this.bigMap.lineStyle(2, 0xe2e8f0, 0.72);
     this.bigMap.strokeRect(x, y, mapSize, mapSize);
 
-    this.drawMapMarkers(this.bigMap, x, y, mapSize, playerX, playerY);
+    this.drawMapMarkers(
+      this.bigMap,
+      x,
+      y,
+      mapSize,
+      playerX,
+      playerY,
+      state.npc?.isAlive ? { x: npcX, y: npcY } : undefined
+    );
     this.positionBigMapLabels(x, y, mapSize);
   }
 
@@ -187,7 +204,11 @@ export class Hud {
     y: number,
     size: number,
     playerX: number,
-    playerY: number
+    playerY: number,
+    npc?: {
+      x: number;
+      y: number;
+    }
   ): void {
     const redX = x + (MAP_PADDING / WORLD_WIDTH) * size;
     const redY = y + (MAP_PADDING / WORLD_HEIGHT) * size;
@@ -216,6 +237,13 @@ export class Hud {
     graphics.strokeCircle(playerX, playerY, 5);
     graphics.fillStyle(0xfacc15, 1);
     graphics.fillCircle(playerX, playerY, 2);
+
+    if (npc) {
+      graphics.fillStyle(0x38bdf8, 0.95);
+      graphics.fillTriangle(npc.x, npc.y - 5, npc.x - 4, npc.y + 4, npc.x + 4, npc.y + 4);
+      graphics.lineStyle(1, 0xe0f2fe, 0.8);
+      graphics.strokeTriangle(npc.x, npc.y - 5, npc.x - 4, npc.y + 4, npc.x + 4, npc.y + 4);
+    }
   }
 
   private drawBigMapLabels(): void {

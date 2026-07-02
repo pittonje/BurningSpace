@@ -22,6 +22,8 @@ export const CAMERA_ZOOM = 0.86;
 
 export const PLAYER_SPAWN_X = 760;
 export const PLAYER_SPAWN_Y = 760;
+export const BLUE_BASE_SPAWN_X = WORLD_WIDTH - 760;
+export const BLUE_BASE_SPAWN_Y = WORLD_HEIGHT - 760;
 
 export const MAP_PADDING = 520;
 export const BASE_RADIUS = 340;
@@ -43,3 +45,41 @@ export const ASTEROID_RESPAWN_MAX_MS = 15000;
 
 export const ASTEROID_SPAWN_PLAYER_SAFE_DISTANCE = 250;
 export const SHIP_ASTEROID_COLLISION_COOLDOWN_MS = 750;
+
+export const PLAYER_PROJECTILE_DAMAGE_TO_NPC = 15;
+
+export const NPC_MAX_HEALTH = 100;
+export const NPC_RETREAT_HEALTH_THRESHOLD = 20;
+export const NPC_COLLISION_RADIUS = 58;
+
+export const NPC_MAX_SPEED = 420;
+export const NPC_ACCELERATION = 750;
+export const NPC_DRAG = 500;
+export const NPC_ROTATION_SMOOTHING = 10;
+
+export const NPC_PLAYER_DETECTION_RADIUS = 1400;
+export const NPC_PLAYER_LOSE_RADIUS = 1800;
+
+export const NPC_ATTACK_RANGE = 700;
+export const NPC_PREFERRED_ATTACK_RANGE = 550;
+export const NPC_MIN_ATTACK_RANGE = 350;
+
+export const NPC_ASTEROID_SEARCH_RADIUS = 1800;
+export const NPC_ASTEROID_ATTACK_RANGE = 650;
+
+export const NPC_FIRE_COOLDOWN_MS = 300;
+export const NPC_PROJECTILE_DAMAGE = 10;
+export const NPC_PROJECTILE_SPEED = 1000;
+export const NPC_PROJECTILE_LIFETIME_MS = 1400;
+export const NPC_PROJECTILE_POOL_SIZE = 36;
+export const NPC_PROJECTILE_COLLISION_RADIUS = 16;
+
+export const NPC_RESPAWN_DELAY_MS = 3000;
+export const NPC_RESPAWN_INVULNERABILITY_MS = 1500;
+export const NPC_REPAIR_RATE_PER_SECOND = 20;
+export const NPC_REPAIR_COMPLETE_HEALTH = 100;
+
+export const NPC_BASE_ARRIVAL_RADIUS = 250;
+export const NPC_TARGET_REEVALUATION_MS = 500;
+export const NPC_ASTEROID_COLLISION_DAMAGE = 6;
+export const NPC_PLAYER_COLLISION_DAMAGE = 5;
