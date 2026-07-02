@@ -22,13 +22,22 @@ export const CAMERA_ZOOM = 0.86;
 
 export const PLAYER_SPAWN_X = 760;
 export const PLAYER_SPAWN_Y = 760;
+export const RED_BASE_X = PLAYER_SPAWN_X;
+export const RED_BASE_Y = PLAYER_SPAWN_Y;
 export const BLUE_BASE_SPAWN_X = WORLD_WIDTH - 760;
 export const BLUE_BASE_SPAWN_Y = WORLD_HEIGHT - 760;
+export const BLUE_BASE_X = BLUE_BASE_SPAWN_X;
+export const BLUE_BASE_Y = BLUE_BASE_SPAWN_Y;
 
 export const MAP_PADDING = 520;
 export const BASE_RADIUS = 340;
 export const CENTRAL_ZONE_RADIUS = 720;
 export const GRID_STEP = 1000;
+export const BASE_REGEN_RADIUS = 500;
+export const BASE_DEFENSE_RADIUS = 900;
+export const BASE_ENEMY_DAMAGE_PER_TICK = 20;
+export const BASE_ENEMY_DAMAGE_INTERVAL_MS = 500;
+export const BASE_DEFENSE_ENABLED = true;
 
 export const ASTEROID_ZONE_WIDTH = 2400;
 export const ASTEROID_ZONE_HEIGHT = 1800;
@@ -47,6 +56,8 @@ export const ASTEROID_SPAWN_PLAYER_SAFE_DISTANCE = 250;
 export const SHIP_ASTEROID_COLLISION_COOLDOWN_MS = 750;
 
 export const PLAYER_PROJECTILE_DAMAGE_TO_NPC = 15;
+export const PLAYER_PROJECTILE_RANGE = 1400;
+export const PLAYER_BASE_REGEN_PER_SECOND = 50;
 
 export const NPC_MAX_HEALTH = 100;
 export const NPC_RETREAT_HEALTH_THRESHOLD = 20;
@@ -71,11 +82,13 @@ export const NPC_FIRE_COOLDOWN_MS = 300;
 export const NPC_PROJECTILE_DAMAGE = 10;
 export const NPC_PROJECTILE_SPEED = 1000;
 export const NPC_PROJECTILE_LIFETIME_MS = 1400;
+export const NPC_PROJECTILE_RANGE = 1400;
 export const NPC_PROJECTILE_POOL_SIZE = 36;
 export const NPC_PROJECTILE_COLLISION_RADIUS = 16;
 
 export const NPC_RESPAWN_DELAY_MS = 3000;
 export const NPC_RESPAWN_INVULNERABILITY_MS = 1500;
+export const NPC_HEALTH_REGEN_PER_SECOND = 0;
 export const NPC_REPAIR_RATE_PER_SECOND = 20;
 export const NPC_REPAIR_COMPLETE_HEALTH = 100;
 

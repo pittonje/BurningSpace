@@ -2,20 +2,29 @@ import Phaser from 'phaser';
 import {
   NPC_PROJECTILE_COLLISION_RADIUS,
   NPC_PROJECTILE_DAMAGE,
-  NPC_PROJECTILE_LIFETIME_MS,
+  NPC_PROJECTILE_RANGE,
   NPC_PROJECTILE_SPEED,
   WORLD_HEIGHT,
   WORLD_WIDTH
 } from '../config/gameConfig';
+import { runtimeBalance } from '../config/runtimeBalance';
+
+type NpcProjectileLaunchOptions = {
+  damage: number;
+  speed: number;
+  range: number;
+};
 
 export class NpcProjectile {
   readonly ownerId: string;
   readonly faction = 'blue';
-  readonly damage = NPC_PROJECTILE_DAMAGE;
   private readonly body: Phaser.GameObjects.Graphics;
   private velocityX = 0;
   private velocityY = 0;
-  private ageMs = 0;
+  private startX = 0;
+  private startY = 0;
+  private range = NPC_PROJECTILE_RANGE;
+  private damageValue = NPC_PROJECTILE_DAMAGE;
   private active = false;
 
   constructor(scene: Phaser.Scene, ownerId: string) {
@@ -41,11 +50,19 @@ export class NpcProjectile {
     return NPC_PROJECTILE_COLLISION_RADIUS;
   }
 
-  spawn(x: number, y: number, angle: number): void {
+  get damage(): number {
+    return this.damageValue;
+  }
+
+  spawn(x: number, y: number, angle: number, options?: Partial<NpcProjectileLaunchOptions>): void {
+    const speed = options?.speed ?? runtimeBalance.npc.projectileSpeed;
     this.active = true;
-    this.ageMs = 0;
-    this.velocityX = Math.cos(angle) * NPC_PROJECTILE_SPEED;
-    this.velocityY = Math.sin(angle) * NPC_PROJECTILE_SPEED;
+    this.startX = x;
+    this.startY = y;
+    this.range = options?.range ?? runtimeBalance.npc.projectileRange;
+    this.damageValue = options?.damage ?? runtimeBalance.npc.projectileDamage;
+    this.velocityX = Math.cos(angle) * speed;
+    this.velocityY = Math.sin(angle) * speed;
     this.body.setPosition(x, y);
     this.body.setRotation(angle);
     this.body.setVisible(true);
@@ -57,13 +74,15 @@ export class NpcProjectile {
       return;
     }
 
-    this.ageMs += deltaMs;
     this.body.x += this.velocityX * deltaSeconds;
     this.body.y += this.velocityY * deltaSeconds;
     this.redraw();
 
+    const travelledX = this.body.x - this.startX;
+    const travelledY = this.body.y - this.startY;
+
     if (
-      this.ageMs >= NPC_PROJECTILE_LIFETIME_MS ||
+      travelledX * travelledX + travelledY * travelledY >= this.range * this.range ||
       this.body.x < 0 ||
       this.body.y < 0 ||
       this.body.x > WORLD_WIDTH ||
@@ -84,7 +103,8 @@ export class NpcProjectile {
   }
 
   private redraw(): void {
-    const agePercent = Phaser.Math.Clamp(this.ageMs / NPC_PROJECTILE_LIFETIME_MS, 0, 1);
+    const travelled = Math.hypot(this.body.x - this.startX, this.body.y - this.startY);
+    const agePercent = Phaser.Math.Clamp(travelled / this.range, 0, 1);
     const alpha = 1 - agePercent * 0.32;
     const pulse = 0.86 + Math.sin(agePercent * Math.PI * 7) * 0.07;
 

@@ -2,17 +2,14 @@ import Phaser from 'phaser';
 import {
   BLUE_BASE_SPAWN_X,
   BLUE_BASE_SPAWN_Y,
-  NPC_ACCELERATION,
   NPC_COLLISION_RADIUS,
   NPC_DRAG,
-  NPC_MAX_HEALTH,
-  NPC_MAX_SPEED,
-  NPC_REPAIR_COMPLETE_HEALTH,
   NPC_RESPAWN_INVULNERABILITY_MS,
   NPC_ROTATION_SMOOTHING,
   WORLD_HEIGHT,
   WORLD_WIDTH
 } from '../config/gameConfig';
+import { runtimeBalance } from '../config/runtimeBalance';
 import { approachZero, clamp, magnitude, normalizeVector, shortestAngleStep } from '../utils/math';
 
 export type NpcMoveCommand = {
@@ -33,7 +30,7 @@ export class NpcShip {
   private readonly spriteBaseScaleY: number;
   private velocityX = 0;
   private velocityY = 0;
-  private healthValue = NPC_MAX_HEALTH;
+  private healthValue = runtimeBalance.npc.maxHealth;
   private alive = true;
   private damaged = false;
   private enginePower = 0;
@@ -88,7 +85,7 @@ export class NpcShip {
   }
 
   get maxHealth(): number {
-    return NPC_MAX_HEALTH;
+    return runtimeBalance.npc.maxHealth;
   }
 
   get isAlive(): boolean {
@@ -110,13 +107,14 @@ export class NpcShip {
 
     this.updateInvulnerabilityVisual();
     this.updateRepairVisual();
+    this.healthValue = Math.min(this.healthValue, runtimeBalance.npc.maxHealth);
 
     const thrust = normalizeVector(command.thrustX, command.thrustY);
     const thrusting = thrust.lengthSq() > 0;
 
     if (thrusting) {
-      this.velocityX += thrust.x * NPC_ACCELERATION * deltaSeconds;
-      this.velocityY += thrust.y * NPC_ACCELERATION * deltaSeconds;
+      this.velocityX += thrust.x * runtimeBalance.npc.acceleration * deltaSeconds;
+      this.velocityY += thrust.y * runtimeBalance.npc.acceleration * deltaSeconds;
     } else {
       const dragAmount = NPC_DRAG * deltaSeconds;
       this.velocityX = approachZero(this.velocityX, dragAmount);
@@ -149,7 +147,7 @@ export class NpcShip {
     const bankSmoothing = 1 - Math.exp(-10 * deltaSeconds);
     this.bank = Phaser.Math.Linear(this.bank, targetBank, bankSmoothing);
 
-    const speedPercent = Phaser.Math.Clamp(this.speed / NPC_MAX_SPEED, 0, 1);
+    const speedPercent = Phaser.Math.Clamp(this.speed / runtimeBalance.npc.maxSpeed, 0, 1);
     const targetEnginePower = thrusting ? Phaser.Math.Clamp(0.42 + speedPercent * 0.62, 0.42, 0.9) : speedPercent * 0.2;
     const engineSmoothing = 1 - Math.exp(-10 * deltaSeconds);
     this.enginePower = Phaser.Math.Linear(this.enginePower, targetEnginePower, engineSmoothing);
@@ -181,10 +179,10 @@ export class NpcShip {
       return;
     }
 
-    this.healthValue = Math.min(NPC_REPAIR_COMPLETE_HEALTH, this.healthValue + amount);
+    this.healthValue = Math.min(runtimeBalance.npc.maxHealth, this.healthValue + amount);
 
-    if (this.healthValue >= NPC_REPAIR_COMPLETE_HEALTH) {
-      this.healthValue = NPC_REPAIR_COMPLETE_HEALTH;
+    if (this.healthValue >= runtimeBalance.npc.maxHealth) {
+      this.healthValue = runtimeBalance.npc.maxHealth;
       this.damaged = false;
     }
 
@@ -204,7 +202,7 @@ export class NpcShip {
 
   respawn(): void {
     this.alive = true;
-    this.healthValue = NPC_MAX_HEALTH;
+    this.healthValue = runtimeBalance.npc.maxHealth;
     this.damaged = false;
     this.repairing = false;
     this.velocityX = 0;
@@ -216,6 +214,21 @@ export class NpcShip {
     this.repairGlow.setVisible(false);
     this.invulnerableUntil = this.scene.time.now + NPC_RESPAWN_INVULNERABILITY_MS;
     this.drawHealthBar();
+  }
+
+  kill(): void {
+    if (!this.alive) {
+      return;
+    }
+
+    this.healthValue = 0;
+    this.die();
+  }
+
+  teleportTo(x: number, y: number): void {
+    this.container.setPosition(clamp(x, 0, WORLD_WIDTH), clamp(y, 0, WORLD_HEIGHT));
+    this.velocityX = 0;
+    this.velocityY = 0;
   }
 
   separateFrom(worldX: number, worldY: number, minDistance: number): void {
@@ -267,11 +280,11 @@ export class NpcShip {
   private limitSpeed(): void {
     const currentSpeed = this.speed;
 
-    if (currentSpeed <= NPC_MAX_SPEED) {
+    if (currentSpeed <= runtimeBalance.npc.maxSpeed) {
       return;
     }
 
-    const scale = NPC_MAX_SPEED / currentSpeed;
+    const scale = runtimeBalance.npc.maxSpeed / currentSpeed;
     this.velocityX *= scale;
     this.velocityY *= scale;
   }
@@ -279,7 +292,7 @@ export class NpcShip {
   private drawHealthBar(): void {
     this.healthBar.clear();
 
-    if (!this.alive || (!this.damaged && this.healthValue >= NPC_MAX_HEALTH)) {
+    if (!this.alive || (!this.damaged && this.healthValue >= runtimeBalance.npc.maxHealth)) {
       return;
     }
 
@@ -287,7 +300,7 @@ export class NpcShip {
     const height = 6;
     const x = -width / 2;
     const y = -86;
-    const percent = Phaser.Math.Clamp(this.healthValue / NPC_MAX_HEALTH, 0, 1);
+    const percent = Phaser.Math.Clamp(this.healthValue / runtimeBalance.npc.maxHealth, 0, 1);
 
     this.healthBar.setRotation(-this.container.rotation);
     this.healthBar.fillStyle(0x020617, 0.78);

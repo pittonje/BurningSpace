@@ -20,6 +20,7 @@ export type HudState = {
     y: number;
     isAlive: boolean;
   };
+  alert?: string;
   weaponCooldownRemainingMs: number;
   fps: number;
 };
@@ -36,6 +37,7 @@ export class Hud {
   private readonly statusText: Phaser.GameObjects.Text;
   private readonly healthBar: Phaser.GameObjects.Graphics;
   private readonly controlsText: Phaser.GameObjects.Text;
+  private readonly alertText: Phaser.GameObjects.Text;
   private readonly minimap: Phaser.GameObjects.Graphics;
   private readonly bigMap: Phaser.GameObjects.Graphics;
   private readonly bigMapLabels: Phaser.GameObjects.Text[] = [];
@@ -56,6 +58,12 @@ export class Hud {
       fontSize: '13px',
       lineSpacing: 3
     });
+    this.alertText = scene.add.text(0, 0, '', {
+      color: '#fef2f2',
+      fontFamily: 'ui-monospace, monospace',
+      fontSize: '15px',
+      fontStyle: '700'
+    }).setScrollFactor(0).setDepth(1001);
 
     this.minimap = scene.add.graphics();
     this.bigMap = scene.add.graphics().setScrollFactor(0).setDepth(999).setVisible(false);
@@ -97,6 +105,9 @@ export class Hud {
     this.statusText.setText(lines.join('\n'));
     this.drawPanel();
     this.drawHealthBar(state.health, state.maxHealth);
+    this.alertText.setText(state.alert ?? '');
+    this.alertText.setVisible(Boolean(state.alert));
+    this.alertText.setPosition(this.scene.scale.width / 2 - this.alertText.width / 2, 24);
     this.drawMinimap(state);
     this.drawBigMap(state);
   }
@@ -112,6 +123,7 @@ export class Hud {
     this.healthBar.setPosition(14, 120);
     this.controlsText.setPosition(14, 146);
     this.minimap.setPosition(200, 32);
+    this.alertText.setPosition(this.scene.scale.width / 2 - this.alertText.width / 2, 24);
     this.drawBigMapLabels();
   }
 
@@ -121,6 +133,7 @@ export class Hud {
     }
 
     this.bigMap.destroy();
+    this.alertText.destroy();
     this.container.destroy();
   }
 

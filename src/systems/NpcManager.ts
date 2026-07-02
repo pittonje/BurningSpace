@@ -4,23 +4,14 @@ import {
   BLUE_BASE_SPAWN_Y,
   NPC_ASTEROID_ATTACK_RANGE,
   NPC_ASTEROID_SEARCH_RADIUS,
-  NPC_ATTACK_RANGE,
   NPC_BASE_ARRIVAL_RADIUS,
-  NPC_FIRE_COOLDOWN_MS,
-  NPC_MAX_HEALTH,
   NPC_MIN_ATTACK_RANGE,
-  NPC_PLAYER_DETECTION_RADIUS,
-  NPC_PLAYER_LOSE_RADIUS,
-  NPC_PREFERRED_ATTACK_RANGE,
   NPC_PROJECTILE_POOL_SIZE,
-  NPC_REPAIR_COMPLETE_HEALTH,
-  NPC_REPAIR_RATE_PER_SECOND,
-  NPC_RESPAWN_DELAY_MS,
-  NPC_RETREAT_HEALTH_THRESHOLD,
   NPC_TARGET_REEVALUATION_MS,
   WORLD_HEIGHT,
   WORLD_WIDTH
 } from '../config/gameConfig';
+import { runtimeBalance } from '../config/runtimeBalance';
 import { Asteroid } from '../entities/Asteroid';
 import { NpcProjectile } from '../entities/NpcProjectile';
 import { NpcShip, type NpcMoveCommand } from '../entities/NpcShip';
@@ -50,7 +41,7 @@ export class NpcManager {
   private stateValue: NpcState = 'moveToCenter';
   private targetAsteroid?: Asteroid;
   private lastTargetReevaluationAt = -NPC_TARGET_REEVALUATION_MS;
-  private lastFireAt = -NPC_FIRE_COOLDOWN_MS;
+  private lastFireAt = -runtimeBalance.npc.fireCooldownMs;
   private respawnScheduled = false;
   private debugVisible = false;
   private centerWanderX = WORLD_WIDTH / 2;
@@ -105,13 +96,23 @@ export class NpcManager {
       return;
     }
 
+    if (runtimeBalance.aiPaused) {
+      this.ship.heal(runtimeBalance.npc.healthRegenPerSecond * deltaSeconds);
+      this.clearMoveCommand(this.ship.x + Math.cos(this.ship.rotation), this.ship.y + Math.sin(this.ship.rotation));
+      this.ship.update(this.moveCommand, deltaSeconds);
+      this.drawDebug(player);
+      return;
+    }
+
     if (this.stateValue === 'repairing') {
       this.updateRepairing(deltaSeconds);
       this.drawDebug(player);
       return;
     }
 
-    if (this.stateValue === 'retreatToBase' || this.ship.health < NPC_RETREAT_HEALTH_THRESHOLD) {
+    this.ship.heal(runtimeBalance.npc.healthRegenPerSecond * deltaSeconds);
+
+    if (this.stateValue === 'retreatToBase' || this.ship.health < runtimeBalance.npc.retreatHealthThreshold) {
       this.enterRetreat();
       this.updateRetreat(deltaSeconds);
       this.drawDebug(player);
@@ -169,7 +170,7 @@ export class NpcManager {
       this.targetAsteroid.x,
       this.targetAsteroid.y,
       NPC_ASTEROID_ATTACK_RANGE,
-      NPC_PREFERRED_ATTACK_RANGE,
+      runtimeBalance.npc.preferredAttackRange,
       NPC_MIN_ATTACK_RANGE
     );
   }
@@ -180,8 +181,8 @@ export class NpcManager {
       deltaSeconds,
       player.x,
       player.y,
-      NPC_ATTACK_RANGE,
-      NPC_PREFERRED_ATTACK_RANGE,
+      runtimeBalance.npc.attackRange,
+      runtimeBalance.npc.preferredAttackRange,
       NPC_MIN_ATTACK_RANGE
     );
   }
@@ -202,11 +203,11 @@ export class NpcManager {
   private updateRepairing(deltaSeconds: number): void {
     this.targetAsteroid = undefined;
     this.ship.setRepairing(true);
-    this.ship.heal(NPC_REPAIR_RATE_PER_SECOND * deltaSeconds);
+    this.ship.heal(Math.max(runtimeBalance.npc.baseRepairPerSecond, runtimeBalance.blueBase.alliedRegenPerSecond) * deltaSeconds);
     this.clearMoveCommand(BLUE_BASE_SPAWN_X, BLUE_BASE_SPAWN_Y);
     this.ship.update(this.moveCommand, deltaSeconds);
 
-    if (this.ship.health >= NPC_REPAIR_COMPLETE_HEALTH) {
+    if (this.ship.health >= runtimeBalance.npc.maxHealth) {
       this.ship.setRepairing(false);
       this.stateValue = 'moveToCenter';
       this.lastTargetReevaluationAt = -NPC_TARGET_REEVALUATION_MS;
@@ -260,7 +261,7 @@ export class NpcManager {
   }
 
   private tryFire(time: number, targetX: number, targetY: number): void {
-    if (time - this.lastFireAt < NPC_FIRE_COOLDOWN_MS || !this.ship.isAlive) {
+    if (time - this.lastFireAt < runtimeBalance.npc.fireCooldownMs || !this.ship.isAlive) {
       return;
     }
 
@@ -279,7 +280,11 @@ export class NpcManager {
 
     const muzzle = this.ship.getMuzzlePosition();
     const angle = Phaser.Math.Angle.Between(muzzle.x, muzzle.y, targetX, targetY);
-    projectileToUse.spawn(muzzle.x, muzzle.y, angle);
+    projectileToUse.spawn(muzzle.x, muzzle.y, angle, {
+      damage: runtimeBalance.npc.projectileDamage,
+      speed: runtimeBalance.npc.projectileSpeed,
+      range: runtimeBalance.npc.projectileRange
+    });
     this.lastFireAt = time;
   }
 
@@ -289,7 +294,7 @@ export class NpcManager {
     }
 
     const distanceToPlayerSquared = distanceSquared(this.ship.x, this.ship.y, player.x, player.y);
-    const radius = this.stateValue === 'chasePlayer' ? NPC_PLAYER_LOSE_RADIUS : NPC_PLAYER_DETECTION_RADIUS;
+    const radius = this.stateValue === 'chasePlayer' ? runtimeBalance.npc.loseRadius : runtimeBalance.npc.detectionRadius;
 
     return distanceToPlayerSquared <= radius * radius;
   }
@@ -337,7 +342,7 @@ export class NpcManager {
     }
 
     this.respawnScheduled = true;
-    this.scene.time.delayedCall(NPC_RESPAWN_DELAY_MS, () => {
+    this.scene.time.delayedCall(runtimeBalance.npc.respawnDelayMs, () => {
       this.ship.respawn();
       this.stateValue = 'moveToCenter';
       this.targetAsteroid = undefined;
@@ -373,6 +378,44 @@ export class NpcManager {
     this.moveCommand.faceY = faceY;
   }
 
+  healFull(): void {
+    this.ship.heal(runtimeBalance.npc.maxHealth);
+  }
+
+  damage(amount: number): void {
+    this.ship.takeDamage(amount);
+  }
+
+  kill(): void {
+    this.ship.kill();
+    this.enterDead();
+  }
+
+  respawnNow(): void {
+    this.respawnScheduled = false;
+    this.ship.respawn();
+    this.stateValue = 'moveToCenter';
+    this.targetAsteroid = undefined;
+  }
+
+  teleportToBlueBase(): void {
+    this.ship.teleportTo(BLUE_BASE_SPAWN_X, BLUE_BASE_SPAWN_Y);
+  }
+
+  teleportToCenter(): void {
+    this.ship.teleportTo(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+  }
+
+  forceRetreat(): void {
+    this.enterRetreat();
+  }
+
+  resetState(): void {
+    this.stateValue = 'moveToCenter';
+    this.targetAsteroid = undefined;
+    this.ship.setRepairing(false);
+  }
+
   private drawDebug(player: PlayerShip): void {
     this.debugGraphics.clear();
     this.debugGraphics.setVisible(this.debugVisible);
@@ -383,9 +426,11 @@ export class NpcManager {
     }
 
     this.debugGraphics.lineStyle(1, 0x38bdf8, 0.18);
-    this.debugGraphics.strokeCircle(this.ship.x, this.ship.y, NPC_PLAYER_DETECTION_RADIUS);
+    this.debugGraphics.strokeCircle(this.ship.x, this.ship.y, runtimeBalance.npc.detectionRadius);
     this.debugGraphics.lineStyle(1, 0x7dd3fc, 0.12);
-    this.debugGraphics.strokeCircle(this.ship.x, this.ship.y, NPC_PLAYER_LOSE_RADIUS);
+    this.debugGraphics.strokeCircle(this.ship.x, this.ship.y, runtimeBalance.npc.loseRadius);
+    this.debugGraphics.lineStyle(1, 0x60a5fa, 0.2);
+    this.debugGraphics.strokeCircle(this.ship.x, this.ship.y, runtimeBalance.npc.attackRange);
 
     if (this.stateValue === 'chasePlayer' && player.isAlive) {
       this.debugGraphics.lineStyle(2, 0x60a5fa, 0.42);
@@ -395,7 +440,7 @@ export class NpcManager {
       this.debugGraphics.lineBetween(this.ship.x, this.ship.y, this.targetAsteroid.x, this.targetAsteroid.y);
     }
 
-    const label = `${this.stateValue} HP ${Math.ceil(this.ship.health)}/${NPC_MAX_HEALTH} shots ${this.activeProjectileCount}`;
+    const label = `${this.stateValue} HP ${Math.ceil(this.ship.health)}/${runtimeBalance.npc.maxHealth} shots ${this.activeProjectileCount}`;
     this.debugGraphics.fillStyle(0x020617, 0.72);
     this.debugGraphics.fillRect(this.ship.x - 82, this.ship.y - 128, 164, 18);
     this.debugGraphics.lineStyle(1, 0x38bdf8, 0.4);

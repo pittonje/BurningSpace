@@ -1,17 +1,26 @@
 import Phaser from 'phaser';
 import {
-  PROJECTILE_LIFETIME_MS,
   PROJECTILE_COLLISION_RADIUS,
   PROJECTILE_SPEED,
   WORLD_HEIGHT,
   WORLD_WIDTH
 } from '../config/gameConfig';
+import { runtimeBalance } from '../config/runtimeBalance';
+
+type ProjectileLaunchOptions = {
+  damage: number;
+  speed: number;
+  range: number;
+};
 
 export class Projectile {
   private readonly body: Phaser.GameObjects.Graphics;
   private velocityX = 0;
   private velocityY = 0;
-  private ageMs = 0;
+  private startX = 0;
+  private startY = 0;
+  private range = runtimeBalance.player.projectileRange;
+  private damageValue = runtimeBalance.player.projectileDamage;
   private active = false;
 
   constructor(scene: Phaser.Scene) {
@@ -36,11 +45,19 @@ export class Projectile {
     return PROJECTILE_COLLISION_RADIUS;
   }
 
-  spawn(x: number, y: number, angle: number): void {
+  get damage(): number {
+    return this.damageValue;
+  }
+
+  spawn(x: number, y: number, angle: number, options?: Partial<ProjectileLaunchOptions>): void {
+    const speed = options?.speed ?? PROJECTILE_SPEED;
     this.active = true;
-    this.ageMs = 0;
-    this.velocityX = Math.cos(angle) * PROJECTILE_SPEED;
-    this.velocityY = Math.sin(angle) * PROJECTILE_SPEED;
+    this.startX = x;
+    this.startY = y;
+    this.range = options?.range ?? runtimeBalance.player.projectileRange;
+    this.damageValue = options?.damage ?? runtimeBalance.player.projectileDamage;
+    this.velocityX = Math.cos(angle) * speed;
+    this.velocityY = Math.sin(angle) * speed;
     this.body.setPosition(x, y);
     this.body.setRotation(angle);
     this.body.setVisible(true);
@@ -52,13 +69,15 @@ export class Projectile {
       return;
     }
 
-    this.ageMs += deltaMs;
     this.body.x += this.velocityX * deltaSeconds;
     this.body.y += this.velocityY * deltaSeconds;
     this.redraw();
 
+    const travelledX = this.body.x - this.startX;
+    const travelledY = this.body.y - this.startY;
+
     if (
-      this.ageMs >= PROJECTILE_LIFETIME_MS ||
+      travelledX * travelledX + travelledY * travelledY >= this.range * this.range ||
       this.body.x < 0 ||
       this.body.y < 0 ||
       this.body.x > WORLD_WIDTH ||
@@ -79,7 +98,8 @@ export class Projectile {
   }
 
   private redraw(): void {
-    const agePercent = Phaser.Math.Clamp(this.ageMs / PROJECTILE_LIFETIME_MS, 0, 1);
+    const travelled = Math.hypot(this.body.x - this.startX, this.body.y - this.startY);
+    const agePercent = Phaser.Math.Clamp(travelled / this.range, 0, 1);
     const alpha = 1 - agePercent * 0.28;
     const pulse = 0.8 + Math.sin(agePercent * Math.PI * 8) * 0.08;
 

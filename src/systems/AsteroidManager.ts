@@ -67,6 +67,17 @@ export class AsteroidManager {
     }
   }
 
+  respawnAll(playerX: number, playerY: number): void {
+    this.destroyAll();
+    this.createInitialField(playerX, playerY);
+  }
+
+  destroyAll(): void {
+    for (const asteroid of this.asteroids) {
+      asteroid.deactivate();
+    }
+  }
+
   update(deltaSeconds: number): void {
     for (const asteroid of this.asteroids) {
       asteroid.update(deltaSeconds);

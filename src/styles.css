@@ -28,15 +28,17 @@ canvas {
   top: 18px;
   right: 18px;
   z-index: 20;
-  width: 320px;
+  width: min(420px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
   box-sizing: border-box;
-  padding: 16px 22px 20px;
+  padding: 14px 16px 16px;
   color: #f8fafc;
   background: rgb(2 6 23 / 82%);
   border: 1px solid rgb(56 189 248 / 46%);
   border-radius: 8px;
   box-shadow: 0 18px 48px rgb(0 0 0 / 34%);
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  overflow: auto;
   pointer-events: auto;
   user-select: none;
 }
@@ -51,15 +53,71 @@ canvas {
   font-weight: 700;
 }
 
-.admin-panel__value {
-  margin-bottom: 14px;
+.admin-panel__summary,
+.admin-panel__message {
+  margin-bottom: 10px;
   color: #bfdbfe;
-  font-size: 14px;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
-.admin-panel__slider {
-  display: block;
-  width: 100%;
-  accent-color: #38bdf8;
+.admin-panel__section {
+  padding: 8px 0;
+  border-top: 1px solid rgb(148 163 184 / 22%);
+}
+
+.admin-panel__section summary {
   cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.admin-panel__field,
+.admin-panel__toggle {
+  display: grid;
+  grid-template-columns: 1fr 118px;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+  color: #dbeafe;
+  font-size: 12px;
+}
+
+.admin-panel__field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 5px 7px;
+  color: #f8fafc;
+  background: rgb(15 23 42 / 88%);
+  border: 1px solid rgb(56 189 248 / 34%);
+  border-radius: 5px;
+  font: inherit;
+}
+
+.admin-panel__toggle {
+  grid-template-columns: auto 1fr;
+}
+
+.admin-panel__buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.admin-panel__buttons button {
+  min-height: 30px;
+  padding: 5px 7px;
+  color: #e0f2fe;
+  background: rgb(15 23 42 / 82%);
+  border: 1px solid rgb(56 189 248 / 34%);
+  border-radius: 5px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-panel__buttons button:hover,
+.admin-panel__field input:focus {
+  border-color: rgb(125 211 252 / 72%);
+  outline: none;
 }

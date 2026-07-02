@@ -2,18 +2,19 @@ import Phaser from 'phaser';
 import {
   CAMERA_LERP,
   CAMERA_ZOOM,
-  ASTEROID_COLLISION_DAMAGE,
-  ASTEROID_PROJECTILE_DAMAGE,
-  FIRE_COOLDOWN_MS,
   NPC_ASTEROID_COLLISION_DAMAGE,
   NPC_PLAYER_COLLISION_DAMAGE,
-  PLAYER_PROJECTILE_DAMAGE_TO_NPC,
+  BLUE_BASE_X,
+  BLUE_BASE_Y,
+  RED_BASE_X,
+  RED_BASE_Y,
   PLAYER_SPAWN_X,
   PLAYER_SPAWN_Y,
   PROJECTILE_POOL_SIZE,
   WORLD_HEIGHT,
   WORLD_WIDTH
 } from '../config/gameConfig';
+import { resetRuntimeBalance, runtimeBalance } from '../config/runtimeBalance';
 import { PlayerShip, type MovementInput } from '../entities/PlayerShip';
 import { Projectile } from '../entities/Projectile';
 import { AsteroidManager } from '../systems/AsteroidManager';
@@ -43,7 +44,10 @@ export class GameScene extends Phaser.Scene {
   private npcAsteroidContacts = new Set<number>();
   private nextNpcAsteroidContacts = new Set<number>();
   private playerNpcContact = false;
-  private lastFireAt = -FIRE_COOLDOWN_MS;
+  private lastFireAt = -runtimeBalance.player.fireCooldownMs;
+  private lastBlueBaseDamageAt = -Infinity;
+  private lastRedBaseDamageAt = -Infinity;
+  private baseDebugGraphics?: Phaser.GameObjects.Graphics;
   private debugVisible = false;
 
   constructor() {
@@ -64,9 +68,13 @@ export class GameScene extends Phaser.Scene {
     this.asteroidManager.createInitialField(this.player.x, this.player.y);
     this.npcManager = new NpcManager(this);
     this.hud = new Hud(this);
-    this.adminPanel = new AdminPanel(this, this.player.speedLimit, (speedLimit) => {
-      this.player?.setSpeedLimit(speedLimit);
-    });
+    this.baseDebugGraphics = this.add.graphics().setDepth(6).setVisible(false);
+
+    const isDev = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
+
+    if (isDev) {
+      this.adminPanel = new AdminPanel(this, this.createAdminActions());
+    }
 
     this.setupInput();
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
@@ -87,7 +95,7 @@ export class GameScene extends Phaser.Scene {
       ? this.getDisabledMovementInput()
       : this.getMovementInput();
 
-    this.player.update(movementInput, pointerWorld, deltaSeconds);
+    this.player.update(movementInput, pointerWorld, deltaSeconds, this.getPlayerRegenRate());
 
     if (
       this.player.isAlive &&
@@ -104,12 +112,14 @@ export class GameScene extends Phaser.Scene {
 
     this.asteroidManager?.update(deltaSeconds);
     this.npcManager?.update(time, deltaMs, this.player, this.asteroidManager?.activeAsteroids ?? []);
+    this.applyBaseEffects(time, deltaSeconds);
     this.handlePlayerProjectileNpcCollisions();
     this.handleNpcProjectileCollisions();
     this.handleProjectileAsteroidCollisions();
     this.handlePlayerAsteroidCollisions();
     this.handleNpcAsteroidCollisions();
     this.handlePlayerNpcCollision();
+    this.drawBaseDebug();
     this.updateCamera(deltaSeconds);
 
     this.hud.update({
@@ -118,6 +128,7 @@ export class GameScene extends Phaser.Scene {
       speed: this.player.speed,
       health: this.player.health,
       maxHealth: this.player.maxHealth,
+      alert: this.isPlayerInEnemyBaseDefense() ? 'ENEMY BASE DEFENSE' : undefined,
       npc: this.npcManager
         ? {
             x: this.npcManager.ship.x,
@@ -125,7 +136,7 @@ export class GameScene extends Phaser.Scene {
             isAlive: this.npcManager.ship.isAlive
           }
         : undefined,
-      weaponCooldownRemainingMs: Math.max(0, FIRE_COOLDOWN_MS - (time - this.lastFireAt)),
+      weaponCooldownRemainingMs: Math.max(0, runtimeBalance.player.fireCooldownMs - (time - this.lastFireAt)),
       fps: this.game.loop.actualFps
     });
   }
@@ -180,7 +191,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private tryFire(time: number): void {
-    if (!this.player || !this.player.isAlive || time - this.lastFireAt < FIRE_COOLDOWN_MS) {
+    if (!this.player || !this.player.isAlive || time - this.lastFireAt < runtimeBalance.player.fireCooldownMs) {
       return;
     }
 
@@ -191,8 +202,16 @@ export class GameScene extends Phaser.Scene {
     }
 
     const [leftMuzzle, rightMuzzle] = this.player.getMuzzlePositions();
-    leftProjectile.spawn(leftMuzzle.x, leftMuzzle.y, this.player.rotation);
-    rightProjectile.spawn(rightMuzzle.x, rightMuzzle.y, this.player.rotation);
+    leftProjectile.spawn(leftMuzzle.x, leftMuzzle.y, this.player.rotation, {
+      damage: runtimeBalance.player.projectileDamage,
+      speed: runtimeBalance.player.projectileSpeed,
+      range: runtimeBalance.player.projectileRange
+    });
+    rightProjectile.spawn(rightMuzzle.x, rightMuzzle.y, this.player.rotation, {
+      damage: runtimeBalance.player.projectileDamage,
+      speed: runtimeBalance.player.projectileSpeed,
+      range: runtimeBalance.player.projectileRange
+    });
     this.lastFireAt = time;
   }
 
@@ -222,7 +241,7 @@ export class GameScene extends Phaser.Scene {
         }
 
         projectile.despawn();
-        asteroid.takeDamage(ASTEROID_PROJECTILE_DAMAGE);
+        asteroid.takeDamage(projectile.damage);
 
         if (!asteroid.isAlive) {
           this.asteroidManager.scheduleRespawn(asteroid, () => ({
@@ -252,7 +271,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       projectile.despawn();
-      npc.takeDamage(PLAYER_PROJECTILE_DAMAGE_TO_NPC);
+      npc.takeDamage(projectile.damage);
     }
   }
 
@@ -327,7 +346,7 @@ export class GameScene extends Phaser.Scene {
       this.player.separateFrom(asteroid.x, asteroid.y, combinedRadius);
 
       if (!this.playerAsteroidContacts.has(asteroid.id)) {
-        const damaged = this.player.takeDamage(ASTEROID_COLLISION_DAMAGE);
+        const damaged = this.player.takeDamage(runtimeBalance.player.asteroidCollisionDamage);
 
         if (damaged) {
           this.cameras.main.shake(120, 0.004);
@@ -404,6 +423,93 @@ export class GameScene extends Phaser.Scene {
     this.playerNpcContact = true;
   }
 
+  private getPlayerRegenRate(): number {
+    if (!this.player?.isAlive) {
+      return 0;
+    }
+
+    if (this.isInsideCircle(this.player.x, this.player.y, RED_BASE_X, RED_BASE_Y, runtimeBalance.redBase.zoneRadius)) {
+      return Math.max(runtimeBalance.player.baseHealthRegenPerSecond, runtimeBalance.redBase.alliedRegenPerSecond);
+    }
+
+    return runtimeBalance.player.healthRegenPerSecond;
+  }
+
+  private applyBaseEffects(time: number, deltaSeconds: number): void {
+    if (!this.player) {
+      return;
+    }
+
+    const npc = this.npcManager?.ship;
+
+    if (
+      npc?.isAlive &&
+      this.npcManager?.state !== 'repairing' &&
+      this.isInsideCircle(npc.x, npc.y, BLUE_BASE_X, BLUE_BASE_Y, runtimeBalance.blueBase.zoneRadius)
+    ) {
+      npc.heal(Math.max(runtimeBalance.npc.baseRepairPerSecond, runtimeBalance.blueBase.alliedRegenPerSecond) * deltaSeconds);
+    }
+
+    if (
+      this.player.isAlive &&
+      runtimeBalance.blueBase.defenseEnabled &&
+      this.isPlayerInEnemyBaseDefense() &&
+      time - this.lastBlueBaseDamageAt >= runtimeBalance.blueBase.enemyDamageIntervalMs
+    ) {
+      const damaged = this.player.takeDamage(runtimeBalance.blueBase.enemyDamagePerTick);
+      this.lastBlueBaseDamageAt = time;
+
+      if (damaged) {
+        this.createBaseDefenseHit(BLUE_BASE_X, BLUE_BASE_Y, this.player.x, this.player.y, 0x38bdf8);
+      }
+    }
+
+    if (
+      npc?.isAlive &&
+      runtimeBalance.redBase.defenseEnabled &&
+      this.isInsideCircle(npc.x, npc.y, RED_BASE_X, RED_BASE_Y, runtimeBalance.redBase.defenseRadius) &&
+      time - this.lastRedBaseDamageAt >= runtimeBalance.redBase.enemyDamageIntervalMs
+    ) {
+      npc.takeDamage(runtimeBalance.redBase.enemyDamagePerTick);
+      this.lastRedBaseDamageAt = time;
+      this.createBaseDefenseHit(RED_BASE_X, RED_BASE_Y, npc.x, npc.y, 0xef4444);
+    }
+  }
+
+  private isPlayerInEnemyBaseDefense(): boolean {
+    return Boolean(
+      this.player?.isAlive &&
+      this.isInsideCircle(this.player.x, this.player.y, BLUE_BASE_X, BLUE_BASE_Y, runtimeBalance.blueBase.defenseRadius)
+    );
+  }
+
+  private isInsideCircle(x: number, y: number, centerX: number, centerY: number, radius: number): boolean {
+    const dx = x - centerX;
+    const dy = y - centerY;
+
+    return dx * dx + dy * dy <= radius * radius;
+  }
+
+  private createBaseDefenseHit(baseX: number, baseY: number, targetX: number, targetY: number, color: number): void {
+    const beam = this.add.graphics();
+    beam.setDepth(29);
+    beam.setBlendMode(Phaser.BlendModes.ADD);
+    beam.lineStyle(3, color, 0.68);
+    beam.lineBetween(baseX, baseY, targetX, targetY);
+    beam.fillStyle(0xffffff, 0.8);
+    beam.fillCircle(targetX, targetY, 9);
+
+    this.tweens.add({
+      targets: beam,
+      alpha: 0,
+      duration: 180,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        beam.destroy();
+      }
+    });
+  }
+
   private updateCamera(deltaSeconds: number): void {
     if (!this.player) {
       return;
@@ -444,6 +550,7 @@ export class GameScene extends Phaser.Scene {
       this.hud?.setDebugVisible(this.debugVisible);
       this.asteroidManager?.setDebugVisible(this.debugVisible);
       this.npcManager?.setDebugVisible(this.debugVisible);
+      this.drawBaseDebug();
     }
   }
 
@@ -451,5 +558,44 @@ export class GameScene extends Phaser.Scene {
     this.hud?.layout();
     this.adminPanel?.layout();
     this.updateCamera(1 / 60);
+  }
+
+  private drawBaseDebug(): void {
+    this.baseDebugGraphics?.clear();
+    this.baseDebugGraphics?.setVisible(this.debugVisible);
+
+    if (!this.debugVisible || !this.baseDebugGraphics) {
+      return;
+    }
+
+    this.baseDebugGraphics.lineStyle(2, 0xef4444, 0.28);
+    this.baseDebugGraphics.strokeCircle(RED_BASE_X, RED_BASE_Y, runtimeBalance.redBase.zoneRadius);
+    this.baseDebugGraphics.lineStyle(1, 0xef4444, 0.16);
+    this.baseDebugGraphics.strokeCircle(RED_BASE_X, RED_BASE_Y, runtimeBalance.redBase.defenseRadius);
+
+    this.baseDebugGraphics.lineStyle(2, 0x38bdf8, 0.28);
+    this.baseDebugGraphics.strokeCircle(BLUE_BASE_X, BLUE_BASE_Y, runtimeBalance.blueBase.zoneRadius);
+    this.baseDebugGraphics.lineStyle(1, 0x38bdf8, 0.16);
+    this.baseDebugGraphics.strokeCircle(BLUE_BASE_X, BLUE_BASE_Y, runtimeBalance.blueBase.defenseRadius);
+  }
+
+  private createAdminActions(): ConstructorParameters<typeof AdminPanel>[1] {
+    return {
+      healPlayer: () => this.player?.heal(runtimeBalance.player.maxHealth),
+      killPlayer: () => this.player?.kill(),
+      respawnPlayer: () => this.player?.respawn(),
+      teleportPlayerToRedBase: () => this.player?.teleportTo(RED_BASE_X, RED_BASE_Y),
+      teleportPlayerToCenter: () => this.player?.teleportTo(WORLD_WIDTH / 2, WORLD_HEIGHT / 2),
+      healNpc: () => this.npcManager?.healFull(),
+      damageNpc: () => this.npcManager?.damage(10),
+      killNpc: () => this.npcManager?.kill(),
+      respawnNpc: () => this.npcManager?.respawnNow(),
+      teleportNpcToBlueBase: () => this.npcManager?.teleportToBlueBase(),
+      teleportNpcToCenter: () => this.npcManager?.teleportToCenter(),
+      forceNpcRetreat: () => this.npcManager?.forceRetreat(),
+      resetNpcState: () => this.npcManager?.resetState(),
+      respawnAllAsteroids: () => this.asteroidManager?.respawnAll(this.player?.x ?? PLAYER_SPAWN_X, this.player?.y ?? PLAYER_SPAWN_Y),
+      destroyAllAsteroids: () => this.asteroidManager?.destroyAll()
+    };
   }
 }
