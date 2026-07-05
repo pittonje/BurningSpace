@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { BootScene } from '../scenes/BootScene';
 import { GameScene } from '../scenes/GameScene';
+import { MultiplayerGameScene } from '../scenes/MultiplayerGameScene';
 import { NetworkTestScene } from '../scenes/NetworkTestScene';
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
@@ -22,5 +23,5 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     pixelArt: false,
     roundPixels: false
   },
-  scene: [BootScene, NetworkTestScene, GameScene]
+  scene: [BootScene, NetworkTestScene, MultiplayerGameScene, GameScene]
 };

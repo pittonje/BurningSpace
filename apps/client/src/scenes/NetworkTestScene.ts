@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { Faction, JoinMode, JoinRequest, RoomParticipant } from '@burningspace/shared';
 import { NetworkClient, type ConnectionState, type Unsubscribe } from '../network/NetworkClient';
+import { networkClient } from '../network/networkSession';
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
   tagName: K,
@@ -25,6 +26,7 @@ export class NetworkTestScene extends Phaser.Scene {
   private root?: HTMLDivElement;
   private statusValue?: HTMLSpanElement;
   private errorText?: HTMLDivElement;
+  private profileErrorText?: HTMLDivElement;
   private roomInfoText?: HTMLDivElement;
   private nicknameInput?: HTMLInputElement;
   private modeSelect?: HTMLSelectElement;
@@ -32,17 +34,20 @@ export class NetworkTestScene extends Phaser.Scene {
   private factionField?: HTMLLabelElement;
   private connectButton?: HTMLButtonElement;
   private applyButton?: HTMLButtonElement;
+  private enterMultiplayerButton?: HTMLButtonElement;
   private disconnectButton?: HTMLButtonElement;
   private participantsList?: HTMLUListElement;
   private connectionState: ConnectionState = { status: 'disconnected' };
   private readonly disposers: Unsubscribe[] = [];
+  private keepConnectionOnShutdown = false;
 
   constructor() {
     super('NetworkTestScene');
   }
 
   create(): void {
-    this.network = new NetworkClient();
+    this.network = networkClient;
+    this.keepConnectionOnShutdown = false;
     this.createUi();
     this.bindNetwork();
     this.render();
@@ -61,6 +66,7 @@ export class NetworkTestScene extends Phaser.Scene {
 
     this.roomInfoText = createElement('div', 'network-test__room-info', '');
     this.errorText = createElement('div', 'network-test__error', '');
+    this.profileErrorText = createElement('div', 'network-test__error', '');
 
     this.nicknameInput = createElement('input', 'network-test__input');
     this.nicknameInput.value = `Guest${Math.floor(100 + Math.random() * 900)}`;
@@ -86,16 +92,27 @@ export class NetworkTestScene extends Phaser.Scene {
 
     this.connectButton = createElement('button', 'network-test__button', 'Connect');
     this.applyButton = createElement('button', 'network-test__button', 'Apply profile');
+    this.enterMultiplayerButton = createElement('button', 'network-test__button', 'Enter multiplayer');
     this.disconnectButton = createElement('button', 'network-test__button', 'Disconnect');
     const openLocalButton = createElement('button', 'network-test__button network-test__button--secondary', 'Open local prototype');
 
     const buttons = createElement('div', 'network-test__buttons');
-    buttons.append(this.connectButton, this.applyButton, this.disconnectButton, openLocalButton);
+    buttons.append(this.connectButton, this.applyButton, this.enterMultiplayerButton, this.disconnectButton, openLocalButton);
 
     const participantsTitle = createElement('h2', 'network-test__subtitle', 'Participants');
     this.participantsList = createElement('ul', 'network-test__participants');
 
-    panel.append(title, status, this.roomInfoText, this.errorText, form, buttons, participantsTitle, this.participantsList);
+    panel.append(
+      title,
+      status,
+      this.roomInfoText,
+      this.errorText,
+      this.profileErrorText,
+      form,
+      buttons,
+      participantsTitle,
+      this.participantsList
+    );
     root.append(panel);
     document.body.append(root);
     this.root = root;
@@ -106,6 +123,10 @@ export class NetworkTestScene extends Phaser.Scene {
       });
     });
     this.applyButton.addEventListener('click', () => this.network?.setProfile(this.getProfile()));
+    this.enterMultiplayerButton.addEventListener('click', () => {
+      this.keepConnectionOnShutdown = true;
+      this.scene.start('MultiplayerGameScene');
+    });
     this.disconnectButton.addEventListener('click', () => {
       void this.network?.disconnect();
     });
@@ -171,6 +192,11 @@ export class NetworkTestScene extends Phaser.Scene {
       this.errorText.hidden = !this.connectionState.error;
     }
 
+    if (this.profileErrorText) {
+      this.profileErrorText.textContent = this.connectionState.profileError ?? '';
+      this.profileErrorText.hidden = !this.connectionState.profileError;
+    }
+
     if (this.roomInfoText) {
       const roomInfo = this.connectionState.roomInfo;
       this.roomInfoText.textContent = roomInfo
@@ -178,19 +204,24 @@ export class NetworkTestScene extends Phaser.Scene {
         : 'Room: -';
     }
 
-    const connected = status === 'connected' || status === 'error';
+    const connected = status === 'connected';
+    const canDisconnect = status === 'connected' || status === 'error';
     const connecting = status === 'connecting';
 
     if (this.connectButton) {
-      this.connectButton.disabled = connecting || connected;
+      this.connectButton.disabled = connecting || canDisconnect;
     }
 
     if (this.applyButton) {
       this.applyButton.disabled = !connected || connecting;
     }
 
+    if (this.enterMultiplayerButton) {
+      this.enterMultiplayerButton.disabled = !this.network?.profile || !connected || connecting;
+    }
+
     if (this.disconnectButton) {
-      this.disconnectButton.disabled = !connected || connecting;
+      this.disconnectButton.disabled = !canDisconnect || connecting;
     }
 
     const spectator = this.modeSelect?.value === 'spectator';
@@ -236,7 +267,9 @@ export class NetworkTestScene extends Phaser.Scene {
       dispose();
     }
 
-    void this.network?.disconnect();
+    if (!this.keepConnectionOnShutdown) {
+      void this.network?.disconnect();
+    }
     this.root?.remove();
     this.root = undefined;
     this.network = undefined;
