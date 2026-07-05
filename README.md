@@ -1,32 +1,43 @@
 # BurningSpace
 
-BurningSpace - браузерный космический прототип на Phaser 3, TypeScript, Vite и Colyseus.
+BurningSpace is a Phaser 3 + TypeScript + Vite client and Colyseus server monorepo. The current `main` branch contains a stable server-authoritative multiplayer core: network participants, player/spectator modes, server movement, server projectiles, damage, death, respawn, and combat lifecycle hardening.
 
-Проект использует монорепозиторий. Локальная аркада остается отдельной клиентской сценой, а multiplayer-сцена постепенно переносится на серверно-авторитетную модель. Сейчас сервер уже отвечает за сетевых игроков, движение, снаряды, попадания, здоровье, смерть и респавн.
+The project direction is now a persistent multiplayer space action-strategy with accounts, hangars, ship classes, hired pilots, player wings, economy, and a shared two-faction frontline. Persistent systems are not implemented yet; this repository stage documents and prepares the architecture.
 
-## Структура
+## Structure
 
 ```text
-apps/client      Phaser/Vite клиент и игровые ассеты
-apps/server      Node.js/TypeScript/Colyseus сервер
-packages/shared  общие типы, константы и названия сетевых сообщений
+apps/client       Phaser/Vite client, UI, rendering, input, local prototype
+apps/server       Node.js/TypeScript/Colyseus server
+packages/shared   shared protocol types and constants
+docs/design       product and gameplay direction
+docs/architecture architecture boundaries
+docs/adr          architecture decision records
+docs/agents       agent handoff and review templates
 ```
 
-## Установка
+## Milestone
+
+- Stable multiplayer core tag: `v0.7.0-multiplayer-core`.
+- Main branch: `main`.
+- Planning branch for the persistent game direction: `planning/persistent-game-foundation`.
+- Local prototype tag: `local-prototype-v0.4`.
+
+## Install
 
 ```bash
 npm install
 ```
 
-## Запуск
+## Run
 
-Сервер:
+Server:
 
 ```bash
 npm run dev:server
 ```
 
-Клиент:
+Client:
 
 ```bash
 npm run dev:client
@@ -38,7 +49,7 @@ Health endpoint:
 http://localhost:2567/health
 ```
 
-Ожидаемый ответ:
+Expected response:
 
 ```json
 {
@@ -47,98 +58,111 @@ http://localhost:2567/health
 }
 ```
 
-## Базовый сетевой тест
+## Test
 
-1. Запустить сервер: `npm run dev:server`.
-2. Запустить клиент: `npm run dev:client`.
-3. Открыть две вкладки клиента.
-4. Нажать `Connect` в обеих вкладках.
-5. Задать разные ники.
-6. Выбрать разные фракции: `red` и `blue`.
-7. Нажать `Apply profile`.
-8. Проверить одинаковый список участников.
-9. Нажать `Enter multiplayer` в обеих вкладках.
-10. Проверить, что оба корабля видны в сетевой сцене.
+Use the unified check:
 
-## Сетевой бой игроков
+```bash
+npm test
+```
 
-BattleRoom синхронизирует через Colyseus Schema:
+It runs:
 
-- `participants` - подключенные участники;
-- `ships` - серверные корабли игроков;
-- `projectiles` - серверные снаряды.
+- workspace typecheck;
+- workspace build;
+- movement diagnostic;
+- combat diagnostic;
+- network/client lifecycle diagnostic.
 
-Клиентская сцена отправляет только состояние ввода: движение, `aimAngle` и `shooting`. `NetworkClient` добавляет monotonically increasing `sequence`, а сервер сам считает движение, создает снаряды, двигает их с фиксированной скоростью, проверяет swept circle collision, запрещает friendly fire и self-hit, применяет урон, рассылает hit/death events и выполняет respawn.
-
-Текущие сетевые правила:
-
-- один player-профиль с faction `red` или `blue` получает один корабль;
-- spectator видит корабли и снаряды, но не получает собственный корабль;
-- ЛКМ или `Space` стреляют в multiplayer-сцене;
-- попадание снаряда снимает 15 HP;
-- корабль имеет 100 HP;
-- при 0 HP корабль скрывается, получает таймер респавна и появляется на базе своей фракции;
-- после респавна действует короткая неуязвимость;
-- снаряды не наносят урон владельцу и союзникам.
-
-Локальная сцена `GameScene` не использует эту сетевую механику. Астероиды, NPC, базы, runtime balance и админ-панель остаются частью локального прототипа.
-
-## Multiplayer Combat Lifecycle Hardening
-
-- Input sequence хранится в `NetworkClient`, поэтому переход `MultiplayerGameScene -> NetworkTestScene -> MultiplayerGameScene` не сбрасывает управление.
-- Stale input автоматически нейтрализуется сервером через `NETWORK_INPUT_TIMEOUT_MS`: корабль перестает ускоряться и стрелять, если новые input-сообщения не приходят.
-- `mode` и `faction` фиксируются после первого принятого профиля до disconnect; менять можно только nickname.
-- Ошибка валидации профиля отделена от connection error: соединение остается `connected`, а UI показывает profile error отдельно.
-- Уже выпущенные `ProjectileState` переживают disconnect владельца и удаляются только по попаданию, дальности или выходу за границы мира.
-- Клиент хранит `serverClockOffsetMs` из `roomInfo.serverTime` и использует оценку серверного времени для respawn countdown и invulnerability visual.
-- Test teleport удалён из обычной `BattleRoom`; lifecycle-проверки используют отдельную `TestBattleRoom`, не зарегистрированную в production entrypoint.
-
-## Управление
-
-Сетевая сцена:
-
-- `WASD` или стрелки - движение игрока или свободная камера spectator.
-- Мышь - направление поворота корабля.
-- ЛКМ или `Space` - стрельба.
-- `Esc` - вернуться в сетевое lobby без отключения от комнаты.
-
-Локальная игра:
-
-- `WASD` - движение.
-- Мышь - направление корабля.
-- ЛКМ - стрельба.
-- `M` - большая карта.
-- `F1` - debug-информация.
-- `P` - админская панель в dev-режиме.
-
-## Проверка
+Focused commands are also available:
 
 ```bash
 npm run typecheck
 npm run build
+npm run check:movement
+npm run check:combat
+npm run check:network
 ```
 
-Диагностические скрипты:
+## Basic Multiplayer Test
 
-```bash
-npx tsx apps/server/scripts/movement-check.ts
-npx tsx apps/server/scripts/combat-check.ts
-npx tsx apps/client/scripts/network-client-callback-check.ts
-```
+1. Start the server: `npm run dev:server`.
+2. Start the client: `npm run dev:client`.
+3. Open two browser tabs.
+4. Click `Connect` in both tabs.
+5. Set different nicknames.
+6. Choose different factions: `red` and `blue`.
+7. Click `Apply profile`.
+8. Verify both tabs show the same participant list.
+9. Click `Enter multiplayer` in both tabs.
+10. Verify both ships are visible in the multiplayer scene.
 
-`network-client-callback-check.ts` сам запускает test-only Colyseus room, подключает двух игроков и spectator, проверяет синхронизацию участников/кораблей, profile lifecycle, stale input timeout, death/respawn, invulnerability и то, что снаряды переживают disconnect владельца.
+## Current Multiplayer Rules
 
-## Текущий статус
+BattleRoom synchronizes:
 
-- Стабильный тег локального прототипа: `local-prototype-v0.4`.
-- Рабочая ветка мультиплеерной архитектуры: `multiplayer-foundation`.
-- Клиент: `apps/client`.
-- Сервер: `apps/server`.
-- Общие типы: `packages/shared`.
+- `participants`;
+- `ships`;
+- `projectiles`.
 
-## Ограничения
+The client sends input only: movement, `aimAngle`, and `shooting`. `NetworkClient` owns the increasing input sequence. The server computes movement, creates and moves projectiles, checks collisions, applies damage, sends hit/death events, and performs respawn.
 
-- Астероиды, NPC, базы и боевой баланс пока не перенесены на сервер.
-- Нет выбора свободных командных слотов и spectator-камеры по игрокам.
-- Нет server reconciliation/prediction; клиент интерполирует серверные состояния.
-- Нет постоянной базы данных, Docker и production deployment.
+Lifecycle hardening includes:
+
+- stale input timeout;
+- mode/faction locked until disconnect;
+- profile validation errors separate from connection errors;
+- projectiles survive owner disconnect;
+- server clock offset for respawn/invulnerability UI;
+- no test teleport in the production BattleRoom.
+
+The local `GameScene` remains separate. Asteroids, the local NPC, bases, runtime balance, and the admin panel are still part of the local prototype, not the multiplayer BattleRoom.
+
+## Design And Architecture Docs
+
+Start here:
+
+- [Game Vision](docs/design/GAME_VISION.md)
+- [Onboarding](docs/design/ONBOARDING.md)
+- [Core Loop](docs/design/CORE_LOOP.md)
+- [Account And Progression](docs/design/ACCOUNT_AND_PROGRESSION.md)
+- [Ship Classes](docs/design/SHIP_CLASSES.md)
+- [NPC Systems](docs/design/NPC_SYSTEMS.md)
+- [Squads And Squadrons](docs/design/SQUADS_AND_SQUADRONS.md)
+- [Economy Principles](docs/design/ECONOMY.md)
+- [Domain Model](docs/architecture/DOMAIN_MODEL.md)
+- [Persistence Boundaries](docs/architecture/PERSISTENCE.md)
+- [Scalability Requirements](docs/architecture/SCALABILITY.md)
+- [Auth And Security](docs/architecture/AUTH_AND_SECURITY.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Decisions Pending](docs/DECISIONS_PENDING.md)
+
+## Agent Workflow
+
+Agents should read [AGENTS.md](AGENTS.md) before work. Longer or cross-module tasks require an ExecPlan using [PLANS.md](PLANS.md).
+
+Supporting docs:
+
+- [Contributing](docs/CONTRIBUTING.md)
+- [Responsibility Matrix](docs/agents/RESPONSIBILITY_MATRIX.md)
+- [Task Template](docs/agents/TASK_TEMPLATE.md)
+- [Handoff Template](docs/agents/HANDOFF_TEMPLATE.md)
+- [Review Template](docs/agents/REVIEW_TEMPLATE.md)
+
+Rules:
+
+- one task, one branch, one PR;
+- no direct push to `main`;
+- no secrets in the repository;
+- update ADRs for architecture decisions;
+- do not implement account/economy/persistence before design approval.
+
+## Current Limitations
+
+- No registration or authentication.
+- No database or persistent account state.
+- No economy implementation.
+- No hangar, pilots, or wing system.
+- No server-side asteroids, NPC waves, or bases.
+- No Docker, deployment, monitoring, or production secrets.
+

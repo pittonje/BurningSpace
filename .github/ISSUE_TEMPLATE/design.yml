@@ -1,0 +1,22 @@
+name: Design
+description: Track a product or gameplay design decision.
+title: "design: "
+labels: ["design"]
+body:
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision needed
+    validations:
+      required: true
+  - type: textarea
+    id: systems
+    attributes:
+      label: Systems affected
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options
+
