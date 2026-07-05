@@ -1,0 +1,22 @@
+name: Architecture
+description: Track an architecture decision or cross-system change.
+title: "architecture: "
+labels: ["architecture"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+    validations:
+      required: true
+  - type: textarea
+    id: adr
+    attributes:
+      label: ADR impact
+

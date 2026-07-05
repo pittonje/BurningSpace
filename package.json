@@ -11,6 +11,10 @@
     "build": "npm run build --workspaces",
     "build:client": "npm run build -w @burningspace/client",
     "build:server": "npm run build -w @burningspace/server",
+    "check:movement": "npx tsx apps/server/scripts/movement-check.ts",
+    "check:combat": "npx tsx apps/server/scripts/combat-check.ts",
+    "check:network": "npx tsx apps/client/scripts/network-client-callback-check.ts",
+    "test": "npm run typecheck && npm run build && npm run check:movement && npm run check:combat && npm run check:network",
     "typecheck": "npm run typecheck --workspaces",
     "typecheck:client": "npm run typecheck -w @burningspace/client",
     "typecheck:server": "npm run typecheck -w @burningspace/server"
