@@ -1,0 +1,51 @@
+name: Core Pull Request Checks
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build workspaces
+        run: npm run build
+
+      - name: Typecheck workspaces
+        run: npm run typecheck
+
+      - name: Check protocol profile compatibility
+        run: npm run check:protocol-profile
+
+      - name: Network client callback diagnostic
+        run: npx tsx apps/client/scripts/network-client-callback-check.ts
+
+      - name: Movement diagnostic
+        run: npx tsx apps/server/scripts/movement-check.ts
+
+      - name: Combat diagnostic
+        run: npx tsx apps/server/scripts/combat-check.ts
