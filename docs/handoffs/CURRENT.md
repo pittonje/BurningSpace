@@ -1,71 +1,79 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-07-11
-Updated by: Codex — CI-002RV verification failed
+Updated by: Codex — CI-002D implementation and local validation
 
 ## Repository state
 
 - Base branch: `main`
-- Base commit: `93569a3eb0093045409580ce1b5950de0a62e62f`
-- Active branch: `ci/verify-deterministic-qa-comment`
-- Upstream: `origin/ci/verify-deterministic-qa-comment`
-- Pull request: [#16 — CI-002RV — Verify Deterministic Claude QA Comment Delivery](https://github.com/pittonje/BurningSpace/pull/16)
-- Working tree: final verification documentation in progress
+- Base commit: `346d095fe80ef457287cc14a2753bbfd3faa7a9e`
+- Active branch: `ci/safe-claude-invocation-diagnostics`
+- Upstream: not configured until push
+- Stable implementation checkpoint: `48a73fe` (`ci: add sanitized Claude execution diagnostics`)
+- Pull request: None until branch push
 
 ## Current task
 
-- Task ID: `CI-002RV`
-- Task title: Verify Deterministic Claude QA Comment Delivery
-- Task file: `docs/tasks/ci-002rv-verify-deterministic-comment-delivery.md`
-- Status: Failed — structured output absent in both runs
+- Task ID: `CI-002D`
+- Task title: Safe Claude Invocation Diagnostics
+- Task file: `docs/tasks/ci-002d-safe-claude-invocation-diagnostics.md`
+- Status: Implementation and local validation complete; PR pending
 
-## Goal
+## Implemented diagnostics
 
-Verify after PR #15 merged that the trusted workflow on `main` receives valid
-Claude structured output and deterministically publishes exactly one correctly
-bound four-heading QA comment per current workflow run.
+- Added a Step Summary diagnostic between the Claude Action and deterministic
+  result handling.
+- Reads only the pinned Action's declared `execution_file` output.
+- Stdlib-only sanitizer caps size/records/depth, parses JSON/JSONL, rejects
+  invalid UTF-8/nulls/duplicates, emits allowlisted metadata, and normalizes to
+  fixed categories.
+- Raw records, prompts, tool output, environment data, headers, and tokens are
+  never printed or commented.
+- Existing event, permissions, gates, `show_full_output: false`, read-only tools,
+  renderer, publisher, stale check, and failure comment remain unchanged.
 
-## Confirmed preflight
+## Validation
 
-- PR #15 merged into `main` as `93569a3`.
-- Local `main` was clean and synchronized with `origin/main` before branching.
-- `.github/workflows/claude-qa-review-pilot.yml` exists on `main`.
-- `.github/workflows/pr-checks.yml` remains at its CI-001 content; its last
-  change is commit `dd04674`.
-- `CLAUDE_CODE_OAUTH_TOKEN` is listed for GitHub Actions; its value was not
-  accessed.
-- No local or remote `ci/verify-deterministic-qa-comment` branch existed.
+- Sanitizer matrix: 28/28 pass; sensitive exposure zero.
+- Python syntax and diagnostic shell syntax: pass.
+- JSON Schema parse and exact four-pair `claude_args` reconstruction: pass.
+- Build, typecheck, protocol profile, network callback, movement, combat: pass.
+- Existing Vite chunk warning unchanged and informational.
+- Local YAML parser/actionlint unavailable; PR CI must validate workflow YAML.
 
-## Reviewer routing
+## Reviews
 
-- Required: `security-reviewer`, `qa-reviewer`, `architecture-reviewer`.
-- Skipped: Network (no networking/protocol change), Gameplay (no gameplay
-  change), Visual Design (no visual/asset change).
-- Reviewers are read-only and cannot edit, commit, push, branch, or comment.
+- Local Security Review: approved, post-merge evidence required.
+- Local QA Review: approved conditional on green PR CI and final scope check.
+- Local Architecture Review: approved in the main diagnostic report.
+- These are structured Codex reviews, not named Claude-agent executions or
+  approvals. Local Claude Code was not invoked because tokens are exhausted.
 
-## Allowed paths
+## Changed files
 
-- CI-002RV task, verification report, three reviewer reports, this handoff,
-  and `PROJECT_CONTEXT.md` only after full verification.
+- `.github/workflows/claude-qa-review-pilot.yml`
+- `.github/scripts/sanitize-claude-diagnostic.py`
+- `docs/tasks/ci-002d-safe-claude-invocation-diagnostics.md`
+- `docs/reviews/ci-002d-invocation-diagnostics.md`
+- `docs/reviews/ci-002d-security-review.md`
+- `docs/reviews/ci-002d-qa-review.md`
+- `docs/handoffs/CURRENT.md`
+- `PROJECT_CONTEXT.md`
 
-## Forbidden paths
+## Remaining uncertainty
 
-- Both workflows, runtime applications/packages, manifests, lockfile, tsconfig
-  files, assets, and reviewer definitions.
-
-## Next action
-
-The two planned Claude runs (`29156077671`, `29156150151`) authenticated through OIDC and
-obtained App tokens but returned `is_error: true`, one turn, zero cost, and no
-`structured_output`. Each produced exactly one sanitized SHA-bound failure
-comment and a failed job. Both CI-001 runs passed. The final report commit also
-triggered run `29156280877`, which reproduced the same failure with exactly one
-comment; its CI-001 run passed. Required external manual review was blocked by
-managed-environment data-export policy. `PROJECT_CONTEXT.md` must remain
-unchanged and CI-003 remains blocked. Do not merge PR #16.
+- Root cause is unknown; CI-002D does not claim one.
+- The modified workflow cannot exercise its new diagnostic path on its own PR.
+- CI-002DV must verify the trusted merged Step Summary after human merge.
 
 ## Preserved constraints
 
-- CI-003 and PR-007 remain unauthorized.
-- No workflow or runtime modification is authorized.
-- The invalid-output path must not be provoked by changing production workflow.
+- CI-001, runtime, dependencies, lockfile, assets, and reviewer definitions are
+  unchanged.
+- CI-003 remains blocked. PR-007 remains deferred.
+- Do not merge the CI-002D PR automatically.
+
+## Next safe action
+
+Commit documentation, push, open CI-002D PR, verify CI-001 and scope, then await
+human review and merge. After merge, create a separately scoped CI-002DV task.

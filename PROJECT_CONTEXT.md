@@ -387,19 +387,25 @@ CI-002 — Claude Review Pilot (partially verified, not complete):
 - CI-002V also demonstrated **intermittent comment delivery**: one successful run posted zero PR comments (`permission_denials_count: 4`), and a later run under byte-identical configuration posted the expected comment. Forensic diagnosis (`docs/reviews/ci-002r-comment-delivery-forensics.md`) attributes this primarily to non-deterministic agent tool-call behavior, amplified by the action's decoupling of job success from the comment side effect, with no retry or fallback.
 - CI-002 is **not** marked complete pending the follow-up below.
 
-CI-002R — Deterministic Claude QA Comment Delivery (implemented, pending merge and post-merge verification):
+CI-002R — Deterministic Claude QA Comment Delivery (merged; diagnostic follow-up in progress):
 
 - Branch: `ci/deterministic-qa-comment-delivery`.
 - Changes ownership of the final comment publication from Claude to the workflow: Claude now returns strict structured JSON output only (validated via `--json-schema` plus a second, authoritative in-workflow validator) and has no comment-posting, write, commit, or push capability; a deterministic workflow step validates, renders the four required headings, and posts exactly one top-level comment via `gh pr comment --body-file` with a step-scoped token.
 - Invalid or missing review output produces one sanitized failure comment and fails the job — no silent zero-comment success path remains; superseded/closed/draft runs skip posting via a live pre-post HEAD re-check.
 - Both actions are pinned to exact commit SHAs (`claude-code-action` `v1.0.171`, `checkout` `v6.0.3`) validated by the forensic runs.
-- Full reliability remains **pending CI-002RV post-merge verification** — the modified workflow cannot prove its own behavior on its own PR (GitHub validates workflow files against the default branch).
+- CI-002RV post-merge verification failed because Claude Code repeatedly ended
+  after one turn with zero cost and no structured output. OAuth availability,
+  GitHub OIDC/App exchange, CI-001, and deterministic sanitized failure
+  publication remain proven.
+- CI-002D adds safe allowlisted execution-file diagnostics while retaining
+  `show_full_output: false`; the underlying invocation error remains pending
+  CI-002DV post-merge evidence.
 
 Recommended order:
 
-1. CI-002RV — post-merge verification of deterministic comment delivery (after CI-002R merges).
-2. CI-003 — Routed Claude Reviews (blocked until CI-002RV passes).
-3. PR-007 — Narrow Profile Message Consumer Imports.
+1. CI-002DV — post-merge verification of safe invocation diagnostics.
+2. CI-003 — Routed Claude Reviews (blocked until invocation reliability is proven).
+3. PR-007 — Narrow Profile Message Consumer Imports (deferred).
 
 Any implementation PR must define a narrow scope and explicit non-goals.
 
