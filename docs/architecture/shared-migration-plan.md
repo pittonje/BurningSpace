@@ -20,7 +20,7 @@
 - Reviewers: architecture, network, QA.
 - Non-goals: consumer cutover, wire changes, schema changes, gameplay changes, old export removal.
 
-## Phase 2 — One coordinated protocol consumer cutover
+## Phase 2a — Coordinated profile consumer cutover
 
 - Files affected: the relevant `NetworkClient` import, `BattleRoom` import, explicit client/server manifest dependencies, and protocol compatibility tests.
 - Expected consumers: client and server for one complete message category only.
@@ -28,7 +28,27 @@
 - Rollback: revert imports/manifests to `@burningspace/shared`; no state migration is required.
 - Required tests: build/typecheck, network callback diagnostic, focused room lifecycle behavior, exact wire-name assertions.
 - Reviewers: network, architecture, QA.
-- Non-goals: unrelated messages, Colyseus schema, balance, config, gameplay.
+- Non-goals: unrelated messages, Colyseus schema, balance, config, gameplay. Profile-message rate limiting and reconnection policy remain separate server-hardening concerns, not protocol-path migration work.
+
+## Phase 2b — Player input contract
+
+- Files affected: protocol input-frame exports, `NetworkClient`, `BattleRoom`, input validation, movement simulation type imports, diagnostics, and explicit manifests.
+- Expected consumers: client sender plus server room, validator, simulation, and movement diagnostic in one coordinated PR.
+- Compatibility: preserve every field, boolean/finite validation, monotonically increasing sequence handling, throttle behavior, stale-input neutralization, and server-only simulation.
+- Rollback: retain the shared `PlayerInputMessage` export and revert all consumers together.
+- Required tests: bidirectional type compatibility, rejected malformed/stale input, input timeout behavior, movement diagnostic, callback diagnostic, build/typecheck.
+- Reviewers: network, security, architecture, QA.
+- Non-goals: prediction/reconciliation, rate changes, movement tuning, new input fields, gameplay behavior.
+
+## Phase 2c — Events and schema-mirrored snapshots
+
+- Files affected: room-info, hit/death event, participant, ship, and projectile snapshot exports; coordinated client/server imports; schema-parity checks.
+- Expected consumers: `NetworkClient`, multiplayer scene/views, `BattleRoom`, callback diagnostic, and explicit manifests.
+- Compatibility: preserve event strings and fields exactly. Compare `ShipSnapshot`, `ProjectileSnapshot`, and participant projections against `ShipState`, `ProjectileState`, and `ParticipantState` because these shapes are manually mirrored rather than generated.
+- Rollback: retain old shared exports and revert the full category's imports together; do not alter schemas or room state.
+- Required tests: compile-time snapshot/schema projection checks, runtime message-name equality, callback diagnostic, build/typecheck.
+- Reviewers: network, architecture, QA.
+- Non-goals: schema field changes, serialization changes, new events, reconciliation, gameplay.
 
 ## Phase 3 — Balance constants
 
@@ -68,3 +88,6 @@
 - Preserve old exports until zero consumers remain and rollback has been exercised.
 - Keep `packages/shared -> packages/protocol` forbidden.
 - Update `PROJECT_CONTEXT.md` factually after each accepted boundary change.
+- Keep `MAX_ROOM_CLIENTS` and `NETWORK_INPUT_TIMEOUT_MS` server-owned unless Product Architect explicitly reclassifies them; connection limits and anti-abuse policy do not belong in protocol or topology config.
+- Never register `TestBattleRoom` or test-only message handlers in the production server entry point during protocol cutovers.
+- Treat reconnection grace and profile-message rate limiting as explicit future server-hardening work, not assumptions hidden inside import migration.
