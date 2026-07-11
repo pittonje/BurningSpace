@@ -1,143 +1,168 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-07-11
-Updated by: Claude (CI-002V verification complete — partially verified)
+Updated by: Claude (CI-002R implementation complete, pre-commit)
 
 ## Repository state
 
-- Base branch: `main`
-- Active branch: `ci/verify-claude-qa-pilot`
-- Upstream: `origin/ci/verify-claude-qa-pilot`
-- HEAD: `fdb5bfd93d8e0f17b3e93c7fbb034bc16833d776` (before this handoff
-  commit; this file's update will be committed on top)
-- Working tree: Clean
-- Pull request: [#14 — CI-002V — Verify Claude QA Pilot](https://github.com/pittonje/BurningSpace/pull/14)
-- Pull request state: Open, **not merged**
+- Base branch: `main` (at `4c3de975b464a0752e09720b40466b6b35b021ac`, the
+  PR #14 merge commit)
+- Active branch: `ci/deterministic-qa-comment-delivery`
+- Upstream: not yet pushed at the time this handoff was written; see the
+  pull-request section below for the state after push
+- Stable task checkpoint: `4c3de97` (branch point); the CI-002R commits are
+  this checkpoint's documented children with subjects listed under
+  "Commit plan" below
+- Working tree at handoff-write time: CI-002R changes staged/committed per
+  the commit plan
+- Pull request: to be opened as "CI-002R — Deterministic Claude QA Comment
+  Delivery" (base `main`, head `ci/deterministic-qa-comment-delivery`);
+  the number is recorded in the PR itself and the final session report
 
 ## Current task
 
-- Task ID: `CI-002V`
-- Task title: Post-Merge Claude QA Pilot Verification
-- Task file: `docs/tasks/ci-002v-post-merge-pilot-verification.md`
-- Verification report: `docs/reviews/ci-002v-pilot-verification.md`
-- Status: **Partially verified.** See full detail in the verification
-  report.
+- Task ID: `CI-002R`
+- Task title: Deterministic Claude QA Comment Delivery
+- Task file: `docs/tasks/ci-002r-deterministic-comment-delivery.md`
+- Forensic report: `docs/reviews/ci-002r-comment-delivery-forensics.md`
+- Architecture: `docs/architecture/claude-review-comment-delivery.md`
+- Status: implementation and local validation complete; all three manual
+  reviews approved (no blockers); accepted review corrections applied and
+  re-validated.
 
-## CI-001 / CI-002 workflow status
+## Forensic conclusion (summary)
 
-- CI-001 (`.github/workflows/pr-checks.yml`): unchanged, active on
-  `main`, passing independently (run `29151662021` on PR #14, success).
-- CI-002 (`.github/workflows/claude-qa-review-pilot.yml`): unchanged,
-  active on `main` since PR #13 merged as `558ce34`. Not modified by
-  CI-002V.
-- Runtime changes: none.
-- Dependency changes: none.
+CI-002V's intermittent comment delivery is attributed primarily to
+non-deterministic agent tool-call behavior under a narrow Bash allowlist
+(`Bash(gh pr comment:*)`), amplified by `claude-code-action`'s decoupling
+of job success from the comment side effect, with no retry/fallback. Both
+observed runs used identical action SHA/CLI version/config; the run with
+*more* permission denials is the one that succeeded — ruling out config
+drift, auth failure, transient API failure, and MCP startup failure.
+Corroborated upstream by anthropics/claude-code-action#1384. Full detail
+and confidence labels in the forensic report.
 
-## Verification result summary
+## Workflow change summary
 
-Confirmed working, post-merge, on a normal subsequent PR (#14):
+`.github/workflows/claude-qa-review-pilot.yml` (only workflow changed):
 
-- Core Pull Request Checks (CI-001) passes independently.
-- Claude QA Review Pilot executes fully — **not** merge-gated (the
-  pre-merge "workflow file must match default branch" block observed on
-  PR #13 is resolved now that the workflow exists on `main`).
-- OAuth authentication (`CLAUDE_CODE_OAUTH_TOKEN`) succeeds.
-- GitHub App OIDC token exchange succeeds ("App token successfully
-  obtained", "Using GITHUB_TOKEN from OIDC").
-- `qa-reviewer` is genuinely invoked (`--agent qa-reviewer`, 18 turns,
-  ~97s, `total_cost_usd: 0.426`).
-- Read-only boundary held: zero files/commits/branches changed by the
-  automated reviewer; fail-closed regardless of the exact cause below.
-- No secret value exposed anywhere in logs (verified by direct scan).
+- Claude step (`id: claude_review`): tools reduced to
+  `Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*)` — comment posting
+  removed; `--json-schema` added (six-field strict contract); actions
+  pinned to exact SHAs (`claude-code-action` @ `e90deca4…` = v1.0.171,
+  `checkout` @ `df4cb1c0…` = v6.0.3).
+- New deterministic render step (`id: render_review`, `if: always()`):
+  embedded stdlib-Python validator/renderer; strict second-layer
+  validation (types, limits, control/bidi/invisible characters, duplicate
+  keys, UTF-8, fail-closed `reviewed_commit` = trusted head SHA binding);
+  renders the four required headings; catch-all guarantees a sanitized
+  failure comment for any unanticipated defect.
+- New deterministic publish step (`if: always()`): live
+  headRefOid/state/isDraft re-check (silent skip when superseded, closed,
+  or drafted), `gh pr comment --body-file` with step-scoped
+  `GH_TOKEN: ${{ github.token }}`, job fails after posting the failure
+  comment when validation failed.
 
-**Not achieved:**
+## Local validation results
 
-- Zero PR comments were posted anywhere (confirmed via
-  `gh api .../pulls/14/reviews`, `.../pulls/14/comments`,
-  `.../issues/14/comments` — all empty), despite the job completing
-  (`"is_error": false`, `"permission_denials_count": 4`). The required
-  "exactly one top-level QA comment with four headings" acceptance
-  criterion is unmet.
-- Root cause not confirmed: the default Actions log doesn't expose
-  per-tool-call permission-denial detail. `architecture-reviewer`
-  surfaced a plausible lead — the workflow's `prompt:` text wraps the
-  `gh pr comment ... --body "<review>"` example across a line break
-  inside one backtick span, which could cause a constructed command that
-  doesn't literally prefix-match the `Bash(gh pr comment:*)` allowlist.
-  Unconfirmed; investigating further requires `show_full_output: true`,
-  which is a pilot-workflow change out of scope for CI-002V.
+- Renderer test matrix: 47/47 pass (40 required cases + case-24 split +
+  6 reviewer-feedback cases), run against the Python extracted verbatim
+  from the committed workflow file.
+- `python -m py_compile`: pass. `bash -n` on both extracted shell steps:
+  pass. YAML parse (PyYAML, local-only install): pass. `git diff --check`:
+  clean. GitHub `${{ }}` expressions: 16/16 balanced, all from trusted
+  context.
+- Base checks: build, typecheck, protocol-profile, network callback,
+  movement, combat — all pass; only the known pre-existing Vite chunk-size
+  warning (unchanged, informational).
 
-## Files changed (PR #14, final)
+## Reviewer routing and results
 
-- `docs/tasks/ci-002v-post-merge-pilot-verification.md` (new)
-- `docs/reviews/ci-002v-pilot-verification.md` (new)
+- `security-reviewer` (required, manual, read-only): **Approved with
+  suggestions**, no blockers — `docs/reviews/ci-002r-security-review.md`.
+- `qa-reviewer` (required, manual, read-only): **Approved**, no blockers —
+  `docs/reviews/ci-002r-qa-review.md`. (The automated qa-reviewer runs via
+  the workflow itself, which cannot execute its modified form pre-merge.)
+- `architecture-reviewer` (recommended, manual, read-only): **Approved
+  with suggestions**, no blockers —
+  `docs/reviews/ci-002r-architecture-review.md`.
+- Skipped: `network-reviewer` (deviation from matrix default recorded in
+  the task file), `gameplay-reviewer`, `visual-design-lead`.
+- All accepted corrections applied and re-validated (catch-all exception
+  guarantee, fail-closed SHA binding, extended invisible-character
+  denylist as `\u` escapes, doc reconciliations); matrix re-run at 47/47.
+
+## Exact changed files
+
+- `.github/workflows/claude-qa-review-pilot.yml` (modified)
+- `docs/tasks/ci-002r-deterministic-comment-delivery.md` (new)
+- `docs/reviews/ci-002r-comment-delivery-forensics.md` (new)
+- `docs/reviews/ci-002r-security-review.md` (new)
+- `docs/reviews/ci-002r-qa-review.md` (new)
+- `docs/reviews/ci-002r-architecture-review.md` (new)
+- `docs/architecture/claude-review-comment-delivery.md` (new)
 - `docs/handoffs/CURRENT.md` (this file)
-- `PROJECT_CONTEXT.md` (CI-002 recorded as partially verified, not
-  complete)
+- `PROJECT_CONTEXT.md` (CI-002R recorded; recommended order updated)
 
-Confirmed empty diffs vs `main` for `.github/workflows/**`, `apps/**`,
-`packages/**`, `package.json`, `package-lock.json`, `tsconfig.base.json`,
-and `.claude/agents/**`.
+Confirmed empty diffs vs `main` for `apps/**`, `packages/**`,
+`package.json`, `package-lock.json`, `tsconfig.base.json`,
+`.claude/agents/**`, and `.github/workflows/pr-checks.yml`.
+
+## Commit plan
+
+1. `docs: record Claude comment delivery forensics`
+2. `ci: make Claude QA comment delivery deterministic`
+3. `docs: document deterministic review delivery`
+4. `docs: finalize CI-002R reviews and handoff`
 
 ## Preserved invariants
 
 - Server authority, wire format, gameplay, and balance unchanged.
 - Runtime source, scripts, dependencies, lockfile, and assets unchanged.
-- CI-001 and CI-002 workflow files unchanged.
-- Reviewer definitions unchanged.
+- CI-001 workflow and reviewer definitions unchanged.
+- `pull_request`-only; same-repo/owner/non-draft gate unchanged; minimal
+  permissions unchanged; no fork support; no `pull_request_target`.
 - No secret value accessed, printed, or committed.
 - Local Claude settings remain private, ignored, and untracked.
 
-## CI-003 / PR-007 status
+## Post-merge limitation
 
-- CI-003 (Routed Claude Reviews): **not authorized**. Recommended by both
-  manual reviews to remain blocked until a dedicated CI-002 follow-up
-  fixes the comment-posting gap — layering routed multi-reviewer
-  automation on an unreliable comment-posting path would multiply the
-  same failure.
-- PR-007 (Narrow Profile Message Consumer Imports): not authorized.
-
-## Reviewer routing and results
-
-- Required automated `qa-reviewer` (via the CI-002 workflow itself): ran
-  to completion but did not post its comment — see above.
-- Required `security-reviewer` (manual, read-only): **Approved**. No
-  blockers. Confirmed `pull_request`-only, same-repo/owner/non-draft gate
-  held, minimal permissions, `id-token` used only for the documented
-  OIDC exchange, no secret exposure, no unauthorized write. Flagged the
-  comment-posting gap as a functional issue, not a security failure
-  (fail-closed).
-- Recommended `architecture-reviewer` (manual, read-only): **Approved**
-  for PR #14's own scope (documentation-only, no workflow/runtime change,
-  no CI-003 leakage). **Not** approved as evidence CI-002 is ready to
-  unblock CI-003 — recommends a dedicated follow-up first.
-- Skipped: `network-reviewer`, `gameplay-reviewer`, `visual-design-lead`
-  (no protocol, gameplay, or visual/asset change).
+The modified workflow cannot prove its own end-to-end behavior on this PR
+(GitHub validates a PR's workflow file against the default branch —
+observed directly in the PR #13 run history). Pre-merge evidence is local:
+the 47-case matrix against the exact embedded code, syntax validation, and
+three approving reviews.
 
 ## Open blockers and decisions
 
-- **CI-002's comment-posting step needs a dedicated, narrowly scoped
-  follow-up task** (diagnosis + fix, with its own reviewer routing)
-  before CI-003 can be authorized. This session did not attempt a fix,
-  since modifying the pilot workflow was explicitly out of scope for
-  CI-002V.
+- None for CI-002R itself.
+- Candidate follow-up (out of scope, from security review): consider a
+  `.gitattributes` entry pinning LF for `.github/workflows/*.yml` (the
+  committed blob is LF-only today; risk is theoretical on Windows
+  checkouts with `core.autocrlf=true`).
+- CI-003 remains blocked until CI-002RV passes. PR-007 not authorized.
 
 ## Next safe action
 
-Product Architect reviews PR #14 and `docs/reviews/ci-002v-pilot-verification.md`,
-then authorizes a scoped CI-002 follow-up task to diagnose and fix the
-comment-posting gap (likely starting with enabling `show_full_output:
-true` for one debug run to see the exact denied tool call). Do not
-implement CI-003 or PR-007 until that follow-up succeeds. Do not merge
-PR #14 without the Product Architect's decision on the partial result.
+Before PR creation: open the CI-002R pull request and inspect merge-gated
+CI behavior (CI-001 must pass; the modified pilot must not execute with
+untrusted privileges).
+
+After PR creation: human review and merge of CI-002R, followed by CI-002RV
+post-merge reliability verification (documentation-only PR proving: valid
+structured output → exactly one four-heading comment; invalid output → one
+sanitized failure comment + failed job; no zero-comment success path; no
+duplicate comments; stale runs do not comment; secrets masked; CI-001
+independent; CI-003 blocked until CI-002RV passes).
 
 ## Resume instructions
 
 1. Read `PROJECT_CONTEXT.md`, `AGENTS.md`, and this handoff.
-2. Read `docs/tasks/ci-002v-post-merge-pilot-verification.md` and
-   `docs/reviews/ci-002v-pilot-verification.md`.
-3. Verify branch `ci/verify-claude-qa-pilot`, PR #14 open and unmerged,
-   and a clean working tree.
-4. Do not implement CI-003 or PR-007 from this handoff alone.
-5. Any CI-002 comment-posting fix requires its own scoped task file and
-   security review before modifying `.github/workflows/claude-qa-review-pilot.yml`.
+2. Read `docs/tasks/ci-002r-deterministic-comment-delivery.md`, the
+   forensic report, and the architecture document.
+3. Verify branch `ci/deterministic-qa-comment-delivery`, the commit chain
+   from checkpoint `4c3de97` per the commit plan, a clean working tree,
+   and the PR state.
+4. Do not merge the CI-002R PR without human review.
+5. Do not implement CI-003 or PR-007 from this handoff alone; CI-002RV
+   requires its own scoped task file after CI-002R merges.
