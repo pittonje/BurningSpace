@@ -46,11 +46,16 @@ locally.
 
 - not use `pull_request_target`;
 - check out the repository (`actions/checkout`);
-- configure Node.js 20 (Active LTS) via `actions/setup-node`, matching the
-  only Node-version evidence in the repository:
-  `apps/server/package.json` pins `@types/node: ^20.14.10` and no `.nvmrc`,
-  `.node-version`, Volta config, or `engines` field exists anywhere in the
-  repository;
+- configure Node.js 22 via `actions/setup-node`. No explicit Node-version
+  evidence exists anywhere in the repository: there is no `engines` field,
+  `.nvmrc`, `.node-version`, Volta config, or committed CI documentation
+  naming a runtime version. `apps/server/package.json`'s
+  `@types/node: ^20.14.10` is a type-definitions pin, not a runtime
+  requirement, and does not count as explicit version evidence. Per
+  Product Architect authorization dated 2026-07-11 (superseding this task
+  file's original Node 20 inference from `@types/node`), the default for
+  "no explicit project version exists" is Node.js 22 as the conservative
+  supported CI baseline;
 - use `actions/setup-node`'s built-in npm cache keyed on `package-lock.json`;
 - run `npm ci`;
 - run, in order, failing the job if any command exits non-zero:
