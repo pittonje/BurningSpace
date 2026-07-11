@@ -60,9 +60,13 @@ that step.
 
 ## Comment count
 
-Two completed Claude workflow runs produced exactly two top-level comments,
-one per run. There are zero inline review comments and zero submitted reviews.
-No zero-comment success occurred; neither Claude run succeeded.
+The two planned verification runs each produced exactly one top-level comment.
+The final report commit necessarily triggered an ancillary third run
+(`29156280877` on `52511eff38a6d671ef9e1870fd6e50cfa7fc890a`), which reproduced
+the same failure and posted exactly one comment (`4946843034`). Across all
+three completed Claude runs there are exactly three top-level comments, one per
+run. There are zero inline review comments and zero submitted reviews. No
+zero-comment success occurred; no Claude run succeeded.
 
 ## Commit binding
 
@@ -137,6 +141,9 @@ publication separated, CI-001 independent, and no CI-003 implementation.
   only `is_error: true`, one turn, zero cost, and absent structured output.
 - Cancellation of an actively running stale run was not observed.
 - Required named external reviews could not be run under the managed policy.
+- The final evidence commit triggered a third, consistent failure-path sample;
+  the correction commit recording it uses `[skip ci]` to avoid recursively
+  generating further report-only samples.
 
 ## Final status
 
@@ -144,4 +151,3 @@ publication separated, CI-001 independent, and no CI-003 implementation.
 run. CI-003 remains blocked. The deterministic failure publisher itself behaved
 correctly and CI-001 remained green, but those partial successes do not meet the
 task's full acceptance criteria.
-

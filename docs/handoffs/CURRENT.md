@@ -55,13 +55,14 @@ bound four-heading QA comment per current workflow run.
 
 ## Next action
 
-Commit and push the failed verification report and reviewer-status documents.
-Both Claude runs (`29156077671`, `29156150151`) authenticated through OIDC and
+The two planned Claude runs (`29156077671`, `29156150151`) authenticated through OIDC and
 obtained App tokens but returned `is_error: true`, one turn, zero cost, and no
 `structured_output`. Each produced exactly one sanitized SHA-bound failure
-comment and a failed job. Both CI-001 runs passed. Required external manual
-review was blocked by managed-environment data-export policy. `PROJECT_CONTEXT.md`
-must remain unchanged and CI-003 remains blocked. Do not merge PR #16.
+comment and a failed job. Both CI-001 runs passed. The final report commit also
+triggered run `29156280877`, which reproduced the same failure with exactly one
+comment; its CI-001 run passed. Required external manual review was blocked by
+managed-environment data-export policy. `PROJECT_CONTEXT.md` must remain
+unchanged and CI-003 remains blocked. Do not merge PR #16.
 
 ## Preserved constraints
 
