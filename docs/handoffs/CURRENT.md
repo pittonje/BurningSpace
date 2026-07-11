@@ -9,11 +9,12 @@ Updated by: Claude — CI-002D2 implementation complete
 - Active branch: `ci/isolate-claude-schema-failure`
 - Planning commit: `00788f6` — docs: define CI-002D2 invocation experiment
   (created on local main, carried onto this branch)
-- Implementation commit: the single child of `00788f6` with subject
-  "ci: isolate Claude schema invocation failure"
-- Working tree: clean after commit
-- Pull request: to be recorded after creation (see PR section below once
-  updated by the post-PR handoff commit)
+- Implementation commit: `9af4ace` — ci: isolate Claude schema invocation
+  failure (single child of `00788f6`)
+- Working tree: clean
+- Pull request: [#19 — CI-002D2 — Isolate Claude Schema Invocation Failure](https://github.com/pittonje/BurningSpace/pull/19)
+- Pull request state: Open, not merged; a Claude QA failure on this
+  self-modifying-workflow PR is expected and is NOT the experiment result
 
 ## Current task
 
