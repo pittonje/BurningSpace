@@ -4,7 +4,7 @@
 
 BurningSpace is a server-authoritative multiplayer space game bootstrap. The current repository is an npm-workspaces monorepo with a Phaser/Vite client, a Colyseus server, a shared package, a preserved local prototype, and an existing multiplayer foundation.
 
-Read `PROJECT_CONTEXT.md` first, then this file, the current task in `docs/tasks/`, and relevant architecture/design documents. The latest project context overrides older assumptions unless the Product Architect explicitly says otherwise.
+Read `PROJECT_CONTEXT.md` first, then this file, `docs/handoffs/CURRENT.md`, the current task named there, and relevant architecture/design documents. The latest project context overrides older assumptions unless the Product Architect explicitly says otherwise.
 
 ## Non-negotiable rules
 
@@ -26,6 +26,8 @@ Read `PROJECT_CONTEXT.md` first, then this file, the current task in `docs/tasks
 
 ## PR expectations
 
+- Every implementation session reads `docs/handoffs/CURRENT.md` and updates it before switching agents or ending a meaningful checkpoint.
+- `PROJECT_CONTEXT.md` stores durable state, while task files remain authoritative for exact scope; do not reread the whole repository unless the task explicitly requires an audit.
 - Before implementation, every task must declare its applicable reviewer set using `docs/agents/reviewer-routing.md`, including a short reason for skipped reviewers.
 - Work on one scoped branch/task at a time and avoid overlapping writes.
 - Read the relevant task and architecture documents before editing.

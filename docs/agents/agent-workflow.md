@@ -29,3 +29,11 @@
 - Read-only reviewers ground findings in concrete repository evidence and name the reviewed commit.
 - Reviewer reports identify domain blockers but do not authorize implementation outside the task scope.
 - Product Architect resolves conflicts between reviewer domains; Codex remains the primary implementer.
+
+## Handoffs
+
+- Codex and Claude Code use the same `docs/handoffs/CURRENT.md` operational handoff.
+- The outgoing implementer records exact branch, `HEAD`, working-tree, PR, validation, and next-action state.
+- The incoming implementer verifies Git and PR state before editing and reports mismatches instead of guessing.
+- Reviewer reports remain separate from implementation handoff state.
+- A handoff records authorized work; it does not authorize scope expansion.
