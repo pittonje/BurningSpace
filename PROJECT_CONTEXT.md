@@ -308,7 +308,8 @@ Current planning work:
 - PR-002 — Shared Package Boundary Audit & Migration Plan
 - Branch: `planning/shared-package-boundary-audit`
 - Scope: documentation, dependency audit, ownership classification, and migration planning only
-- Current state: 44 public shared exports inventoried; no runtime migration
+- PR: [#5](https://github.com/pittonje/BurningSpace/pull/5), open and awaiting human review
+- Current state: 44 public shared exports inventoried; build and typecheck pass; no runtime migration or runtime source changes
 
 Recommended order after the audit:
 
