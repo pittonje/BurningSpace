@@ -2,6 +2,8 @@
 
 BurningSpace - браузерный космический прототип на Phaser 3, TypeScript, Vite и Colyseus.
 
+Перед архитектурной или технической работой прочитайте `PROJECT_CONTEXT.md`, затем `AGENTS.md` и актуальный файл задачи в `docs/tasks/`.
+
 Проект использует монорепозиторий. Локальная аркада остается отдельной клиентской сценой, а multiplayer-сцена постепенно переносится на серверно-авторитетную модель. Сейчас сервер уже отвечает за сетевых игроков, движение, снаряды, попадания, здоровье, смерть и респавн.
 
 ## Структура
@@ -9,7 +11,10 @@ BurningSpace - браузерный космический прототип на
 ```text
 apps/client      Phaser/Vite клиент и игровые ассеты
 apps/server      Node.js/TypeScript/Colyseus сервер
-packages/shared  общие типы, константы и названия сетевых сообщений
+packages/shared  текущие общие типы, константы и сетевой контракт
+packages/protocol будущая граница сетевых сообщений и снимков
+packages/balance принятые версионированные константы баланса
+packages/config  конфигурация карты и топологии
 ```
 
 ## Установка
@@ -134,7 +139,8 @@ npx tsx apps/client/scripts/network-client-callback-check.ts
 - Рабочая ветка мультиплеерной архитектуры: `multiplayer-foundation`.
 - Клиент: `apps/client`.
 - Сервер: `apps/server`.
-- Общие типы: `packages/shared`.
+- Текущий общий runtime-контракт: `packages/shared`.
+- Будущие структурные границы: `packages/protocol`, `packages/balance`, `packages/config`.
 
 ## Ограничения
 

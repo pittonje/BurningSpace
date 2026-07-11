@@ -1,0 +1,23 @@
+# Agent Workflow
+
+## Roles
+
+- ChatGPT / Product Architect: owns requirements, architecture intent, acceptance criteria, and resolves design conflicts.
+- Codex / Primary Implementer: writes code and documentation, runs checks, and reports scope and risks.
+- Claude reviewers: read-only architecture, network, security, QA, gameplay, and visual reviews by default.
+- Visual Design Lead / Art Director: owns visual direction, consistency, briefs, and approval of visual output.
+- Graphics Generation Agents: produce assets from approved briefs without editing gameplay code.
+- VFX Agent: develops readable effects within the approved visual language.
+- UI/UX Visual Agent: develops interface presentation and usability without assuming gameplay authority.
+
+## Rules
+
+- Use one branch per task and keep task scope explicit.
+- Avoid overlapping writes; establish file ownership before parallel work.
+- Codex is the primary code implementer.
+- Claude reviewers do not edit files or commit unless explicitly assigned implementation work.
+- Visual agents do not edit gameplay code.
+- Reviewers return blockers, important suggestions, minor suggestions, and an approval status.
+- Product Architect resolves design conflicts and requirement ambiguity.
+- Preserve existing prototype files unless a task explicitly authorizes migration or removal.
+- Run relevant build, type-check, and focused checks before handoff.
