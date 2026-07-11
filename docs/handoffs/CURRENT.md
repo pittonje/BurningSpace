@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-07-11
-Updated by: Codex — CI-002RV started
+Updated by: Codex — CI-002RV verification failed
 
 ## Repository state
 
@@ -10,14 +10,14 @@ Updated by: Codex — CI-002RV started
 - Active branch: `ci/verify-deterministic-qa-comment`
 - Upstream: `origin/ci/verify-deterministic-qa-comment`
 - Pull request: [#16 — CI-002RV — Verify Deterministic Claude QA Comment Delivery](https://github.com/pittonje/BurningSpace/pull/16)
-- Working tree: synchronize-run evidence update in progress
+- Working tree: final verification documentation in progress
 
 ## Current task
 
 - Task ID: `CI-002RV`
 - Task title: Verify Deterministic Claude QA Comment Delivery
 - Task file: `docs/tasks/ci-002rv-verify-deterministic-comment-delivery.md`
-- Status: In progress — first run observed; synchronize run pending
+- Status: Failed — structured output absent in both runs
 
 ## Goal
 
@@ -55,12 +55,13 @@ bound four-heading QA comment per current workflow run.
 
 ## Next action
 
-Push this harmless documentation-only update to exercise synchronize behavior.
-The first run (`29156077671`, HEAD `c0f59d4`) authenticated through OIDC and
-obtained the GitHub App token, but Claude returned an error result with no
-`structured_output`; the deterministic publisher posted exactly one sanitized,
-SHA-bound failure comment and failed the job. CI-001 run `29156077707` passed.
-Do not merge the PR.
+Commit and push the failed verification report and reviewer-status documents.
+Both Claude runs (`29156077671`, `29156150151`) authenticated through OIDC and
+obtained App tokens but returned `is_error: true`, one turn, zero cost, and no
+`structured_output`. Each produced exactly one sanitized SHA-bound failure
+comment and a failed job. Both CI-001 runs passed. Required external manual
+review was blocked by managed-environment data-export policy. `PROJECT_CONTEXT.md`
+must remain unchanged and CI-003 remains blocked. Do not merge PR #16.
 
 ## Preserved constraints
 

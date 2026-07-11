@@ -1,6 +1,6 @@
 # CI-002RV — Verify Deterministic Claude QA Comment Delivery
 
-Status: In progress
+Status: Failed — both live runs returned no structured output; CI-003 remains blocked
 
 ## Goal
 
