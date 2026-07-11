@@ -26,19 +26,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Run Claude QA reviewer
-        uses: anthropics/claude-code-action@v1
-        env:
-          GH_TOKEN: ${{ github.token }}
+        id: claude_review
+        uses: anthropics/claude-code-action@e90deca47693f9457b72f2b53c17d7c445a87342 # v1.0.171
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           track_progress: "false"
           use_sticky_comment: "false"
           prompt: |
             You are running as the read-only qa-reviewer agent for the
-            BurningSpace repository, invoked automatically by the CI-002
+            BurningSpace repository, invoked automatically by the CI-002R
             Claude QA Review Pilot workflow on pull request
             #${{ github.event.pull_request.number }}.
 
@@ -49,11 +48,9 @@ jobs:
             4. Read the active task file referenced there, if one exists.
 
             Then:
-            5. Run `gh pr view ${{ github.event.pull_request.number }}` and
-               `gh pr diff ${{ github.event.pull_request.number }}` to
-               inspect this pull request's description and diff.
-            6. Review the diff against the active task file's scope,
-               allowed/forbidden files, and acceptance criteria.
+            5. Run `gh pr view ${{ github.event.pull_request.number }}` to inspect this pull request's description.
+            6. Run `gh pr diff ${{ github.event.pull_request.number }}` to inspect this pull request's diff.
+            7. Review the diff against the active task file's scope, allowed/forbidden files, and acceptance criteria.
 
             Strict rules:
             - Do not edit, create, or delete any file.
@@ -62,20 +59,284 @@ jobs:
             - Do not implement fixes.
             - Do not run destructive commands.
             - Do not expand task scope beyond reviewing this pull request.
+            - You have no ability to post PR comments and must not attempt
+              to. A separate, deterministic workflow step validates and
+              publishes your review after you return it.
 
-            Finally, post exactly one top-level pull request comment with
-            `gh pr comment ${{ github.event.pull_request.number }} --body
-            "<review>"` containing exactly these four sections, in this
-            order, and nothing else:
+            Finally, return your review as a single JSON object matching
+            the required schema, with exactly these fields and nothing
+            else:
+            - "blockers": an array of short blocker strings (empty array
+              if none).
+            - "important_suggestions": an array of short important-
+              suggestion strings (empty array if none).
+            - "minor_suggestions": an array of short minor-suggestion
+              strings (empty array if none).
+            - "approval_status": a short status string, for example
+              "Approved", "Approved with suggestions", or "Not approved".
+              Do not include the "#" character in this field.
+            - "reviewed_commit": exactly this 40-character commit SHA,
+              with no other characters:
+              ${{ github.event.pull_request.head.sha }}
+            - "summary": a short one-paragraph plain-text summary of the
+              review.
 
-            ## Blockers
-            ## Important suggestions
-            ## Minor suggestions
-            ## Approval status
-
-            Do not post more than one comment. Do not use inline review
-            comments.
+            Keep each array item under 500 characters, each array under 20
+            items, "approval_status" under 100 characters, and "summary"
+            under 2000 characters. Every field must be single-line plain
+            text with no embedded newline characters. Return only the JSON
+            object - no Markdown code fences and no other text.
           claude_args: |
             --agent qa-reviewer
-            --allowedTools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*)"
+            --allowedTools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*)"
             --disallowedTools "Write,Edit,NotebookEdit"
+            --json-schema '{"type":"object","additionalProperties":false,"required":["blockers","important_suggestions","minor_suggestions","approval_status","reviewed_commit","summary"],"properties":{"blockers":{"type":"array","maxItems":20,"items":{"type":"string","maxLength":500}},"important_suggestions":{"type":"array","maxItems":20,"items":{"type":"string","maxLength":500}},"minor_suggestions":{"type":"array","maxItems":20,"items":{"type":"string","maxLength":500}},"approval_status":{"type":"string","maxLength":100},"reviewed_commit":{"type":"string","pattern":"^[0-9a-f]{40}$"},"summary":{"type":"string","maxLength":2000}}}'
+
+      - name: Validate and render QA review
+        id: render_review
+        if: always()
+        env:
+          STRUCTURED_OUTPUT: ${{ steps.claude_review.outputs.structured_output }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # Deliberately no `set -e`: the Python validator exits 1 on
+          # invalid review output, and this script must keep running to
+          # record that exit code for the publisher step.
+          set -uo pipefail
+          printf '%s' "${STRUCTURED_OUTPUT:-}" > "$RUNNER_TEMP/review.json"
+          printf 'Reviewed commit: %s\nWorkflow run: %s\n' "${EXPECTED_SHA:-}" "${RUN_URL:-}" > "$RUNNER_TEMP/footer.txt"
+
+          python3 - "$RUNNER_TEMP/review.json" "${EXPECTED_SHA:-}" "$RUNNER_TEMP/footer.txt" "$RUNNER_TEMP/comment.md" <<'PYEOF'
+          import json
+          import os
+          import re
+          import sys
+
+          MAX_ITEMS = 20
+          MAX_ITEM_LEN = 500
+          MAX_SUMMARY_LEN = 2000
+          MAX_APPROVAL_LEN = 100
+          MAX_TOTAL_LEN = 60000
+
+          SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+          # Every field is single-line by contract: C0 controls, DEL, and the
+          # Unicode line/paragraph separators are all rejected.
+          CONTROL_RANGES = [(0x00, 0x1F), (0x7F, 0x7F), (0x2028, 0x2029)]
+          # Bidi override/embedding/isolate controls (Trojan-Source class),
+          # written as escapes so the denylist is visible and cannot be
+          # corrupted by editors or linters.
+          BIDI_CONTROLS = set(
+              "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+          )
+          # Zero-width characters, BOM, word joiner, and soft hyphen.
+          INVISIBLE_CHARS = set("\u200b\u200c\u200d\ufeff\u2060\u00ad")
+
+          REQUIRED_ARRAY_FIELDS = ("blockers", "important_suggestions", "minor_suggestions")
+          REQUIRED_STRING_FIELDS = ("approval_status", "reviewed_commit", "summary")
+          ALL_REQUIRED_FIELDS = set(REQUIRED_ARRAY_FIELDS) | set(REQUIRED_STRING_FIELDS)
+
+
+          class ValidationError(Exception):
+              pass
+
+
+          def check_disallowed_chars(name, value):
+              for ch in value:
+                  cp = ord(ch)
+                  for lo, hi in CONTROL_RANGES:
+                      if lo <= cp <= hi:
+                          raise ValidationError(f"{name} contains a disallowed control character (U+{cp:04X})")
+                  if ch in BIDI_CONTROLS:
+                      raise ValidationError(f"{name} contains a bidi control character (U+{cp:04X})")
+                  if ch in INVISIBLE_CHARS:
+                      raise ValidationError(f"{name} contains an invisible/BOM character (U+{cp:04X})")
+
+
+          def validate_string(name, value, max_len, allow_empty=True):
+              if not isinstance(value, str) or isinstance(value, bool):
+                  raise ValidationError(f"{name} must be a string")
+              if not allow_empty and len(value) == 0:
+                  raise ValidationError(f"{name} must not be empty")
+              if len(value) > max_len:
+                  raise ValidationError(f"{name} exceeds max length {max_len}")
+              check_disallowed_chars(name, value)
+              return value
+
+
+          def validate_array(name, value):
+              if not isinstance(value, list):
+                  raise ValidationError(f"{name} must be an array")
+              if len(value) > MAX_ITEMS:
+                  raise ValidationError(f"{name} exceeds max item count {MAX_ITEMS}")
+              for i, item in enumerate(value):
+                  validate_string(f"{name}[{i}]", item, MAX_ITEM_LEN, allow_empty=False)
+              return value
+
+
+          def no_duplicate_keys(pairs):
+              seen = set()
+              for k, _v in pairs:
+                  if k in seen:
+                      raise ValidationError(f"duplicate JSON key: {k!r}")
+                  seen.add(k)
+              return dict(pairs)
+
+
+          def parse_and_validate(raw_bytes, expected_sha):
+              # Fail closed: without a trusted head SHA the reviewed_commit
+              # binding cannot be checked, so the payload is rejected.
+              if not expected_sha:
+                  raise ValidationError("expected PR head SHA is unavailable")
+              if raw_bytes is None:
+                  raise ValidationError("no structured output available")
+              try:
+                  raw_text = raw_bytes.decode("utf-8", errors="strict")
+              except UnicodeDecodeError as exc:
+                  raise ValidationError(f"structured output is not valid UTF-8: {exc}") from exc
+              if raw_text.strip() == "":
+                  raise ValidationError("structured output is empty or whitespace-only")
+              try:
+                  data = json.loads(raw_text, object_pairs_hook=no_duplicate_keys)
+              except ValidationError:
+                  raise
+              except json.JSONDecodeError as exc:
+                  raise ValidationError(f"malformed JSON: {exc}") from exc
+              if not isinstance(data, dict):
+                  raise ValidationError("top-level structured output must be a JSON object")
+              actual_keys = set(data.keys())
+              missing = ALL_REQUIRED_FIELDS - actual_keys
+              if missing:
+                  raise ValidationError(f"missing required fields: {sorted(missing)}")
+              extra = actual_keys - ALL_REQUIRED_FIELDS
+              if extra:
+                  raise ValidationError(f"unexpected additional properties: {sorted(extra)}")
+              for field in REQUIRED_ARRAY_FIELDS:
+                  validate_array(field, data[field])
+              validate_string("summary", data["summary"], MAX_SUMMARY_LEN, allow_empty=True)
+              approval_status = validate_string("approval_status", data["approval_status"], MAX_APPROVAL_LEN, allow_empty=False)
+              if "#" in approval_status:
+                  raise ValidationError("approval_status must not contain '#'")
+              reviewed_commit = validate_string("reviewed_commit", data["reviewed_commit"], 40, allow_empty=False)
+              if not SHA_RE.match(reviewed_commit):
+                  raise ValidationError("reviewed_commit is not a 40-character lowercase hex SHA")
+              if reviewed_commit != expected_sha:
+                  raise ValidationError("reviewed_commit does not match expected PR head SHA")
+              return data
+
+
+          def render_list(items):
+              if not items:
+                  return "None."
+              return "\n".join(f"- {item}" for item in items)
+
+
+          def render_success(data, footer):
+              body = (
+                  "## Blockers\n\n" + render_list(data["blockers"]) + "\n\n"
+                  "## Important suggestions\n\n" + render_list(data["important_suggestions"]) + "\n\n"
+                  "## Minor suggestions\n\n" + render_list(data["minor_suggestions"]) + "\n\n"
+                  "## Approval status\n\n" + data["approval_status"] + "\n"
+              )
+              if footer:
+                  body += "\n" + footer + "\n"
+              if len(body) > MAX_TOTAL_LEN:
+                  raise ValidationError(f"rendered comment exceeds max total length {MAX_TOTAL_LEN}")
+              return body
+
+
+          def sanitize_category(reason):
+              cleaned = "".join(ch for ch in str(reason) if 0x20 <= ord(ch) < 0x7F)
+              return cleaned[:120] if cleaned else "unspecified"
+
+
+          def render_failure(reason, footer):
+              category = sanitize_category(reason)
+              body = (
+                  "## Blockers\n\n"
+                  "Automated QA review output could not be validated.\n\n"
+                  "## Important suggestions\n\n"
+                  "Inspect the linked workflow run before merging this pull request.\n\n"
+                  "## Minor suggestions\n\n"
+                  "None.\n\n"
+                  "## Approval status\n\n"
+                  "Not approved — automation failure\n"
+              )
+              if footer:
+                  body += "\n" + footer + "\n"
+              body += f"\nFailure category: {category}\n"
+              return body
+
+
+          def write_utf8(path, text):
+              with open(path, "wb") as fh:
+                  fh.write(text.encode("utf-8"))
+
+
+          def main(argv):
+              input_path, expected_sha, footer_path, output_path = argv[1], argv[2] or None, argv[3], argv[4]
+              footer = ""
+              if os.path.isfile(footer_path):
+                  with open(footer_path, "rb") as fh:
+                      footer = fh.read().decode("utf-8", errors="replace").strip()
+              raw_bytes = None
+              if os.path.isfile(input_path):
+                  with open(input_path, "rb") as fh:
+                      raw_bytes = fh.read()
+              # One-comment guarantee: every code path below, including an
+              # unanticipated defect in validation or rendering, must still
+              # write a comment file. Only the exception's type name is
+              # surfaced for unexpected errors - never its message, which
+              # could embed reviewer-controlled text.
+              try:
+                  data = parse_and_validate(raw_bytes, expected_sha)
+                  write_utf8(output_path, render_success(data, footer))
+                  return 0
+              except ValidationError as exc:
+                  sys.stderr.write(f"validation failed: {exc}\n")
+                  write_utf8(output_path, render_failure(str(exc), footer))
+                  return 1
+              except Exception as exc:
+                  sys.stderr.write(f"unexpected renderer error: {type(exc).__name__}\n")
+                  write_utf8(output_path, render_failure(f"unexpected renderer error: {type(exc).__name__}", footer))
+                  return 1
+
+
+          if __name__ == "__main__":
+              sys.exit(main(sys.argv))
+          PYEOF
+
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Publish QA review comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          RENDER_EXIT_CODE: ${{ steps.render_review.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          COMMENT_FILE="$RUNNER_TEMP/comment.md"
+          if [ ! -f "$COMMENT_FILE" ]; then
+            echo "::error::No rendered review output available; cannot post a comment."
+            exit 1
+          fi
+
+          PR_STATUS=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid,state,isDraft --jq '.headRefOid + " " + .state + " " + (.isDraft | tostring)')
+          CURRENT_SHA=$(echo "$PR_STATUS" | cut -d' ' -f1)
+          CURRENT_STATE=$(echo "$PR_STATUS" | cut -d' ' -f2)
+          CURRENT_DRAFT=$(echo "$PR_STATUS" | cut -d' ' -f3)
+
+          if [ "$CURRENT_SHA" != "$EXPECTED_SHA" ] || [ "$CURRENT_STATE" != "OPEN" ] || [ "$CURRENT_DRAFT" != "false" ]; then
+            echo "PR is no longer current (head=$CURRENT_SHA state=$CURRENT_STATE draft=$CURRENT_DRAFT); this run was superseded, closed, or drafted. Skipping comment."
+            exit 0
+          fi
+
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file "$COMMENT_FILE"
+
+          if [ "${RENDER_EXIT_CODE:-1}" != "0" ]; then
+            echo "::error::QA review output failed validation; posted a sanitized failure comment. Failing the job."
+            exit 1
+          fi
