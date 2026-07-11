@@ -1,13 +1,22 @@
-import type { Faction, JoinMode } from './factions.js';
+import type { Faction } from './factions.js';
+import { ProfileClientMessages, ProfileServerMessages } from './profile-contract.js';
+
+// Preserve the pre-isolation direct module type surface for compatibility.
+export type {
+  JoinRequest,
+  ProfileAcceptedMessage,
+  ProfileRejectedMessage,
+  RoomParticipant
+} from './profile-contract.js';
 
 export const ClientMessages = {
-  SET_PROFILE: 'setProfile',
+  SET_PROFILE: ProfileClientMessages.SET_PROFILE,
   PLAYER_INPUT: 'playerInput'
 } as const;
 
 export const ServerMessages = {
-  PROFILE_ACCEPTED: 'profileAccepted',
-  PROFILE_REJECTED: 'profileRejected',
+  PROFILE_ACCEPTED: ProfileServerMessages.PROFILE_ACCEPTED,
+  PROFILE_REJECTED: ProfileServerMessages.PROFILE_REJECTED,
   ROOM_INFO: 'roomInfo',
   HIT_EVENT: 'hitEvent',
   SHIP_DESTROYED: 'shipDestroyed'
@@ -15,20 +24,6 @@ export const ServerMessages = {
 
 export type ClientMessageType = (typeof ClientMessages)[keyof typeof ClientMessages];
 export type ServerMessageType = (typeof ServerMessages)[keyof typeof ServerMessages];
-
-export interface JoinRequest {
-  nickname: string;
-  mode: JoinMode;
-  faction?: Faction;
-}
-
-export interface RoomParticipant {
-  sessionId: string;
-  nickname: string;
-  mode: JoinMode;
-  faction?: Faction;
-  connectedAt: number;
-}
 
 export interface ShipSnapshot {
   id: string;
@@ -66,12 +61,6 @@ export interface ProjectileSnapshot {
   distanceTraveled: number;
   active: boolean;
   createdAt: number;
-}
-
-export interface ProfileAcceptedMessage extends RoomParticipant {}
-
-export interface ProfileRejectedMessage {
-  reason: string;
 }
 
 export interface RoomInfoMessage {

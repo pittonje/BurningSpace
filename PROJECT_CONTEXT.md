@@ -159,7 +159,11 @@ Current role: generic shared types plus the active multiplayer runtime contract,
 
 ### `packages/protocol`
 
-Current role: future protocol boundary with non-runtime placeholder types. It is not the active contract. Future role: client-to-server messages, server-to-client messages, snapshots, protocol version, input frames, and events. Migrate from `packages/shared/src/messages.ts` incrementally and preserve field compatibility until client and server cut over together.
+Current role: active transitional public boundary for the migrated profile contract. Client and server profile consumers import through this package, while the canonical profile definitions currently remain in `packages/shared` and are re-exported by protocol.
+
+Other protocol groups still remain in `packages/shared` and must migrate incrementally. `packages/shared` must not depend on `packages/protocol`; canonical ownership transfer and compatibility cleanup remain future work.
+
+Future role: canonical owner of client-to-server messages, server-to-client messages, snapshots, protocol version, input frames, and network events after coordinated migration and compatibility retention.
 
 ### `packages/balance`
 
@@ -323,21 +327,34 @@ Completed compatibility work:
 - Local structured Architecture, Network, and QA reviews found no blockers; external Claude was unavailable under managed-environment policy.
 - Profile compatibility facade is complete.
 
-Current implementation work:
+Completed consumer cutover:
 
 - PR-004 — Coordinated Profile Protocol Consumer Cutover
 - Branch: `feature/profile-protocol-consumer-cutover`
-- PR: [#7](https://github.com/pittonje/BurningSpace/pull/7), open against `main` and awaiting human merge.
+- PR [#7](https://github.com/pittonje/BurningSpace/pull/7) was merged into `main` as `5c2bad9`.
 - Scope: coordinated profile import cutover in `NetworkClient`, `NetworkTestScene`, and `BattleRoom`.
 - Client and server are updated together; shared compatibility exports are retained and shared remains the canonical definition owner.
 - No wire-format, validation, schema, callback, or gameplay changes.
 - Build, typecheck, profile compatibility check, and network callback diagnostic pass locally.
 - External Architecture, Network, and QA reviews approved the change with no blockers.
 
+Current implementation work:
+
+- PR-005 — Isolate Profile Message Contract
+- Branch: `refactor/profile-contract-isolation`
+- PR [#8](https://github.com/pittonje/BurningSpace/pull/8) is open against `main` from `refactor/profile-contract-isolation` and awaiting human review.
+- `packages/shared/src/profile-contract.ts` owns the canonical profile wire values and selected types.
+- Narrow runtime objects `ProfileClientMessages` and `ProfileServerMessages` are exported by shared and re-exported by protocol.
+- Broad `ClientMessages` and `ServerMessages` properties remain compatible and reference the narrow values.
+- Application source remains unchanged; shared remains canonical.
+- No wire-format, validation, schema, callback, or gameplay changes.
+- Build, typecheck, profile compatibility check, and network callback diagnostic pass.
+- External Architecture, Network, and QA reviews approved the change with no blockers; the accepted type-cycle suggestion was resolved.
+
 Recommended order:
 
-1. PR-004 — Coordinated Profile Protocol Consumer Cutover.
-2. PR-005 — Transfer Profile Protocol Ownership while retaining shared compatibility exports.
+1. PR-005 — Isolate Profile Message Contract.
+2. PR-006 — Narrow Profile Message Consumer Imports.
 3. Incremental balance migration with exact value-parity checks.
 4. Incremental world topology/config migration with behavior-parity checks.
 5. Server-side campaign lifecycle skeleton only after package boundaries stabilize.

@@ -24,7 +24,7 @@ Status: profile compatibility-export preparation implemented in PR-003. Consumer
 
 ## Phase 2a — Coordinated profile consumer cutover
 
-Status: implemented in PR-004. Canonical ownership transfer and shared export cleanup remain incomplete.
+Status: broad protocol-facade consumer cutover implemented in PR-004. Profile-contract isolation implemented in PR-005. Narrow runtime-object consumer cutover, canonical ownership transfer, and shared export cleanup remain incomplete.
 
 - Files affected: the relevant `NetworkClient` import, `BattleRoom` import, explicit client/server manifest dependencies, and protocol compatibility tests.
 - Expected consumers: client and server for one complete message category only.
@@ -33,6 +33,10 @@ Status: implemented in PR-004. Canonical ownership transfer and shared export cl
 - Required tests: build/typecheck, network callback diagnostic, focused room lifecycle behavior, exact wire-name assertions.
 - Reviewers: network, architecture, QA.
 - Non-goals: unrelated messages, Colyseus schema, balance, config, gameplay. Profile-message rate limiting and reconnection policy remain separate server-hardening concerns, not protocol-path migration work.
+
+### Profile-contract isolation
+
+PR-005 isolates the three profile wire names and five selected types in a dedicated shared module. Broad registries reference the narrow values, and protocol re-exports both APIs. This completes only contract isolation; applications still use broad protocol objects and shared remains canonical.
 
 ## Phase 2b — Player input contract
 

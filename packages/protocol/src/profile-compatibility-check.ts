@@ -1,5 +1,7 @@
 import {
   ClientMessages as protocolClientMessages,
+  ProfileClientMessages as protocolProfileClientMessages,
+  ProfileServerMessages as protocolProfileServerMessages,
   ServerMessages as protocolServerMessages,
   type JoinMode as ProtocolJoinMode,
   type JoinRequest as ProtocolJoinRequest,
@@ -9,6 +11,8 @@ import {
 } from '@burningspace/protocol';
 import {
   ClientMessages as sharedClientMessages,
+  ProfileClientMessages as sharedProfileClientMessages,
+  ProfileServerMessages as sharedProfileServerMessages,
   ServerMessages as sharedServerMessages,
   type JoinMode as SharedJoinMode,
   type JoinRequest as SharedJoinRequest,
@@ -79,17 +83,46 @@ assert(
   protocolServerMessages === sharedServerMessages,
   'ServerMessages must preserve strict runtime object identity.'
 );
-assert(protocolClientMessages.SET_PROFILE === 'setProfile', 'SET_PROFILE wire value changed.');
-assert(protocolClientMessages.SET_PROFILE === sharedClientMessages.SET_PROFILE, 'SET_PROFILE exports differ.');
-assert(protocolServerMessages.PROFILE_ACCEPTED === 'profileAccepted', 'PROFILE_ACCEPTED wire value changed.');
 assert(
-  protocolServerMessages.PROFILE_ACCEPTED === sharedServerMessages.PROFILE_ACCEPTED,
-  'PROFILE_ACCEPTED exports differ.'
+  protocolProfileClientMessages === sharedProfileClientMessages,
+  'ProfileClientMessages must preserve strict runtime object identity.'
 );
-assert(protocolServerMessages.PROFILE_REJECTED === 'profileRejected', 'PROFILE_REJECTED wire value changed.');
 assert(
-  protocolServerMessages.PROFILE_REJECTED === sharedServerMessages.PROFILE_REJECTED,
-  'PROFILE_REJECTED exports differ.'
+  protocolProfileServerMessages === sharedProfileServerMessages,
+  'ProfileServerMessages must preserve strict runtime object identity.'
+);
+assert(sharedProfileClientMessages.SET_PROFILE === 'setProfile', 'SET_PROFILE wire value changed.');
+assert(
+  sharedProfileClientMessages.SET_PROFILE === sharedClientMessages.SET_PROFILE,
+  'Shared narrow and broad SET_PROFILE exports differ.'
+);
+assert(
+  protocolProfileClientMessages.SET_PROFILE === sharedProfileClientMessages.SET_PROFILE,
+  'Protocol and shared narrow SET_PROFILE exports differ.'
+);
+assert(
+  sharedProfileServerMessages.PROFILE_ACCEPTED === 'profileAccepted',
+  'PROFILE_ACCEPTED wire value changed.'
+);
+assert(
+  sharedProfileServerMessages.PROFILE_ACCEPTED === sharedServerMessages.PROFILE_ACCEPTED,
+  'Shared narrow and broad PROFILE_ACCEPTED exports differ.'
+);
+assert(
+  protocolProfileServerMessages.PROFILE_ACCEPTED === sharedProfileServerMessages.PROFILE_ACCEPTED,
+  'Protocol and shared narrow PROFILE_ACCEPTED exports differ.'
+);
+assert(
+  sharedProfileServerMessages.PROFILE_REJECTED === 'profileRejected',
+  'PROFILE_REJECTED wire value changed.'
+);
+assert(
+  sharedProfileServerMessages.PROFILE_REJECTED === sharedServerMessages.PROFILE_REJECTED,
+  'Shared narrow and broad PROFILE_REJECTED exports differ.'
+);
+assert(
+  protocolProfileServerMessages.PROFILE_REJECTED === sharedProfileServerMessages.PROFILE_REJECTED,
+  'Protocol and shared narrow PROFILE_REJECTED exports differ.'
 );
 assert(compatibilityAssertions.every(Boolean), 'Compile-time compatibility assertions were not emitted as true.');
 
