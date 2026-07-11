@@ -1,87 +1,64 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-07-11
-Updated by: Codex — CI-002D implementation and local validation
+Updated by: Codex — CI-002DV remote verification complete
 
 ## Repository state
 
 - Base branch: `main`
-- Base commit: `346d095fe80ef457287cc14a2753bbfd3faa7a9e`
-- Active branch: `ci/safe-claude-invocation-diagnostics`
-- Upstream: `origin/ci/safe-claude-invocation-diagnostics`
-- Stable implementation checkpoint: `48a73fe` (`ci: add sanitized Claude execution diagnostics`)
-- Pull request: [#17 — CI-002D — Safe Claude Invocation Diagnostics](https://github.com/pittonje/BurningSpace/pull/17)
+- Base commit: `eaf65c8641a02910dbb657a4a19cbd071a24bba3`
+- Active branch: `ci/verify-safe-claude-diagnostics`
+- Upstream: `origin/ci/verify-safe-claude-diagnostics`
+- Current HEAD before final report commit: `111fe111688de2987b79266a80f3ebd2e0e629cf`
+- Pull request: [#18 — CI-002DV — Verify Safe Claude Invocation Diagnostics](https://github.com/pittonje/BurningSpace/pull/18)
 
 ## Current task
 
-- Task ID: `CI-002D`
-- Task title: Safe Claude Invocation Diagnostics
-- Task file: `docs/tasks/ci-002d-safe-claude-invocation-diagnostics.md`
-- Status: Ready for human review; post-merge diagnostic verification required
+- Task ID: `CI-002DV`
+- Task title: Verify Safe Claude Invocation Diagnostics
+- Task file: `docs/tasks/ci-002dv-verify-safe-claude-diagnostics.md`
+- Status: Safe but inconclusive
 
-## Implemented diagnostics
+## Remote results
 
-- Added a Step Summary diagnostic between the Claude Action and deterministic
-  result handling.
-- Reads only the pinned Action's declared `execution_file` output.
-- Stdlib-only sanitizer caps size/records/depth, parses JSON/JSONL, rejects
-  invalid UTF-8/nulls/duplicates, emits allowlisted metadata, and normalizes to
-  fixed categories.
-- Raw records, prompts, tool output, environment data, headers, and tokens are
-  never printed or commented.
-- Existing event, permissions, gates, `show_full_output: false`, read-only tools,
-  renderer, publisher, stale check, and failure comment remain unchanged.
+- CI-001 run `29157358527`: passed all required steps.
+- Claude run `29157358557`: failed after safe diagnostic and deterministic
+  publication, consistent with missing structured output.
+- Diagnostic step: succeeded.
+- Normalized category: `unknown_safe_error`.
+- Confidence: high in the emitted category; low in any root-cause inference.
+- Failure comment: exactly one, four headings in order, correct HEAD binding,
+  no raw diagnostic detail, followed by failed job.
+- Secret safety: no credential value, raw transcript, or environment dump
+  observed.
+- Step Summary body: unavailable via GitHub REST and in-app browser runtime;
+  complete second-channel visual inspection remains blocked.
 
-## Validation
+## Local reviews
 
-- Sanitizer matrix: 28/28 pass; sensitive exposure zero.
-- Python syntax and diagnostic shell syntax: pass.
-- JSON Schema parse and exact four-pair `claude_args` reconstruction: pass.
-- Build, typecheck, protocol profile, network callback, movement, combat: pass.
-- Existing Vite chunk warning unchanged and informational.
-- Local YAML parser/actionlint unavailable; PR CI must validate workflow YAML.
+- Local Security Review: approved with summary-retrieval limitation.
+- Local QA Review: approved with summary-retrieval limitation.
+- Local Architecture Review: approved.
+- All performed by Codex; no Claude Code or named Claude reviewers invoked.
 
-## Reviews
+## Files changed
 
-- Local Security Review: approved, post-merge evidence required.
-- Local QA Review: approved conditional on green PR CI and final scope check.
-- Local Architecture Review: approved in the main diagnostic report.
-- These are structured Codex reviews, not named Claude-agent executions or
-  approvals. Local Claude Code was not invoked because tokens are exhausted.
-
-## Changed files
-
-- `.github/workflows/claude-qa-review-pilot.yml`
-- `.github/scripts/sanitize-claude-diagnostic.py`
-- `docs/tasks/ci-002d-safe-claude-invocation-diagnostics.md`
-- `docs/reviews/ci-002d-invocation-diagnostics.md`
-- `docs/reviews/ci-002d-security-review.md`
-- `docs/reviews/ci-002d-qa-review.md`
+- `docs/tasks/ci-002dv-verify-safe-claude-diagnostics.md`
+- `docs/reviews/ci-002dv-safe-diagnostic-verification.md`
+- `docs/reviews/ci-002dv-local-security-review.md`
+- `docs/reviews/ci-002dv-local-qa-review.md`
+- `docs/reviews/ci-002dv-local-architecture-review.md`
 - `docs/handoffs/CURRENT.md`
 - `PROJECT_CONTEXT.md`
 
-## Remaining uncertainty
+## Blockers
 
-- Root cause is unknown; CI-002D does not claim one.
-- The modified workflow cannot exercise its new diagnostic path on its own PR.
-- CI-002DV must verify the trusted merged Step Summary after human merge.
-
-## Pull request checks
-
-- CI-001 passed on PR #17 run `29157030847` at `312a924`.
-- Claude QA run `29157030844` followed the expected trusted-main failure path:
-  one sanitized SHA-bound comment and a failed job. This does not exercise or
-  verify the new diagnostic step because the workflow is self-modifying.
-- PR #17 is open and mergeable.
-
-## Preserved constraints
-
-- CI-001, runtime, dependencies, lockfile, assets, and reviewer definitions are
-  unchanged.
-- CI-003 remains blocked. PR-007 remains deferred.
-- Do not merge the CI-002D PR automatically.
+- `unknown_safe_error` is non-specific; underlying invocation failure remains
+  unknown.
+- Step Summary body could not be directly retrieved with available tooling.
+- CI-003 remains blocked.
 
 ## Next safe action
 
-Await human review and merge of PR #17. After merge, create a separately scoped
-CI-002DV task; do not start CI-003.
+Human review of PR #18 evidence, followed by CI-002D2 — Refine Safe
+Unknown-Error Diagnostics. Do not merge automatically and do not start CI-003.
