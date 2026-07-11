@@ -6,45 +6,39 @@ Updated by: Codex
 ## Repository state
 
 - Base branch: `main`
-- Active branch: `docs/agent-handoff-protocol`
-- Upstream: `origin/docs/agent-handoff-protocol`
-- Current HEAD: `f42e124` (stable implementation checkpoint)
-- Working tree: Clean after the expected handoff-only finalization commit
+- Active branch: `main`
+- Upstream: `origin/main`
+- Current HEAD: `24465a9` (stable WF-001 merge checkpoint)
+- Working tree: Clean after the expected handoff-only reset commit
 - Pull request: [#10](https://github.com/pittonje/BurningSpace/pull/10)
-- Pull request state: Open; human merge hold — do not merge without explicit authorization
+- Pull request state: Merged as `24465a9ffc8c7f8d04f46e989293beb9e31cbb66`
 
 ## Current task
 
-- Task ID: `WF-001`
-- Task title: Agent Handoff Protocol
-- Task file: External Product Architect WF-001 brief; no repository task file was authorized
-- Status: Ready for human review; Architecture and QA approved
+- Task ID: `CI-001`
+- Task title: Core Pull Request Checks
+- Task file: None; not created or approved
+- Status: Planned; implementation is not authorized
 
 ## Goal
 
-Create a compact shared handoff system that separates durable project context, exact task authority, and current operational state so Codex, Claude Code, Product Architect, and future sessions can resume safely without repeating a repository-wide audit.
+Wait for a scoped Product Architect task file defining CI-001 goals, allowed files, acceptance criteria, non-goals, and reviewer routing. Do not implement GitHub Actions or CI from this handoff alone.
 
 ## Completed work
 
-- Confirmed PR #9 merged as `81aae8b` and synchronized `main`.
-- Created the dedicated WF-001 branch.
-- Read the permitted workflow context and final PR-006 Architecture/QA evidence.
-- Drafted the Claude entrypoint, handoff protocol, current handoff, and concise workflow references.
-- Committed the implementation as `f42e124`, pushed the branch, and opened PR #10.
-- Architecture review approved with no blockers; accepted compactness/traceability corrections are included in the finalization.
-- QA review approved with no blockers; the explicit human merge hold is included in this finalization.
+- WF-001 introduced the shared Claude/Codex handoff protocol.
+- Architecture and QA approved WF-001 with no blockers.
+- PR #10 merged into `main` as `24465a9`.
+- Local `main` was fast-forwarded to `origin/main`.
+- Current operational state was reset from completed WF-001 work to CI-001 planning.
 
 ## Files created
 
-- `CLAUDE.md`
-- `docs/agents/handoff-protocol.md`
-- `docs/handoffs/CURRENT.md`
+None for CI-001.
 
 ## Files modified
 
-- `AGENTS.md`
-- `PROJECT_CONTEXT.md`
-- `docs/agents/agent-workflow.md`
+None for CI-001.
 
 ## Preserved invariants
 
@@ -59,38 +53,32 @@ Create a compact shared handoff system that separates durable project context, e
 
 | Command | Result |
 |---|---|
-| `git status` | Clean `main` before branch creation |
-| `gh pr view 9` | PR #9 merged as `81aae8b` |
-| `git pull --ff-only origin main` | Already up to date |
-| `git diff --check` | Passed on the final documentation result |
-| Forbidden-path diffs | Empty against `main` |
-| Architecture review | Approved; no blockers |
-| QA review | Approved; no blockers |
+| `gh pr view 10` | PR #10 merged as `24465a9` |
+| `git pull --ff-only origin main` | Local `main` fast-forwarded to merge commit |
+| `git status` | Clean `main` before this handoff-only reset |
 
-Build not run: WF-001 is documentation-only and changes no executable files.
+Build not run: the merged WF-001 task and this reset are documentation-only and change no executable files.
 
 ## Reviewer routing
 
-- Required: `architecture-reviewer`
-- Recommended: `qa-reviewer`
-- Skipped: `network-reviewer`, `security-reviewer`, `gameplay-reviewer`, `visual-design-lead`
-- Reason: No protocol/networking, credential/CI, gameplay/balance, visual, asset, or runtime change
+- Required: Not yet declared
+- Recommended: Not yet declared
+- Skipped: Not yet declared
+- Reason: CI-001 has no approved task file; reviewer selection must be defined there before implementation
 
 ## Open blockers and decisions
 
-None.
+- Product Architect must create or approve the CI-001 task file and reviewer set.
 
 ## Next safe action
 
-Human review and explicit merge decision for PR #10; do not merge without authorization.
+Product Architect creates or approves the scoped CI-001 task file.
 
 ## Resume instructions
 
-1. Read the task authority named above and `docs/agents/handoff-protocol.md`.
-2. Verify branch and `HEAD`.
-3. Verify the working tree.
-4. Continue from the next safe action.
+1. Read `PROJECT_CONTEXT.md`, `AGENTS.md`, and this handoff.
+2. Verify `main`, the recorded merge checkpoint, and the documented handoff-only child commit.
+3. Verify the working tree is clean.
+4. Do not implement CI-001 until its committed task file exists.
 
-After WF-001 merges, the next planned work is `CI-001 — Core Pull Request Checks`; its task file must be approved before implementation. Do not expand this handoff into CI-002 or CI-003 details.
-
-Expected final handoff-only commit subject: `docs: finalize handoff workflow review`.
+Expected handoff-only commit subject: `docs: reset handoff after WF-001 merge`.
