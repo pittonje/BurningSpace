@@ -30,7 +30,7 @@ Contains:
 - acceptance criteria;
 - selected and skipped reviewers.
 
-The task file is implementation authority. When no task file exists, `CURRENT.md` must say so and implementation must wait for a scoped Product Architect brief.
+The task file is implementation authority. When no task file exists, `CURRENT.md` must say so and implementation must wait for a scoped Product Architect brief. A bootstrap workflow task may use an external Product Architect brief only when that brief explicitly forbids creating its own task file; `CURRENT.md` must record that exception. The exception does not authorize implementation of the next task without a committed task file.
 
 ### docs/handoffs/CURRENT.md
 
@@ -47,6 +47,10 @@ Contains current operational state:
 - expected reviewer set.
 
 `CURRENT.md` is mutable. It represents only the latest work state and is not a changelog. Historical details remain in task files, pull requests, review reports, and Git history.
+
+`Current HEAD` records the latest stable implementation checkpoint known when the handoff is written. A commit cannot contain its own resulting hash. When a final commit changes only handoff/workflow documentation, `CURRENT.md` must identify the recorded checkpoint and expected handoff-only commit subject; the receiver verifies that branch tip is that single documented child before continuing.
+
+If further corrections require another commit, the outgoing implementer first updates the recorded stable checkpoint and expected child relationship. Do not accumulate an undocumented chain of handoff-only commits.
 
 ## Required update moments
 
@@ -75,7 +79,7 @@ When a PR exists, it also runs:
 gh pr view <number>
 ```
 
-The receiving agent compares branch, `HEAD`, working tree, PR state, and task status with `CURRENT.md`. Any mismatch must be reported before editing; do not guess, reset, stash, or overwrite another session's work.
+The receiving agent compares branch, `HEAD`, working tree, PR state, and task status with `CURRENT.md`. A documented single handoff-only child commit is verified against its subject and parent. Any other mismatch must be reported before editing; do not guess, reset, stash, or overwrite another session's work.
 
 ## Compactness rules
 

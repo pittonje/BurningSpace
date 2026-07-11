@@ -30,6 +30,7 @@ Before continuing work:
 - verify the branch;
 - verify `HEAD`;
 - verify the working-tree state;
+- verify the pull-request state when `CURRENT.md` names one;
 - compare them with `CURRENT.md`;
 - stop and report discrepancies instead of guessing.
 
