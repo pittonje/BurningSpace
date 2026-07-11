@@ -99,4 +99,3 @@ post GitHub comments.
 - Do not modify runtime code, dependencies, manifests, lockfiles, assets, or
   reviewer definitions.
 - Do not merge the verification PR.
-

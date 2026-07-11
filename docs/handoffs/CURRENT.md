@@ -8,16 +8,16 @@ Updated by: Codex — CI-002RV started
 - Base branch: `main`
 - Base commit: `93569a3eb0093045409580ce1b5950de0a62e62f`
 - Active branch: `ci/verify-deterministic-qa-comment`
-- Upstream: none until first push
-- Pull request: None until initial documentation commit is pushed
-- Working tree: CI-002RV task and handoff documentation in progress
+- Upstream: `origin/ci/verify-deterministic-qa-comment`
+- Pull request: [#16 — CI-002RV — Verify Deterministic Claude QA Comment Delivery](https://github.com/pittonje/BurningSpace/pull/16)
+- Working tree: synchronize-run evidence update in progress
 
 ## Current task
 
 - Task ID: `CI-002RV`
 - Task title: Verify Deterministic Claude QA Comment Delivery
 - Task file: `docs/tasks/ci-002rv-verify-deterministic-comment-delivery.md`
-- Status: In progress — preflight complete
+- Status: In progress — first run observed; synchronize run pending
 
 ## Goal
 
@@ -55,8 +55,12 @@ bound four-heading QA comment per current workflow run.
 
 ## Next action
 
-Commit and push the initial documentation, open the verification PR, and
-observe the first CI-001 and Claude QA workflow runs. Do not merge the PR.
+Push this harmless documentation-only update to exercise synchronize behavior.
+The first run (`29156077671`, HEAD `c0f59d4`) authenticated through OIDC and
+obtained the GitHub App token, but Claude returned an error result with no
+`structured_output`; the deterministic publisher posted exactly one sanitized,
+SHA-bound failure comment and failed the job. CI-001 run `29156077707` passed.
+Do not merge the PR.
 
 ## Preserved constraints
 
