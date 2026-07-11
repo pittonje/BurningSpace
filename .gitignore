@@ -12,6 +12,7 @@ vite-dev*.log
 .vite-dev*.log
 .server-dev*.log
 .client-dev*.log
+.claude/settings.local.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

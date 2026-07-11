@@ -293,7 +293,10 @@ PR-001 — Structure Foundation & Agent Workflow:
 - Implemented no gameplay systems.
 - `npm run build` and `npm run typecheck` pass.
 - Five reviewers reported no confirmed blockers.
-- No commit has been created yet.
+- Branch `feature/project-bootstrap` is pushed to `origin/feature/project-bootstrap`.
+- Commit `db3242d` contains the main PR-001 structure and workflow changes.
+- PR [#4](https://github.com/pittonje/BurningSpace/pull/4) is open against `main` and awaiting final review and merge.
+- No runtime gameplay files were intentionally modified.
 
 Known follow-ups include real use of `PROTOCOL_VERSION`, incremental shared/protocol/balance/config migration, stronger technical guardrails for Bash-enabled reviewers, a visual style/faction identity brief, and dependency audit review as a separate task.
 
