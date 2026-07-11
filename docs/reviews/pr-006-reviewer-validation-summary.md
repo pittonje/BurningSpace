@@ -13,7 +13,7 @@
 | `architecture-reviewer` | Yes | Yes | Passed; approved current workflow scope |
 | `network-reviewer` | Yes | Yes | Not applicable: no network/runtime change |
 | `security-reviewer` | Yes | No | Passed; approved for prototype scope |
-| `qa-reviewer` | Yes | Yes | Final acceptance review pending |
+| `qa-reviewer` | Yes | Yes | Passed; approved all PR-006 acceptance criteria |
 | `gameplay-reviewer` | Yes | No | Passed; approved |
 | `visual-design-lead` | Yes | No | Passed; approved |
 
