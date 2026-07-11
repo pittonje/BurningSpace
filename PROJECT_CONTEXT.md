@@ -338,11 +338,14 @@ Current implementation work:
 
 - PR-005 — Isolate Profile Message Contract
 - Branch: `refactor/profile-contract-isolation`
+- PR [#8](https://github.com/pittonje/BurningSpace/pull/8) is open against `main` from `refactor/profile-contract-isolation` and awaiting human review.
 - `packages/shared/src/profile-contract.ts` owns the canonical profile wire values and selected types.
 - Narrow runtime objects `ProfileClientMessages` and `ProfileServerMessages` are exported by shared and re-exported by protocol.
 - Broad `ClientMessages` and `ServerMessages` properties remain compatible and reference the narrow values.
 - Application source remains unchanged; shared remains canonical.
 - No wire-format, validation, schema, callback, or gameplay changes.
+- Build, typecheck, profile compatibility check, and network callback diagnostic pass.
+- External Architecture, Network, and QA reviews approved the change with no blockers; the accepted type-cycle suggestion was resolved.
 
 Recommended order:
 
