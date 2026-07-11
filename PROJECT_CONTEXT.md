@@ -356,12 +356,13 @@ Current workflow-validation work:
 
 - PR-006 — Reviewer Coverage Validation & Routing
 - Branch: `chore/reviewer-coverage-validation`
+- PR [#9](https://github.com/pittonje/BurningSpace/pull/9) is open against `main` from `chore/reviewer-coverage-validation` and awaiting human review.
 - Scope: repository-wide validation of `security-reviewer`, `gameplay-reviewer`, and `visual-design-lead`, plus a reviewer-routing matrix.
 - All three agents were run independently and read-only against the complete current repository; their definitions passed without changes.
 - No Critical, High, or PR-006-blocking finding was confirmed. Runtime findings remain documented follow-up work.
 - Runtime source, scripts, assets, manifests, dependencies, lockfile, protocol, schemas, networking, and gameplay are unchanged.
 - Build, typecheck, profile compatibility, network callback, movement, and combat checks pass; the existing Vite chunk-size warning remains.
-- Architecture and QA reviews approved after the accepted documentation corrections; PR creation is pending.
+- Architecture and QA reviews approved after the accepted documentation corrections.
 - Historical documents that called the narrow profile import task PR-006 are superseded by the confirmed Product Architect decision below.
 
 Recommended order:
