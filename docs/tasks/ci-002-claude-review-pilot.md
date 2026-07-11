@@ -66,8 +66,19 @@ Use the smallest permissions required by the official action:
 permissions:
   contents: read
   pull-requests: write
-  id-token: write
 ```
+
+`id-token: write` was proposed originally but is **not included**. Verified
+against the current `anthropics/claude-code-action@v1` `action.yml` and
+`code.claude.com/docs/en/github-actions`: `id-token: write` is only
+required for OIDC/workload-identity-federation authentication paths —
+either Anthropic's own federation inputs (`anthropic_federation_rule_id`,
+`anthropic_oidc_audience`, `anthropic_organization_id`,
+`anthropic_service_account_id`, `anthropic_workspace_id`) or third-party
+cloud OIDC federation (`use_bedrock`/`aws-actions/configure-aws-credentials`,
+`use_vertex`/`google-github-actions/auth`). This pilot authenticates with a
+static `claude_code_oauth_token` only, which does not use any of those
+paths, so `id-token: write` grants an unused capability and is dropped.
 
 Do not grant:
 

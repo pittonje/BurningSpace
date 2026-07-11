@@ -18,19 +18,27 @@ Updated by: Claude (CI-002 preparation only)
 - Task ID: `CI-002`
 - Task title: Claude Review Pilot
 - Task file: `docs/tasks/ci-002-claude-review-pilot.md`
-- Status: Waiting for manual Claude GitHub App and secret setup —
-  `CLAUDE_CODE_OAUTH_TOKEN` is not listed under repository Actions secrets.
+- Status: Authorized for Claude implementation and implementation is in
+  progress. The repository owner ran `/install-github-app` (stdout:
+  "GitHub Actions setup complete!") and the Product Architect explicitly
+  confirmed, in the authorizing prompt: the official Claude GitHub App is
+  installed for BurningSpace, and GitHub Actions secret
+  `CLAUDE_CODE_OAUTH_TOKEN` exists. This agent independently re-verified
+  only the secret's existence via `gh secret list --app actions` (name and
+  creation timestamp `2026-07-11T11:13:28Z`, no value read); GitHub App
+  installation is recorded here as a Product Architect attestation, not as
+  something this agent independently confirmed via the GitHub API.
 
 ## Goal
 
-Wait for the repository owner to complete manual Claude GitHub App
-installation and secret setup, then for the Product Architect to confirm
-and explicitly authorize CI-002 workflow implementation. Do not implement
-`.github/workflows/claude-qa-review-pilot.yml` from this handoff alone.
+Implement `.github/workflows/claude-qa-review-pilot.yml` exactly as
+specified in `docs/tasks/ci-002-claude-review-pilot.md`, open the CI-002
+pull request as the pilot test, and record its results here.
 
 ## Runtime changes
 
-None. Workflow implementation: not started.
+None. Workflow implementation: in progress on this branch (not yet merged;
+PR not yet opened as of this commit).
 
 ## Completed work
 
@@ -98,10 +106,12 @@ None. Workflow implementation: not started.
 
 ## Manual setup status
 
-- Claude GitHub App installation: not programmatically checked or assumed;
-  requires manual repository-owner confirmation.
-- `CLAUDE_CODE_OAUTH_TOKEN` Actions secret: **not listed** (confirmed via
-  `gh secret list --app actions`, empty result).
+- Claude GitHub App installation: Product Architect-attested as complete
+  (repository owner ran `/install-github-app`); not independently
+  re-verified via the GitHub API by this agent.
+- `CLAUDE_CODE_OAUTH_TOKEN` Actions secret: **present** (independently
+  re-confirmed via `gh secret list --app actions`; name and creation
+  timestamp only, no value accessed).
 - Secret value: not accessed.
 
 ## CI-003 / PR-007 status
@@ -119,31 +129,24 @@ None. Workflow implementation: not started.
 
 ## Open blockers and decisions
 
-- `CLAUDE_CODE_OAUTH_TOKEN` does not exist as a repository secret.
-  The repository owner must install the official Claude GitHub App and
-  create this secret manually before CI-002 can be implemented.
+None outstanding for implementation authorization. Remaining work is to
+finish committing the workflow, open the CI-002 pull request, and record
+its live results (Actions run, QA comment, security review) here.
 
 ## Next safe action
 
-When manual setup is incomplete (current state): the repository owner
-installs the official Claude GitHub App and creates the GitHub Actions
-secret `CLAUDE_CODE_OAUTH_TOKEN`, then explicitly authorizes CI-002
-workflow implementation.
-
-When the secret name already exists: the Product Architect confirms
-GitHub App installation and authorizes CI-002 workflow implementation.
-The receiving agent must not infer GitHub App installation solely from
-the secret name.
+Commit `.github/workflows/claude-qa-review-pilot.yml` separately, push the
+branch, and open the CI-002 pull request as the pilot test. Do not merge
+it. Do not implement CI-003 or PR-007.
 
 ## Resume instructions
 
 1. Read `PROJECT_CONTEXT.md`, `AGENTS.md`, and this handoff.
 2. Read `docs/tasks/ci-002-claude-review-pilot.md` (implementation
-   authority once authorized).
-3. Verify branch `ci/claude-review-pilot`, `HEAD` at or after `6ec550e`,
-   and a clean working tree.
-4. Re-check `gh secret list --app actions` for `CLAUDE_CODE_OAUTH_TOKEN`
-   without printing any value; do not assume it exists from this file.
-5. Do not implement `.github/workflows/claude-qa-review-pilot.yml` until
-   both manual setup is confirmed and the Product Architect explicitly
-   authorizes implementation.
+   authority).
+3. Verify branch `ci/claude-review-pilot`, `HEAD` at or after this
+   commit, and a clean working tree.
+4. If the CI-002 pull request is not yet open, open it and observe the
+   pilot run. If it is already open, check its Actions run and QA comment
+   results before taking further action.
+5. Do not implement CI-003 or PR-007 from this handoff alone.
