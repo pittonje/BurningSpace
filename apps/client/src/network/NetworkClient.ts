@@ -1,18 +1,22 @@
 import { Client, Room, getStateCallbacks } from 'colyseus.js';
 import type { MapSchema } from '@colyseus/schema';
 import {
+  ClientMessages as ProfileClientMessages,
+  ServerMessages as ProfileServerMessages,
+  type JoinMode,
+  type JoinRequest,
+  type ProfileAcceptedMessage,
+  type ProfileRejectedMessage,
+  type RoomParticipant
+} from '@burningspace/protocol';
+import {
   ClientMessages,
   ServerMessages,
   type Faction,
   type HitEventMessage,
-  type JoinMode,
-  type JoinRequest,
   type PlayerInputMessage,
   type ProjectileSnapshot,
-  type ProfileAcceptedMessage,
-  type ProfileRejectedMessage,
   type RoomInfoMessage,
-  type RoomParticipant,
   type ShipDestroyedMessage,
   type ShipSnapshot
 } from '@burningspace/shared';
@@ -248,7 +252,7 @@ export class NetworkClient {
 
     this.profileError = undefined;
     this.emitConnectionState();
-    this.room.send(ClientMessages.SET_PROFILE, profile);
+    this.room.send(ProfileClientMessages.SET_PROFILE, profile);
   }
 
   sendPlayerInput(input: PlayerInputPayload): void {
@@ -372,13 +376,13 @@ export class NetworkClient {
   }
 
   private registerRoomListeners(room: Room<BattleStateSchema>): void {
-    room.onMessage<ProfileAcceptedMessage>(ServerMessages.PROFILE_ACCEPTED, (message) => {
+    room.onMessage<ProfileAcceptedMessage>(ProfileServerMessages.PROFILE_ACCEPTED, (message) => {
       this.acceptedProfile = message;
       this.profileError = undefined;
       this.setConnectionState('connected', undefined, this.roomInfo);
     });
 
-    room.onMessage<ProfileRejectedMessage>(ServerMessages.PROFILE_REJECTED, (message) => {
+    room.onMessage<ProfileRejectedMessage>(ProfileServerMessages.PROFILE_REJECTED, (message) => {
       this.profileError = message.reason;
       this.emitConnectionState();
     });

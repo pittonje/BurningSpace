@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import type { Faction, JoinMode, JoinRequest, RoomParticipant } from '@burningspace/shared';
+import type { JoinMode, JoinRequest, RoomParticipant } from '@burningspace/protocol';
+import type { Faction } from '@burningspace/shared';
 import { NetworkClient, type ConnectionState, type Unsubscribe } from '../network/NetworkClient';
 import { networkClient } from '../network/networkSession';
 
