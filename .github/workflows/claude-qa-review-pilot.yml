@@ -92,6 +92,22 @@ jobs:
             --disallowedTools "Write,Edit,NotebookEdit"
             --json-schema '{"type":"object","additionalProperties":false,"required":["blockers","important_suggestions","minor_suggestions","approval_status","reviewed_commit","summary"],"properties":{"blockers":{"type":"array","maxItems":20,"items":{"type":"string","maxLength":500}},"important_suggestions":{"type":"array","maxItems":20,"items":{"type":"string","maxLength":500}},"minor_suggestions":{"type":"array","maxItems":20,"items":{"type":"string","maxLength":500}},"approval_status":{"type":"string","maxLength":100},"reviewed_commit":{"type":"string","pattern":"^[0-9a-f]{40}$"},"summary":{"type":"string","maxLength":2000}}}'
 
+      - name: Summarize safe Claude invocation diagnostic
+        if: always()
+        env:
+          EXECUTION_FILE: ${{ steps.claude_review.outputs.execution_file }}
+          RUN_ID: ${{ github.run_id }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/sanitize-claude-diagnostic.py \
+            --execution-file "${EXECUTION_FILE:-}" \
+            --summary-file "$GITHUB_STEP_SUMMARY" \
+            --run-id "$RUN_ID" \
+            --head-sha "$EXPECTED_SHA" \
+            --action-sha "e90deca47693f9457b72f2b53c17d7c445a87342" \
+            --claude-version "2.1.207"
+
       - name: Validate and render QA review
         id: render_review
         if: always()
