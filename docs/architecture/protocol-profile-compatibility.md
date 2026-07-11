@@ -6,6 +6,8 @@ PR-003 establishes the first transitional `@burningspace/protocol` facade withou
 
 ## Selected symbols
 
+PR-005 adds narrow runtime exports `ProfileClientMessages` and `ProfileServerMessages`. They are the intended profile-specific API and contain only the three selected profile properties. The broad runtime exports remain transitional because current applications still import them through protocol aliases.
+
 | Name | Runtime/type-only | Existing owner | Current consumers | New public import path |
 |---|---|---|---|---|
 | `ClientMessages` | Runtime object | `packages/shared/src/messages.ts` | `NetworkClient`, `BattleRoom` | `@burningspace/protocol` |
@@ -20,7 +22,7 @@ The profile subset uses `ClientMessages.SET_PROFILE`, `ServerMessages.PROFILE_AC
 
 ## Existing active owner
 
-`packages/shared` remains the single canonical active owner in PR-003. Definitions, runtime objects, values, and payload shapes remain unchanged there.
+`packages/shared` remains the single canonical active owner. PR-005 isolates the definitions in `packages/shared/src/profile-contract.ts`; values and payload shapes remain unchanged.
 
 ## New compatibility export path
 
@@ -41,11 +43,11 @@ No deep source or `dist` import is required.
 packages/protocol ──> packages/shared
 ```
 
-The reverse dependency is forbidden. Applications do not depend on protocol yet.
+The reverse dependency is forbidden. Both applications now declare protocol and shared directly; protocol alone depends on shared.
 
 ## Runtime identity strategy
 
-`ClientMessages` and `ServerMessages` are direct ES module re-exports. They are not recreated, wrapped, or copied. The focused check asserts strict object identity and exact profile property strings.
+Narrow and broad objects are direct ES module re-exports. They are not recreated, wrapped, or copied. The focused check asserts strict object identity, narrow-to-broad equality, and exact profile property strings.
 
 ## Type compatibility strategy
 
@@ -53,7 +55,7 @@ Selected types are type-only re-exports. Compile-time assertions verify assignab
 
 ## Current consumers
 
-PR-004 completed the coordinated consumer cutover: `NetworkClient`, `NetworkTestScene`, and `BattleRoom` import the selected profile group from `@burningspace/protocol`. Mixed non-profile message properties remain on shared imports. Shared remains the canonical definition owner.
+PR-004 completed the coordinated package cutover: `NetworkClient`, `NetworkTestScene`, and `BattleRoom` import the selected profile group from `@burningspace/protocol`. They still use broad protocol message objects under profile-specific aliases. A later PR will switch those aliases to the narrow runtime objects. Mixed non-profile message properties remain on shared imports.
 
 ## Wire-format impact
 
@@ -65,15 +67,15 @@ PR-004 completed the coordinated consumer cutover: `NetworkClient`, `NetworkTest
 
 ## Non-goals
 
-- No consumer cutover
+- No narrow runtime-object consumer cutover in PR-005
 - No shared export removal or ownership transfer
 - No other protocol-group migration
 - No gameplay or validation change
 
 ## Future cutover plan
 
-A separate PR will add explicit application dependencies and update the client and server profile imports together. It must retain the shared exports as rollback compatibility until all consumers and diagnostics have moved.
+A separate PR will update the client and server from broad protocol aliases to `ProfileClientMessages` and `ProfileServerMessages` together. It must retain broad shared and protocol exports for rollback.
 
 ## Rollback plan
 
-While no application consumes the facade, rollback is limited to removing the profile re-export module, its dependency, and its focused check. Runtime behavior is unaffected.
+Rollback restores the previous shared definition placement and broad registry literals while leaving application imports unchanged. No wire, data, or runtime behavior migration is involved.

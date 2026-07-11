@@ -323,21 +323,31 @@ Completed compatibility work:
 - Local structured Architecture, Network, and QA reviews found no blockers; external Claude was unavailable under managed-environment policy.
 - Profile compatibility facade is complete.
 
-Current implementation work:
+Completed consumer cutover:
 
 - PR-004 — Coordinated Profile Protocol Consumer Cutover
 - Branch: `feature/profile-protocol-consumer-cutover`
-- PR: [#7](https://github.com/pittonje/BurningSpace/pull/7), open against `main` and awaiting human merge.
+- PR [#7](https://github.com/pittonje/BurningSpace/pull/7) was merged into `main` as `5c2bad9`.
 - Scope: coordinated profile import cutover in `NetworkClient`, `NetworkTestScene`, and `BattleRoom`.
 - Client and server are updated together; shared compatibility exports are retained and shared remains the canonical definition owner.
 - No wire-format, validation, schema, callback, or gameplay changes.
 - Build, typecheck, profile compatibility check, and network callback diagnostic pass locally.
 - External Architecture, Network, and QA reviews approved the change with no blockers.
 
+Current implementation work:
+
+- PR-005 — Isolate Profile Message Contract
+- Branch: `refactor/profile-contract-isolation`
+- `packages/shared/src/profile-contract.ts` owns the canonical profile wire values and selected types.
+- Narrow runtime objects `ProfileClientMessages` and `ProfileServerMessages` are exported by shared and re-exported by protocol.
+- Broad `ClientMessages` and `ServerMessages` properties remain compatible and reference the narrow values.
+- Application source remains unchanged; shared remains canonical.
+- No wire-format, validation, schema, callback, or gameplay changes.
+
 Recommended order:
 
-1. PR-004 — Coordinated Profile Protocol Consumer Cutover.
-2. PR-005 — Transfer Profile Protocol Ownership while retaining shared compatibility exports.
+1. PR-005 — Isolate Profile Message Contract.
+2. PR-006 — Narrow Profile Message Consumer Imports.
 3. Incremental balance migration with exact value-parity checks.
 4. Incremental world topology/config migration with behavior-parity checks.
 5. Server-side campaign lifecycle skeleton only after package boundaries stabilize.
