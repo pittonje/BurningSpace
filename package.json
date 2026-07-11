@@ -6,6 +6,7 @@
     "apps/*"
   ],
   "scripts": {
+    "archive:source": "node scripts/create-source-archive.mjs",
     "dev:client": "npm run dev -w @burningspace/client",
     "dev:server": "npm run dev -w @burningspace/server",
     "build": "npm run build --workspaces",
