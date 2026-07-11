@@ -303,15 +303,26 @@ Known follow-ups include real use of `PROTOCOL_VERSION`, incremental shared/prot
 
 ## 12. Next recommended PRs
 
-Current planning work:
+Completed planning work:
 
 - PR-002 — Shared Package Boundary Audit & Migration Plan
 - Branch: `planning/shared-package-boundary-audit`
 - Scope: documentation, dependency audit, ownership classification, and migration planning only
-- PR: [#5](https://github.com/pittonje/BurningSpace/pull/5), open and awaiting human review
-- Current state: 44 public shared exports inventoried; build and typecheck pass; no runtime migration or runtime source changes
+- PR [#5](https://github.com/pittonje/BurningSpace/pull/5) was merged into `main` as `efe9899`.
+- Audit and planning phase is complete.
 
-Recommended order after the audit:
+Current implementation work:
+
+- PR-003 — Protocol Compatibility Exports: Profile Messages
+- Branch: `feature/protocol-profile-compat-exports`
+- PR: [#6](https://github.com/pittonje/BurningSpace/pull/6), open against `main` and awaiting human review
+- `packages/shared` remains the canonical active owner.
+- `packages/protocol` is a compatibility facade for `ClientMessages`, `ServerMessages`, `JoinMode`, `JoinRequest`, `RoomParticipant`, `ProfileAcceptedMessage`, and `ProfileRejectedMessage`.
+- No client/server consumer cutover, wire-format change, Colyseus schema change, or gameplay change.
+- Build, typecheck, and focused profile compatibility check pass locally.
+- Local structured Architecture, Network, and QA reviews found no blockers; external Claude was unavailable under managed-environment policy.
+
+Recommended order:
 
 1. PR-003 — Protocol Compatibility Exports: Profile Messages.
 2. A coordinated profile-protocol consumer cutover after compatibility is proven.
