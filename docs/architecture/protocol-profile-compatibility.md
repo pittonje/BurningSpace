@@ -53,7 +53,7 @@ Selected types are type-only re-exports. Compile-time assertions verify assignab
 
 ## Current consumers
 
-Client and server still import all active profile symbols from `@burningspace/shared`. The missing explicit client manifest dependency is intentionally deferred to the consumer-cutover PR.
+PR-004 completed the coordinated consumer cutover: `NetworkClient`, `NetworkTestScene`, and `BattleRoom` import the selected profile group from `@burningspace/protocol`. Mixed non-profile message properties remain on shared imports. Shared remains the canonical definition owner.
 
 ## Wire-format impact
 

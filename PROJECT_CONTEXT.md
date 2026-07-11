@@ -311,21 +311,31 @@ Completed planning work:
 - PR [#5](https://github.com/pittonje/BurningSpace/pull/5) was merged into `main` as `efe9899`.
 - Audit and planning phase is complete.
 
-Current implementation work:
+Completed compatibility work:
 
 - PR-003 — Protocol Compatibility Exports: Profile Messages
 - Branch: `feature/protocol-profile-compat-exports`
-- PR: [#6](https://github.com/pittonje/BurningSpace/pull/6), open against `main` and awaiting human review
+- PR [#6](https://github.com/pittonje/BurningSpace/pull/6) was merged into `main` as `9992467`.
 - `packages/shared` remains the canonical active owner.
 - `packages/protocol` is a compatibility facade for `ClientMessages`, `ServerMessages`, `JoinMode`, `JoinRequest`, `RoomParticipant`, `ProfileAcceptedMessage`, and `ProfileRejectedMessage`.
 - No client/server consumer cutover, wire-format change, Colyseus schema change, or gameplay change.
 - Build, typecheck, and focused profile compatibility check pass locally.
 - Local structured Architecture, Network, and QA reviews found no blockers; external Claude was unavailable under managed-environment policy.
+- Profile compatibility facade is complete.
+
+Current implementation work:
+
+- PR-004 — Coordinated Profile Protocol Consumer Cutover
+- Branch: `feature/profile-protocol-consumer-cutover`
+- Scope: coordinated profile import cutover in `NetworkClient`, `NetworkTestScene`, and `BattleRoom`.
+- Client and server are updated together; shared compatibility exports are retained and shared remains the canonical definition owner.
+- No wire-format, validation, schema, callback, or gameplay changes.
+- Build, typecheck, profile compatibility check, and network callback diagnostic pass locally.
 
 Recommended order:
 
-1. PR-003 — Protocol Compatibility Exports: Profile Messages.
-2. A coordinated profile-protocol consumer cutover after compatibility is proven.
+1. PR-004 — Coordinated Profile Protocol Consumer Cutover.
+2. PR-005 — Transfer Profile Protocol Ownership while retaining shared compatibility exports.
 3. Incremental balance migration with exact value-parity checks.
 4. Incremental world topology/config migration with behavior-parity checks.
 5. Server-side campaign lifecycle skeleton only after package boundaries stabilize.

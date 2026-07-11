@@ -24,6 +24,8 @@ Status: profile compatibility-export preparation implemented in PR-003. Consumer
 
 ## Phase 2a — Coordinated profile consumer cutover
 
+Status: implemented in PR-004. Canonical ownership transfer and shared export cleanup remain incomplete.
+
 - Files affected: the relevant `NetworkClient` import, `BattleRoom` import, explicit client/server manifest dependencies, and protocol compatibility tests.
 - Expected consumers: client and server for one complete message category only.
 - Compatibility: client and server move in the same PR; strings and payload fields remain byte/shape equivalent; old shared exports remain available for rollback.
