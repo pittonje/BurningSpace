@@ -315,10 +315,12 @@ Current implementation work:
 
 - PR-003 — Protocol Compatibility Exports: Profile Messages
 - Branch: `feature/protocol-profile-compat-exports`
+- PR: [#6](https://github.com/pittonje/BurningSpace/pull/6), open against `main` and awaiting human review
 - `packages/shared` remains the canonical active owner.
 - `packages/protocol` is a compatibility facade for `ClientMessages`, `ServerMessages`, `JoinMode`, `JoinRequest`, `RoomParticipant`, `ProfileAcceptedMessage`, and `ProfileRejectedMessage`.
 - No client/server consumer cutover, wire-format change, Colyseus schema change, or gameplay change.
 - Build, typecheck, and focused profile compatibility check pass locally.
+- Local structured Architecture, Network, and QA reviews found no blockers; external Claude was unavailable under managed-environment policy.
 
 Recommended order:
 
