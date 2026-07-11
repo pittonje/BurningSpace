@@ -11,6 +11,7 @@
     "build": "npm run build --workspaces",
     "build:client": "npm run build -w @burningspace/client",
     "build:server": "npm run build -w @burningspace/server",
+    "check:protocol-profile": "npm run build -w @burningspace/shared && npm run build -w @burningspace/protocol && node packages/protocol/dist/profile-compatibility-check.js",
     "typecheck": "npm run typecheck --workspaces",
     "typecheck:client": "npm run typecheck -w @burningspace/client",
     "typecheck:server": "npm run typecheck -w @burningspace/server"
