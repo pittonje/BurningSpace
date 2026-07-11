@@ -10,7 +10,7 @@
 
 | Agent | Definition exists | Stored reports before PR-006 | PR-006 baseline result |
 |---|---:|---:|---|
-| `architecture-reviewer` | Yes | Yes | Final workflow review pending |
+| `architecture-reviewer` | Yes | Yes | Passed; approved current workflow scope |
 | `network-reviewer` | Yes | Yes | Not applicable: no network/runtime change |
 | `security-reviewer` | Yes | No | Passed; approved for prototype scope |
 | `qa-reviewer` | Yes | Yes | Final acceptance review pending |
@@ -24,7 +24,7 @@ Earlier task files selected reviewers informally, but neither `AGENTS.md` nor `d
 | Agent | Git object hash | Model | Tools | Required headings |
 |---|---|---|---|---|
 | `security-reviewer` | `2c163af3dccb910a2505bef4dcedb04c254e76f5` | `sonnet` | Read, Grep, Glob, Bash | Blockers; Important suggestions; Minor suggestions; Approval status |
-| `gameplay-reviewer` | `5e7fed47db38f2245dec1c0d594eb9d90ed2aa0` | `sonnet` | Read, Grep, Glob, Bash | Blockers; Important suggestions; Minor suggestions; Approval status |
+| `gameplay-reviewer` | `5e7fed47db38f2245dec31c0d594eb9d90ed2aa0` | `sonnet` | Read, Grep, Glob, Bash | Blockers; Important suggestions; Minor suggestions; Approval status |
 | `visual-design-lead` | `16400599497fa6fe03b20daa4cca6d2f8a606bac` | `sonnet` | Read, Grep, Glob, Bash | Blockers; Important suggestions; Minor suggestions; Approval status |
 
 All three definitions describe read-only reviewers and prohibit edits, commits, and destructive commands.

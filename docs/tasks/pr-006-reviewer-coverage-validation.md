@@ -101,6 +101,7 @@ Revert only PR-006 documentation/workflow commits. Runtime and assets require no
 
 Required:
 
+- This task strengthens the documentation-only matrix defaults because validating these three reviewer domains is the subject of PR-006 itself.
 - `security-reviewer`: validate security audit coverage and findings triage.
 - `gameplay-reviewer`: validate authority/gameplay distinction and scope.
 - `visual-design-lead`: validate assets, presentation, placeholder policy, and pipeline coverage.

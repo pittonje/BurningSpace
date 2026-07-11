@@ -86,5 +86,6 @@ Store reports as `docs/reviews/<task>-<reviewer>-review.md`, for example `docs/r
 - Codex remains the primary implementer; reviewer findings do not grant edit authority.
 - QA approval does not replace Security, Network, Gameplay, or Architecture approval.
 - Visual approval does not grant gameplay or server-authority approval.
+- Gameplay approval does not authorize protocol, validation, or server-authority changes outside the approved gameplay-rule scope.
 - Security approval does not establish gameplay correctness.
 - A blocker stops readiness but does not expand the task scope; out-of-scope fixes become separate tasks.

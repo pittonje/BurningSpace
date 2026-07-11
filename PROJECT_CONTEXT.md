@@ -361,7 +361,7 @@ Current workflow-validation work:
 - No Critical, High, or PR-006-blocking finding was confirmed. Runtime findings remain documented follow-up work.
 - Runtime source, scripts, assets, manifests, dependencies, lockfile, protocol, schemas, networking, and gameplay are unchanged.
 - Build, typecheck, profile compatibility, network callback, movement, and combat checks pass; the existing Vite chunk-size warning remains.
-- Architecture and QA workflow reviews and PR creation are pending.
+- Architecture workflow review approved after two documentation corrections; final QA review and PR creation are pending.
 - Historical documents that called the narrow profile import task PR-006 are superseded by the confirmed Product Architect decision below.
 
 Recommended order:

@@ -2,7 +2,7 @@
 
 ## Agent definition
 
-`.claude/agents/gameplay-reviewer.md`, baseline hash `5e7fed47db38f2245dec1c0d594eb9d90ed2aa0`, model `sonnet`, read-only tools Read/Grep/Glob/Bash.
+`.claude/agents/gameplay-reviewer.md`, baseline hash `5e7fed47db38f2245dec31c0d594eb9d90ed2aa0`, model `sonnet`, read-only tools Read/Grep/Glob/Bash.
 
 ## Reviewed commit
 
