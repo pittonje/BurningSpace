@@ -8,16 +8,16 @@ Updated by: Codex — CI-002D implementation and local validation
 - Base branch: `main`
 - Base commit: `346d095fe80ef457287cc14a2753bbfd3faa7a9e`
 - Active branch: `ci/safe-claude-invocation-diagnostics`
-- Upstream: not configured until push
+- Upstream: `origin/ci/safe-claude-invocation-diagnostics`
 - Stable implementation checkpoint: `48a73fe` (`ci: add sanitized Claude execution diagnostics`)
-- Pull request: None until branch push
+- Pull request: [#17 — CI-002D — Safe Claude Invocation Diagnostics](https://github.com/pittonje/BurningSpace/pull/17)
 
 ## Current task
 
 - Task ID: `CI-002D`
 - Task title: Safe Claude Invocation Diagnostics
 - Task file: `docs/tasks/ci-002d-safe-claude-invocation-diagnostics.md`
-- Status: Implementation and local validation complete; PR pending
+- Status: Implementation and local validation complete; PR open
 
 ## Implemented diagnostics
 
@@ -75,5 +75,5 @@ Updated by: Codex — CI-002D implementation and local validation
 
 ## Next safe action
 
-Commit documentation, push, open CI-002D PR, verify CI-001 and scope, then await
+Verify CI-001 and expected merge-gated Claude behavior on PR #17, then await
 human review and merge. After merge, create a separately scoped CI-002DV task.
