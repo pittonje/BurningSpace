@@ -403,11 +403,30 @@ CI-002R — Deterministic Claude QA Comment Delivery (merged; diagnostic follow-
 - CI-002DV remotely exercised the safe diagnostic path. It produced
   `unknown_safe_error`; diagnostics and deterministic failure publication were
   safe and reliable, with no observed secret exposure, but the result is
-  inconclusive and CI-003 remains blocked pending CI-002D2 refinement.
+  inconclusive and CI-003 remains blocked pending further diagnosis.
+- CI-002QAV re-verified the unchanged full QA workflow after suspecting
+  exhausted Claude token availability. That hypothesis was **not**
+  supported: the run completed 25 genuine turns at non-trivial cost with
+  `is_error: false`, yet `structured_output` was still absent. The Action's
+  own log explicitly stated the reason: `--json-schema was provided but
+  Claude did not return structured_output`.
+- CI-002D3 removed only nonessential JSON Schema constraints (`maxItems`,
+  `maxLength`, `pattern`), preserving the six-field output contract and the
+  unchanged, independently authoritative deterministic validator.
+  CI-002D3V verified this simplification post-merge: **the simplified
+  schema is exonerated** — a second genuine multi-turn run (18 turns,
+  non-trivial cost, `is_error: false`) still produced no
+  `structured_output`, with the identical explicit Action error and safe
+  diagnostic category (`structured_output_error`) as before simplification.
+  Token exhaustion and the tested schema constraints are both ruled out as
+  causes. The next candidate experiment is removing only `--agent
+  qa-reviewer`, keeping the (simplified) `--json-schema` and all other
+  invocation variables unchanged.
 
 Recommended order:
 
-1. CI-002D2 — refine safe diagnostics for `unknown_safe_error`.
+1. CI-002D4 — isolate the Claude agent definition (remove only `--agent
+   qa-reviewer`, pending Product Architect authorization).
 2. CI-003 — Routed Claude Reviews (blocked until invocation reliability is proven).
 3. PR-007 — Narrow Profile Message Consumer Imports (deferred).
 
