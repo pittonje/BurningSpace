@@ -127,11 +127,21 @@ Confirmed empty diffs vs `main` for `apps/**`, `packages/**`,
 
 ## Post-merge limitation
 
-The modified workflow cannot prove its own end-to-end behavior on this PR
-(GitHub validates a PR's workflow file against the default branch —
-observed directly in the PR #13 run history). Pre-merge evidence is local:
-the 47-case matrix against the exact embedded code, syntax validation, and
-three approving reviews.
+The Claude step cannot execute its new configuration on this PR
+(Anthropic's action skips itself when the workflow file differs from the
+default branch — observed live in run `29154108613` on PR #15, matching
+the PR #13 history). However, that same run **did** exercise the
+deterministic failure path end-to-end on a real runner: the Claude-step
+skip produced empty structured output, the render step wrote the sanitized
+failure comment, the publisher posted exactly one comment
+(`issuecomment-4946158186`, all four headings, trusted footer, posted by
+`github-actions[bot]`), and the job failed loudly. The run also exposed
+one real defect — GitHub's default `bash -e` shell aborted the render step
+before `exit_code` was recorded; the fail-safe `${RENDER_EXIT_CODE:-1}`
+default held the contract. Fixed with an explicit `set +e` (commit
+"ci: record render exit code under GitHub's default errexit shell").
+What still cannot be proven pre-merge: the happy path (valid structured
+output → validated review comment), which is CI-002RV's job.
 
 ## Open blockers and decisions
 

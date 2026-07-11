@@ -377,11 +377,20 @@ running, it does not introduce a version bump.
 
 ## Post-merge verification requirement
 
-This PR's workflow change cannot be exercised on itself: GitHub blocks a
-pull request's own modified workflow file from running with its new
-content until that content exists on the default branch (observed directly
-in the PR #13 forensic history — see
-`docs/reviews/ci-002r-comment-delivery-forensics.md`). A dedicated
+The Claude step cannot be exercised with its new configuration on this
+task's own PR: Anthropic's action skips itself when the workflow file
+differs from the default branch (observed in the PR #13 forensic history
+and again live on this task's PR #15, run `29154108613` — see
+`docs/reviews/ci-002r-comment-delivery-forensics.md`). That PR #15 run
+nonetheless proved the deterministic *failure* path end-to-end on a real
+runner: empty structured output → sanitized failure comment with all four
+headings posted by `github-actions[bot]` → job failed loudly. It also
+surfaced one live defect — GitHub injects `-e` into the default `run:`
+shell, which aborted the render step before its `exit_code` output was
+recorded; the publisher's fail-safe `${RENDER_EXIT_CODE:-1}` default held
+the one-comment/failed-job contract regardless, and the step now disables
+errexit explicitly (`set +e`). The unproven remainder is the happy path
+(valid structured output → validated review comment). A dedicated
 follow-up, **CI-002RV — Verify Deterministic Claude QA Comment Delivery**,
 must be opened after this PR merges to prove, on a normal subsequent PR:
 valid structured output produces exactly one comment with all four

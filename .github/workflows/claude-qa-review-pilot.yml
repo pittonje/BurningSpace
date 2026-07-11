@@ -100,10 +100,14 @@ jobs:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # Deliberately no `set -e`: the Python validator exits 1 on
-          # invalid review output, and this script must keep running to
-          # record that exit code for the publisher step.
+          # GitHub runs `run:` steps with `bash -e` by default, so exit-
+          # on-error must be disabled explicitly: the Python validator
+          # exits 1 on invalid review output, and this script must keep
+          # running to record that exit code for the publisher step.
+          # (Observed live in run 29154108613: without `set +e` the step
+          # aborted before recording exit_code.)
           set -uo pipefail
+          set +e
           printf '%s' "${STRUCTURED_OUTPUT:-}" > "$RUNNER_TEMP/review.json"
           printf 'Reviewed commit: %s\nWorkflow run: %s\n' "${EXPECTED_SHA:-}" "${RUN_URL:-}" > "$RUNNER_TEMP/footer.txt"
 
