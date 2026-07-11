@@ -66,19 +66,27 @@ Use the smallest permissions required by the official action:
 permissions:
   contents: read
   pull-requests: write
+  id-token: write
 ```
 
-`id-token: write` was proposed originally but is **not included**. Verified
-against the current `anthropics/claude-code-action@v1` `action.yml` and
-`code.claude.com/docs/en/github-actions`: `id-token: write` is only
-required for OIDC/workload-identity-federation authentication paths —
-either Anthropic's own federation inputs (`anthropic_federation_rule_id`,
-`anthropic_oidc_audience`, `anthropic_organization_id`,
-`anthropic_service_account_id`, `anthropic_workspace_id`) or third-party
-cloud OIDC federation (`use_bedrock`/`aws-actions/configure-aws-credentials`,
-`use_vertex`/`google-github-actions/auth`). This pilot authenticates with a
-static `claude_code_oauth_token` only, which does not use any of those
-paths, so `id-token: write` grants an unused capability and is dropped.
+`id-token: write` was initially dropped based on `action.yml` and
+`code.claude.com/docs/en/github-actions`, which only document it as
+required for OIDC/workload-identity-federation authentication paths
+(Anthropic's own federation inputs, or third-party cloud OIDC federation
+for Bedrock/Vertex). That reading was **empirically wrong** for this
+pilot: the first live run
+(https://github.com/pittonje/BurningSpace/actions/runs/29150904334) failed
+with `Could not fetch an OIDC token. Did you remember to add
+\`id-token: write\` to your workflow permissions?`. The failure's stack
+trace shows `setupGitHubToken` calling `getOidcToken` because no explicit
+`github_token` input was supplied — the action uses a GitHub Actions OIDC
+token to exchange for a scoped installation token from the officially
+installed Claude GitHub App. This is a separate mechanism from the
+AI-authentication federation inputs and is required whenever the action's
+default (non-custom-app) GitHub authentication path is used, regardless of
+whether `claude_code_oauth_token` is a static value. `id-token: write` is
+therefore retained, restored after the first pilot run's failure, and
+documented here as a real requirement, not a proposal.
 
 Do not grant:
 
