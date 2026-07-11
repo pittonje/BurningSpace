@@ -56,7 +56,7 @@ Protocol directly re-exports the narrow and broad shared objects plus the select
 - `npm run typecheck`
 - `npm run check:protocol-profile`
 - `npx tsx apps/client/scripts/network-client-callback-check.ts`
-- canonical production-literal scan
+- canonical production-literal scan (exact-value assertions may repeat literals in verification code, but not in production definitions)
 - empty application and manifest diffs
 
 ## Acceptance criteria

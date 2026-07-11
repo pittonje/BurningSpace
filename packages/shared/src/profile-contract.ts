@@ -1,4 +1,4 @@
-import type { Faction } from './factions.js';
+import type { Faction } from './faction.js';
 
 export const ProfileClientMessages = {
   SET_PROFILE: 'setProfile'

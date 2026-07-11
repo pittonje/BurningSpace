@@ -1,6 +1,7 @@
 import type { Faction } from './factions.js';
 import { ProfileClientMessages, ProfileServerMessages } from './profile-contract.js';
 
+// Preserve the pre-isolation direct module type surface for compatibility.
 export type {
   JoinRequest,
   ProfileAcceptedMessage,

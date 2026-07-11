@@ -27,7 +27,7 @@ shared profile contract
 
 ## Type ownership
 
-The same module owns `JoinMode`, `JoinRequest`, `RoomParticipant`, `ProfileAcceptedMessage`, and `ProfileRejectedMessage`. `Faction` remains a dependency-neutral shared primitive. Compatibility type re-exports preserve earlier shared paths.
+The same module owns `JoinMode`, `JoinRequest`, `RoomParticipant`, `ProfileAcceptedMessage`, and `ProfileRejectedMessage`. `Faction` remains a dependency-neutral shared primitive in `faction.ts`. Compatibility type re-exports preserve earlier shared paths.
 
 ## Broad registry compatibility
 
@@ -43,7 +43,7 @@ Protocol directly re-exports the shared narrow objects and types. Existing `Clie
 
 ## Dependency direction
 
-`packages/protocol -> packages/shared`. There is no reverse runtime dependency or circular runtime import. The shared `Faction`/`JoinMode` relationship is type-only and erased from emitted JavaScript.
+`packages/protocol -> packages/shared`. There is no reverse dependency or circular module import: `profile-contract.ts` depends only on the shared `Faction` type, while the legacy `factions.ts` surface re-exports both types for compatibility.
 
 ## Wire-format impact
 

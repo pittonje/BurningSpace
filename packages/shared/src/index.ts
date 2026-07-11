@@ -2,6 +2,8 @@ export * from './constants.js';
 export * from './factions.js';
 export * from './messages.js';
 export * from './movement.js';
+// Keep the narrow contract explicit at the package root; legacy modules retain
+// their compatibility type re-exports until a later cleanup phase.
 export {
   ProfileClientMessages,
   ProfileServerMessages,
