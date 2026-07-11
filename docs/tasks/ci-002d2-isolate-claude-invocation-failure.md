@@ -1,5 +1,19 @@
 # CI-002D2 — Isolate Claude Invocation Failure
 
+## Implementation checkpoint
+
+- The Product Architect approved experiment B (remove `--json-schema`).
+- Implementation removes exactly the `--json-schema` flag and its schema
+  value from `claude_args` in
+  `.github/workflows/claude-qa-review-pilot.yml`; no other invocation
+  variable changed (agent, prompt, tools, model behavior, action SHA,
+  validator, publisher, diagnostics, gates, and permissions all unchanged).
+- The remote result remains pending post-merge verification (CI-002D2V);
+  no outcome is claimed from this PR's own checks because the modified
+  workflow cannot exercise itself pre-merge.
+- Rollback: re-add the exact removed flag/value (preserved in Git history
+  at planning commit `00788f6` and in the pre-change blob).
+
 ## Goal
 
 Turn the non-specific `unknown_safe_error` from CI-002DV into either a

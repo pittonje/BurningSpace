@@ -90,7 +90,6 @@ jobs:
             --agent qa-reviewer
             --allowedTools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*)"
             --disallowedTools "Write,Edit,NotebookEdit"
-            --json-schema '{"type":"object","additionalProperties":false,"required":["blockers","important_suggestions","minor_suggestions","approval_status","reviewed_commit","summary"],"properties":{"blockers":{"type":"array","maxItems":20,"items":{"type":"string","maxLength":500}},"important_suggestions":{"type":"array","maxItems":20,"items":{"type":"string","maxLength":500}},"minor_suggestions":{"type":"array","maxItems":20,"items":{"type":"string","maxLength":500}},"approval_status":{"type":"string","maxLength":100},"reviewed_commit":{"type":"string","pattern":"^[0-9a-f]{40}$"},"summary":{"type":"string","maxLength":2000}}}'
 
       - name: Summarize safe Claude invocation diagnostic
         if: always()

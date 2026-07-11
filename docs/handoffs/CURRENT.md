@@ -1,18 +1,19 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-07-11
-Updated by: Claude — CI-002D2 planning complete
+Updated by: Claude — CI-002D2 implementation complete
 
 ## Repository state
 
-- Base branch: `main`
-- Active branch: `main` (planning-only documentation; no implementation
-  branch created yet)
-- Upstream: `origin/main`; the planning commit is local-only pending Product
-  Architect review (not pushed, per the CI-002D2 planning brief)
-- Stable checkpoint before this task: `829007ae9e78dee87b22017bd39fa3e0d9cf3d28`
-  (PR #18 merge commit)
-- Pull request: None for CI-002D2 (planning phase; no PR is opened)
+- Base branch: `main` (origin at `829007a`, PR #18 merge commit)
+- Active branch: `ci/isolate-claude-schema-failure`
+- Planning commit: `00788f6` — docs: define CI-002D2 invocation experiment
+  (created on local main, carried onto this branch)
+- Implementation commit: the single child of `00788f6` with subject
+  "ci: isolate Claude schema invocation failure"
+- Working tree: clean after commit
+- Pull request: to be recorded after creation (see PR section below once
+  updated by the post-PR handoff commit)
 
 ## Current task
 
@@ -20,63 +21,73 @@ Updated by: Claude — CI-002D2 planning complete
 - Task title: Isolate Claude Invocation Failure
 - Task file: `docs/tasks/ci-002d2-isolate-claude-invocation-failure.md`
 - Analysis: `docs/reviews/ci-002d2-invocation-analysis.md`
-- Status: Planning complete, implementation not started
+- Status: Implementation complete, post-merge experiment pending
 
-## Selected experiment
+## Selected experiment and exact change
 
-Single variable: **remove `--json-schema` from `claude_args`** in
-`.github/workflows/claude-qa-review-pilot.yml`, changing nothing else.
-Rationale: it is the only invocation input present in every failing run
-(one turn, zero cost, `is_error: true`) and absent from every known-good run
-(CI-002V, 18–19 turns, non-zero cost) at identical action SHA, CLI version,
-agent, tool mechanism, and model alias. Static analysis this session
-additionally verified: `claude_args` parse into exactly four clean
-flag/value pairs, the 609-byte schema is valid JSON, and `--json-schema` is
-a documented flag of CLI 2.1.207 (identical local version checked) — so the
-suspect is the flag's runtime path, not syntax, transport, or flag
-existence. The workflow's own validator remains the authoritative output
-gate, so removing the schema weakens no security boundary and preserves the
-one-comment deterministic publication contract in every outcome.
+Experiment B (Product Architect approved): remove exactly the
+`--json-schema` flag and its 609-byte schema value from `claude_args` in
+`.github/workflows/claude-qa-review-pilot.yml`. One line removed; nothing
+else changed. Post-edit reconstruction confirms `claude_args` contains
+exactly `--agent qa-reviewer`, the unchanged read-only `--allowedTools`
+list, and the unchanged `--disallowedTools` list — no `--json-schema`, no
+`--model`, no new tool permissions, no debug flags.
 
-## Files created
-
-- `docs/tasks/ci-002d2-isolate-claude-invocation-failure.md`
-- `docs/reviews/ci-002d2-invocation-analysis.md`
-
-## Files modified
-
-- `docs/handoffs/CURRENT.md` (this file)
-
-No workflow changes have been made. `PROJECT_CONTEXT.md` is unchanged
-(planning produces no durable verified facts yet).
-
-## Validation
+## Validation results
 
 | Check | Result |
 |---|---|
 | `git diff --check` | Clean |
-| Workflow YAML parse (local PyYAML) | Pass (read-only validation; file unchanged) |
-| `claude_args` token reconstruction | Pass — four flag/value pairs |
-| JSON Schema parse | Pass — valid 609-byte object schema |
-| Forbidden-path diffs | Empty |
+| Workflow YAML parse (local PyYAML) | Pass — 5 steps |
+| `claude_args` token reconstruction | Pass — exactly 3 unchanged pairs |
+| Workflow diff review | Exactly one line removed |
+| Forbidden-path diffs vs origin/main | Empty |
+| Focused local security review | Pass — read-only tools intact, no secret handling changed, `show_full_output` remains false, deterministic publication untouched, one-line exact rollback |
 
-Build/gameplay diagnostics intentionally not run: no executable code changed.
+Build/movement/combat/network diagnostics intentionally not run — no
+runtime code changed; CI-001 validates remotely.
+
+## Expected behavior and interpretation rules
+
+Without `--json-schema`, `structured_output` may remain absent, so even a
+successful Claude execution still produces one sanitized failure comment
+and a failed job — that does not invalidate the experiment. The validator
+was deliberately not modified to compensate. Interpretation happens only
+in CI-002D2V from safe metadata: multi-turn or non-zero cost implicates
+the schema path; an unchanged one-turn zero-cost `is_error: true` failure
+exonerates it and makes `--agent` removal the next single-variable
+candidate. A Claude failure on this self-modifying-workflow PR itself is
+NOT the experiment result (the action skips itself pre-merge).
+
+## Files changed on this branch
+
+- `.github/workflows/claude-qa-review-pilot.yml` (one line removed)
+- `docs/tasks/ci-002d2-isolate-claude-invocation-failure.md`
+  (implementation checkpoint)
+- `docs/reviews/ci-002d2-invocation-analysis.md` (implementation
+  conformance)
+- `docs/handoffs/CURRENT.md` (this file)
+
+`PROJECT_CONTEXT.md` deliberately unchanged — the experiment is not
+verified yet.
 
 ## Preserved invariants
 
-- CI-001, runtime, packages, manifests, lockfile, reviewer definitions:
-  unchanged.
+- CI-001 workflow, runtime, packages, manifests, lockfile, reviewer
+  definitions: unchanged.
+- `pull_request` only; same-repo/owner/non-draft gates; minimal
+  permissions; OAuth/OIDC; concurrency; stale-run protection; sanitized
+  failure comments; `show_full_output: false` — all unchanged.
 - No secret accessed or exposed; local Claude settings untouched.
 - CI-003 remains blocked; PR-007 remains deferred.
 
 ## Open blockers and decisions
 
-- None for planning. The experiment itself requires Product Architect
-  authorization before any workflow edit.
+- None. No root-cause conclusion is claimed.
 
 ## Next safe action
 
-Product Architect review of the selected single-variable experiment
-(remove `--json-schema`), then a scoped implementation task on a dedicated
-branch with its own PR, post-merge diagnostic run, and CI-002D2V evidence
-recording. Do not start CI-003.
+Human review and merge of the CI-002D2 pull request, followed by
+CI-002D2V — Verify Claude Invocation Without JSON Schema (documentation-
+only post-merge verification). Do not implement CI-002D2V now. Do not
+start CI-003.

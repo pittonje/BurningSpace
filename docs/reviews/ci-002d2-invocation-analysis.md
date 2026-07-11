@@ -98,6 +98,15 @@ are untouched.
 No outcome is interpreted as a confirmed root cause by itself; each outcome
 selects the next narrowest step.
 
+## Implementation conformance
+
+The implemented change matches the selected experiment exactly: one line
+removed from `claude_args` (`--json-schema` and its value), verified by
+post-edit token reconstruction showing exactly three remaining flag/value
+pairs (`--agent`, `--allowedTools`, `--disallowedTools`) with no `--model`,
+no new tool permissions, and no debug flags. No additional hypothesis was
+tested. No root cause is claimed; interpretation waits for CI-002D2V.
+
 ## Rollback
 
 Re-add the single `--json-schema` line (exact value preserved in Git
