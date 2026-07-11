@@ -327,10 +327,12 @@ Current implementation work:
 
 - PR-004 — Coordinated Profile Protocol Consumer Cutover
 - Branch: `feature/profile-protocol-consumer-cutover`
+- PR: [#7](https://github.com/pittonje/BurningSpace/pull/7), open against `main` and awaiting human merge.
 - Scope: coordinated profile import cutover in `NetworkClient`, `NetworkTestScene`, and `BattleRoom`.
 - Client and server are updated together; shared compatibility exports are retained and shared remains the canonical definition owner.
 - No wire-format, validation, schema, callback, or gameplay changes.
 - Build, typecheck, profile compatibility check, and network callback diagnostic pass locally.
+- External Architecture, Network, and QA reviews approved the change with no blockers.
 
 Recommended order:
 
