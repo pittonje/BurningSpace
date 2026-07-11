@@ -379,10 +379,18 @@ Completed CI-workflow-baseline work:
 - Local checks and GitHub Actions both passed; Security, QA, and Architecture reviews approved.
 - CI-001 is complete.
 
+CI-002 — Claude Review Pilot (partially verified, not complete):
+
+- Branch: `ci/claude-review-pilot`; PR [#13](https://github.com/pittonje/BurningSpace/pull/13) merged into `main` as `558ce34`.
+- `.github/workflows/claude-qa-review-pilot.yml` is active on `main`: `pull_request`-only, same-repository/owner/non-draft restricted, minimal permissions (`contents: read`, `pull-requests: write`, `id-token: write`), authenticates with `CLAUDE_CODE_OAUTH_TOKEN`, invokes the existing `qa-reviewer` agent read-only.
+- Post-merge verification (CI-002V, PR [#14](https://github.com/pittonje/BurningSpace/pull/14)) confirmed OAuth authentication, GitHub App OIDC token exchange, and `qa-reviewer` invocation all work correctly on a normal subsequent PR — the pre-merge workflow-validation gating is resolved.
+- Verification also found the pilot's comment-posting step is not yet reliable: the reviewer ran to completion (`permission_denials_count: 4`) but posted zero PR comments on the verification run. Root cause is not confirmed; see `docs/reviews/ci-002v-pilot-verification.md`.
+- CI-002 is **not** marked complete. A dedicated, narrowly scoped follow-up task is required to diagnose and fix comment posting before CI-003 is authorized.
+
 Recommended order:
 
-1. CI-002 — Claude Review Pilot.
-2. CI-003 — Routed Claude Reviews.
+1. CI-002 follow-up — diagnose and fix the Claude QA pilot's comment-posting gap.
+2. CI-003 — Routed Claude Reviews (blocked until the CI-002 follow-up succeeds).
 3. PR-007 — Narrow Profile Message Consumer Imports.
 
 Any implementation PR must define a narrow scope and explicit non-goals.
