@@ -6,9 +6,9 @@ _Update rule: Codex must update this file whenever project structure, stack, arc
 
 ## 1. Purpose of this file
 
-This is the primary handoff context for BurningSpace. Every AI agent, reviewer, coding session, design session, and future chat should read it before acting on the project.
+This is the durable project context for BurningSpace. Every AI agent, reviewer, coding session, design session, and future chat should read it before acting on the project.
 
-This is not a task file, full design document, architecture specification, or changelog. Task-specific instructions live in `docs/tasks/`, detailed design in `docs/design/`, architecture in `docs/architecture/`, and agent rules in `AGENTS.md` and `docs/agents/`.
+This is not a task file, current-session log, full design document, architecture specification, or changelog. Task-specific instructions live in `docs/tasks/`, current operational state in `docs/handoffs/CURRENT.md`, detailed design in `docs/design/`, architecture in `docs/architecture/`, and agent rules in `AGENTS.md` and `docs/agents/`.
 
 This file is the compact source of truth for current repository state, technical direction, preservation rules, accepted MVP baseline, agent workflow, and recommended next work. If it conflicts with older chat memory, notes, or assumptions, this file wins unless the Product Architect explicitly says otherwise.
 
@@ -283,6 +283,8 @@ Do not during unrelated or structural PRs:
 
 Current reviewer agents are `architecture-reviewer`, `network-reviewer`, `security-reviewer`, `qa-reviewer`, `gameplay-reviewer`, and `visual-design-lead`.
 
+The root `CLAUDE.md` is the concise Claude Code entrypoint. `docs/handoffs/CURRENT.md` stores mutable operational state; exact task scope remains in `docs/tasks/`. This file stores durable facts rather than detailed session progress. Full-repository rereads are required only by explicit audit tasks.
+
 ## 11. Current PR-001 status
 
 PR-001 — Structure Foundation & Agent Workflow:
@@ -352,11 +354,11 @@ Completed contract-isolation work:
 - External Architecture, Network, and QA reviews approved the change with no blockers; the accepted type-cycle suggestion was resolved.
 - Profile contract isolation is complete.
 
-Current workflow-validation work:
+Completed workflow-validation work:
 
 - PR-006 — Reviewer Coverage Validation & Routing
 - Branch: `chore/reviewer-coverage-validation`
-- PR [#9](https://github.com/pittonje/BurningSpace/pull/9) is open against `main` from `chore/reviewer-coverage-validation` and awaiting human review.
+- PR [#9](https://github.com/pittonje/BurningSpace/pull/9) was merged into `main` as `81aae8b`.
 - Scope: repository-wide validation of `security-reviewer`, `gameplay-reviewer`, and `visual-design-lead`, plus a reviewer-routing matrix.
 - All three agents were run independently and read-only against the complete current repository; their definitions passed without changes.
 - No Critical, High, or PR-006-blocking finding was confirmed. Runtime findings remain documented follow-up work.
@@ -364,15 +366,14 @@ Current workflow-validation work:
 - Build, typecheck, profile compatibility, network callback, movement, and combat checks pass; the existing Vite chunk-size warning remains.
 - Architecture and QA reviews approved after the accepted documentation corrections.
 - Historical documents that called the narrow profile import task PR-006 are superseded by the confirmed Product Architect decision below.
+- PR-006 is complete.
 
 Recommended order:
 
-1. PR-006 — Reviewer Coverage Validation & Routing.
-2. PR-007 — Narrow Profile Message Consumer Imports.
-3. Incremental balance migration with exact value-parity checks.
-4. Incremental world topology/config migration with behavior-parity checks.
-5. Server-side campaign lifecycle skeleton only after package boundaries stabilize.
-6. Persistent campaign storage planning.
+1. CI-001 — Core Pull Request Checks.
+2. CI-002 — Claude Review Pilot.
+3. CI-003 — Routed Claude Reviews.
+4. PR-007 — Narrow Profile Message Consumer Imports.
 
 Any implementation PR must define a narrow scope and explicit non-goals.
 
@@ -382,9 +383,9 @@ Every agent should read:
 
 1. `PROJECT_CONTEXT.md`
 2. `AGENTS.md`
-3. `docs/tasks/<current-task>.md`
-4. Architecture documents relevant to the task
-5. Design documents relevant to the task
+3. `docs/handoffs/CURRENT.md`
+4. The current task file named in `CURRENT.md`
+5. Architecture, design, and source files relevant to that task
 
 If an agent cannot access this file, it should request the latest version before making major architecture or implementation decisions.
 
