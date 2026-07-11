@@ -338,11 +338,11 @@ Completed consumer cutover:
 - Build, typecheck, profile compatibility check, and network callback diagnostic pass locally.
 - External Architecture, Network, and QA reviews approved the change with no blockers.
 
-Current implementation work:
+Completed contract-isolation work:
 
 - PR-005 — Isolate Profile Message Contract
 - Branch: `refactor/profile-contract-isolation`
-- PR [#8](https://github.com/pittonje/BurningSpace/pull/8) is open against `main` from `refactor/profile-contract-isolation` and awaiting human review.
+- PR [#8](https://github.com/pittonje/BurningSpace/pull/8) was merged into `main` as `76095f5`.
 - `packages/shared/src/profile-contract.ts` owns the canonical profile wire values and selected types.
 - Narrow runtime objects `ProfileClientMessages` and `ProfileServerMessages` are exported by shared and re-exported by protocol.
 - Broad `ClientMessages` and `ServerMessages` properties remain compatible and reference the narrow values.
@@ -350,11 +350,24 @@ Current implementation work:
 - No wire-format, validation, schema, callback, or gameplay changes.
 - Build, typecheck, profile compatibility check, and network callback diagnostic pass.
 - External Architecture, Network, and QA reviews approved the change with no blockers; the accepted type-cycle suggestion was resolved.
+- Profile contract isolation is complete.
+
+Current workflow-validation work:
+
+- PR-006 — Reviewer Coverage Validation & Routing
+- Branch: `chore/reviewer-coverage-validation`
+- Scope: repository-wide validation of `security-reviewer`, `gameplay-reviewer`, and `visual-design-lead`, plus a reviewer-routing matrix.
+- All three agents were run independently and read-only against the complete current repository; their definitions passed without changes.
+- No Critical, High, or PR-006-blocking finding was confirmed. Runtime findings remain documented follow-up work.
+- Runtime source, scripts, assets, manifests, dependencies, lockfile, protocol, schemas, networking, and gameplay are unchanged.
+- Build, typecheck, profile compatibility, network callback, movement, and combat checks pass; the existing Vite chunk-size warning remains.
+- Architecture and QA workflow reviews and PR creation are pending.
+- Historical documents that called the narrow profile import task PR-006 are superseded by the confirmed Product Architect decision below.
 
 Recommended order:
 
-1. PR-005 — Isolate Profile Message Contract.
-2. PR-006 — Narrow Profile Message Consumer Imports.
+1. PR-006 — Reviewer Coverage Validation & Routing.
+2. PR-007 — Narrow Profile Message Consumer Imports.
 3. Incremental balance migration with exact value-parity checks.
 4. Incremental world topology/config migration with behavior-parity checks.
 5. Server-side campaign lifecycle skeleton only after package boundaries stabilize.

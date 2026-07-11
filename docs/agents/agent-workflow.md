@@ -21,3 +21,11 @@
 - Product Architect resolves design conflicts and requirement ambiguity.
 - Preserve existing prototype files unless a task explicitly authorizes migration or removal.
 - Run relevant build, type-check, and focused checks before handoff.
+
+## Reviewer routing
+
+- Select reviewers per task using `docs/agents/reviewer-routing.md`; not every reviewer runs on every PR.
+- Every task declares required, recommended/optional, and skipped reviewers with a short applicability reason.
+- Read-only reviewers ground findings in concrete repository evidence and name the reviewed commit.
+- Reviewer reports identify domain blockers but do not authorize implementation outside the task scope.
+- Product Architect resolves conflicts between reviewer domains; Codex remains the primary implementer.

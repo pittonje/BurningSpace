@@ -26,6 +26,7 @@ Read `PROJECT_CONTEXT.md` first, then this file, the current task in `docs/tasks
 
 ## PR expectations
 
+- Before implementation, every task must declare its applicable reviewer set using `docs/agents/reviewer-routing.md`, including a short reason for skipped reviewers.
 - Work on one scoped branch/task at a time and avoid overlapping writes.
 - Read the relevant task and architecture documents before editing.
 - State non-goals and preserve unrelated behavior.
