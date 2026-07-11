@@ -1,99 +1,84 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-07-11
-Updated by: Claude — CI-002QAV verification complete
+Updated by: Claude — CI-002D3 implementation complete
 
 ## Repository state
 
-- Base branch: `main` (origin at `829007a`; carries planning commit
-  `00788f6`)
-- Active branch: `ci/reverify-full-claude-qa`
-- Upstream: `origin/ci/reverify-full-claude-qa`
-- HEAD: `ffaf3f1da1bf20897a7232720491b24507848f08`
-- Pull request: [#20 — CI-002QAV — Re-verify Full Claude QA](https://github.com/pittonje/BurningSpace/pull/20)
-- Pull request state: Open, not merged
+- Base branch: `main` (at `04a903bf5119873653bccd0d5a957bbff1404c21`, PR #20
+  merge commit)
+- Active branch: `ci/simplify-claude-qa-schema`
+- Pull request: to be recorded after creation
 
 ## Current task
 
-- Task ID: `CI-002QAV`
-- Task title: Re-verify Full Claude QA
-- Task file: `docs/tasks/ci-002qav-reverify-full-claude-qa.md`
-- Verification report: `docs/reviews/ci-002qav-full-qa-verification.md`
-- Status: Verification complete — **Full QA still failing**
+- Task ID: `CI-002D3`
+- Task title: Simplify Claude QA Structured Output Schema
+- Task file: `docs/tasks/ci-002d3-simplify-claude-qa-schema.md`
+- Analysis: `docs/reviews/ci-002d3-schema-analysis.md`
+- Status: Implemented, not post-merge verified
 
-## Remote results
+## Exact schema-only change
 
-- CI-001 run `29163795945`: passed, commit `ffaf3f1`.
-- Claude run `29163795990`: **25 turns**, cost **$0.4174**, `is_error:
-  false`, `permission_denials_count: 10`, session ID present — a genuine,
-  fully-completed multi-turn review (comparable in scale to the last
-  known-good CI-002V runs). `structured_output` was still absent.
-- The token-exhaustion hypothesis is **not supported**: this run's scale
-  contradicts a zero-cost/one-turn exhaustion signature.
-- The Action itself logged the exact reason:
-  `--json-schema was provided but Claude did not return structured_output.
-  Result subtype: success` — the strongest direct evidence so far,
-  self-reported by the Action rather than inferred.
-- Safe diagnostic category: `structured_output_error` (a more specific
-  category than the earlier `unknown_safe_error`).
-- Exactly one sanitized failure comment posted (`4948323012`), correct
-  four headings and order, correct HEAD binding, no raw diagnostic leak.
-- No secret, prompt, transcript, or environment value exposed.
+Removed exactly 9 nonessential generation-time constraint instances from
+the `--json-schema` value in `.github/workflows/claude-qa-review-pilot.yml`:
+`maxItems: 20` (×3, on `blockers`/`important_suggestions`/
+`minor_suggestions`), `maxLength: 500` (×3, on those arrays' items),
+`maxLength: 100` (on `approval_status`), `maxLength: 2000` (on `summary`),
+and `pattern: "^[0-9a-f]{40}$"` (on `reviewed_commit`). The diff against
+`main` is exactly one line. All six field names, base types, the
+`required` list, and `additionalProperties: false` are unchanged.
 
-## Result classification
+## Validator unchanged
 
-**Full QA still failing** — not the same immediate failure signature as
-before (that was 1 turn/zero cost; this is 25 turns/non-zero cost), but
-still no valid QA comment. This evidence substantially strengthens the
-CI-002D2 schema hypothesis rather than weakening it: the Action's own log
-now names `--json-schema`/structured-output extraction as the exact
-failure point, on a run that proves the model/entitlement/execution path
-works correctly end-to-end.
+The deterministic in-workflow validator is byte-for-byte identical to
+`main` and still independently enforces `MAX_ITEMS=20`,
+`MAX_ITEM_LEN=500`, `MAX_SUMMARY_LEN=2000`, `MAX_APPROVAL_LEN=100`, and the
+`reviewed_commit` SHA format/binding — the schema simplification only
+affects what the model is asked to produce at generation time, not what
+the workflow accepts for publication.
 
-## Decision regarding PR #19
+## Validation results
 
-Per the task's decision rule for a still-failing result: PR #19 (CI-002D2
-schema-removal experiment) **remains open**; neither workflow was modified
-in this task. Whether to proceed with PR #19's experiment now, given this
-stronger evidence, is a Product Architect decision.
+| Check | Result |
+|---|---|
+| `git diff --check` | Clean |
+| Workflow YAML parse | Pass — 5 steps |
+| `claude_args` reconstruction | Pass — `--agent`, `--allowedTools`, `--disallowedTools`, `--json-schema` all present; no `--model`, no new flags |
+| Schema JSON parse + contract check | Pass — 6/6 fields, all required, `additionalProperties: false`, types unchanged, all 9 nonessential constraints removed, none added |
+| Diff vs `main` | Exactly one line changed |
+| Forbidden-path diffs (incl. `PROJECT_CONTEXT.md`) | Empty |
+| Focused local review | Pass — see `docs/reviews/ci-002d3-schema-analysis.md` |
 
-## Files changed (this task)
+Build/gameplay diagnostics intentionally not run — no runtime code changed;
+CI-001 validates remotely.
 
-- `docs/tasks/ci-002qav-reverify-full-claude-qa.md` (new)
-- `docs/reviews/ci-002qav-full-qa-verification.md` (new)
+## Files created
+
+- `docs/tasks/ci-002d3-simplify-claude-qa-schema.md`
+- `docs/reviews/ci-002d3-schema-analysis.md`
+
+## Files modified
+
+- `.github/workflows/claude-qa-review-pilot.yml` (one line)
 - `docs/handoffs/CURRENT.md` (this file)
 
-`PROJECT_CONTEXT.md` deliberately unchanged (result-specific rule: only a
-"Full QA restored" result authorizes a durable-facts update).
-
-## Scope verification
-
-Forbidden-path diffs vs `main` are empty: `.github/workflows/**`,
-`apps/**`, `packages/**`, `package.json`, `package-lock.json`, TypeScript
-configuration, assets, `.claude/agents/**`. Documentation only.
+`PROJECT_CONTEXT.md` deliberately unchanged pending post-merge verification.
 
 ## Preserved invariants
 
-- CI-001, runtime, packages, manifests, lockfile, reviewer definitions:
-  unchanged.
-- Full Claude QA workflow on `main` unchanged (`--agent qa-reviewer` +
-  `--json-schema` + read-only tools + deterministic validation/
-  publication).
-- No secret accessed or exposed.
+- `--agent qa-reviewer`, `--json-schema`, prompt, model behavior, tool
+  restrictions, Action pin, authentication, safe diagnostics, renderer,
+  publisher, concurrency, stale-run protection, permissions,
+  `show_full_output: false`: all unchanged.
+- PR #19 closed as superseded (branch `ci/isolate-claude-schema-failure`
+  preserved, not deleted).
 - CI-003 remains blocked; PR-007 remains deferred.
-
-## Open blockers and decisions
-
-- PR #19 (schema-removal experiment) awaits a Product Architect decision:
-  proceed with it now (better motivated by this run's specific evidence),
-  choose an alternative structured-output remedy, or request further
-  diagnostics.
-- Whether `structured_output_error` (multi-turn) and the earlier
-  `unknown_safe_error` (one-turn/zero-cost) share one root cause is
-  unresolved.
+- No secret accessed or exposed; local Claude settings untouched.
 
 ## Next safe action
 
-Product Architect review of `docs/reviews/ci-002qav-full-qa-verification.md`
-and a decision on PR #19's disposition. Do not merge PR #20. Do not merge
-PR #19. Do not implement CI-003.
+Human review and merge of the CI-002D3 pull request, followed by
+CI-002D3V — Verify Simplified Claude QA Schema (documentation-only
+post-merge verification). Do not implement CI-002D3V now. Do not start
+CI-003.
