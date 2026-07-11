@@ -159,7 +159,11 @@ Current role: generic shared types plus the active multiplayer runtime contract,
 
 ### `packages/protocol`
 
-Current role: future protocol boundary with non-runtime placeholder types. It is not the active contract. Future role: client-to-server messages, server-to-client messages, snapshots, protocol version, input frames, and events. Migrate from `packages/shared/src/messages.ts` incrementally and preserve field compatibility until client and server cut over together.
+Current role: active transitional public boundary for the migrated profile contract. Client and server profile consumers import through this package, while the canonical profile definitions currently remain in `packages/shared` and are re-exported by protocol.
+
+Other protocol groups still remain in `packages/shared` and must migrate incrementally. `packages/shared` must not depend on `packages/protocol`; canonical ownership transfer and compatibility cleanup remain future work.
+
+Future role: canonical owner of client-to-server messages, server-to-client messages, snapshots, protocol version, input frames, and network events after coordinated migration and compatibility retention.
 
 ### `packages/balance`
 
