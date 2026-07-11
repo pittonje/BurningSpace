@@ -17,7 +17,7 @@ Updated by: Codex — CI-002D implementation and local validation
 - Task ID: `CI-002D`
 - Task title: Safe Claude Invocation Diagnostics
 - Task file: `docs/tasks/ci-002d-safe-claude-invocation-diagnostics.md`
-- Status: Implementation and local validation complete; PR open
+- Status: Ready for human review; post-merge diagnostic verification required
 
 ## Implemented diagnostics
 
@@ -66,6 +66,14 @@ Updated by: Codex — CI-002D implementation and local validation
 - The modified workflow cannot exercise its new diagnostic path on its own PR.
 - CI-002DV must verify the trusted merged Step Summary after human merge.
 
+## Pull request checks
+
+- CI-001 passed on PR #17 run `29157030847` at `312a924`.
+- Claude QA run `29157030844` followed the expected trusted-main failure path:
+  one sanitized SHA-bound comment and a failed job. This does not exercise or
+  verify the new diagnostic step because the workflow is self-modifying.
+- PR #17 is open and mergeable.
+
 ## Preserved constraints
 
 - CI-001, runtime, dependencies, lockfile, assets, and reviewer definitions are
@@ -75,5 +83,5 @@ Updated by: Codex — CI-002D implementation and local validation
 
 ## Next safe action
 
-Verify CI-001 and expected merge-gated Claude behavior on PR #17, then await
-human review and merge. After merge, create a separately scoped CI-002DV task.
+Await human review and merge of PR #17. After merge, create a separately scoped
+CI-002DV task; do not start CI-003.
