@@ -1,6 +1,14 @@
 import { performance } from 'node:perf_hooks';
 import { Client, Room } from 'colyseus';
 import {
+  ClientMessages as ProfileClientMessages,
+  ServerMessages as ProfileServerMessages,
+  type JoinMode,
+  type JoinRequest,
+  type ProfileAcceptedMessage,
+  type ProfileRejectedMessage
+} from '@burningspace/protocol';
+import {
   ClientMessages,
   MAX_ROOM_CLIENTS,
   NETWORK_INPUT_TIMEOUT_MS,
@@ -19,11 +27,7 @@ import {
   WORLD_WIDTH,
   type Faction,
   type HitEventMessage,
-  type JoinMode,
-  type JoinRequest,
   type PlayerInputMessage,
-  type ProfileAcceptedMessage,
-  type ProfileRejectedMessage,
   type RoomInfoMessage,
   type ShipDestroyedMessage
 } from '@burningspace/shared';
@@ -96,7 +100,7 @@ export class BattleRoom extends Room<BattleState> {
 
   onCreate(): void {
     this.setState(new BattleState());
-    this.onMessage<unknown>(ClientMessages.SET_PROFILE, (client, message) => {
+    this.onMessage<unknown>(ProfileClientMessages.SET_PROFILE, (client, message) => {
       this.handleSetProfile(client, message);
     });
     this.onMessage<unknown>(ClientMessages.PLAYER_INPUT, (client, message) => {
@@ -140,7 +144,7 @@ export class BattleRoom extends Room<BattleState> {
     const participant = this.state.participants.get(client.sessionId);
 
     if (!participant) {
-      client.send(ServerMessages.PROFILE_REJECTED, {
+      client.send(ProfileServerMessages.PROFILE_REJECTED, {
         reason: 'Participant was not found.'
       } satisfies ProfileRejectedMessage);
       return;
@@ -149,7 +153,7 @@ export class BattleRoom extends Room<BattleState> {
     const validation = validateProfile(message);
 
     if (!validation.ok) {
-      client.send(ServerMessages.PROFILE_REJECTED, {
+      client.send(ProfileServerMessages.PROFILE_REJECTED, {
         reason: validation.reason
       } satisfies ProfileRejectedMessage);
       return;
@@ -161,7 +165,7 @@ export class BattleRoom extends Room<BattleState> {
       participant.profileReady &&
       (participant.mode !== validation.profile.mode || participant.faction !== requestedFaction)
     ) {
-      client.send(ServerMessages.PROFILE_REJECTED, {
+      client.send(ProfileServerMessages.PROFILE_REJECTED, {
         reason: 'Disconnect before changing mode or faction.'
       } satisfies ProfileRejectedMessage);
       return;
@@ -179,7 +183,7 @@ export class BattleRoom extends Room<BattleState> {
       this.inputs.delete(client.sessionId);
     }
 
-    client.send(ServerMessages.PROFILE_ACCEPTED, {
+    client.send(ProfileServerMessages.PROFILE_ACCEPTED, {
       sessionId: participant.sessionId,
       nickname: participant.nickname,
       mode: participant.mode as JoinMode,

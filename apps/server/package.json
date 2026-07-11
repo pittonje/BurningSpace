@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@burningspace/protocol": "*",
     "@burningspace/shared": "*",
     "@colyseus/ws-transport": "^0.16.5",
     "colyseus": "^0.16.4"
