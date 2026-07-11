@@ -21,6 +21,7 @@ Profile negotiation has a clear request/accepted/rejected lifecycle, is smaller 
 
 ## Scope
 
+- First declare the existing `@burningspace/shared` dependency in `apps/client/package.json` and synchronize the lockfile without changing versions; this removes reliance on workspace hoisting before protocol work.
 - Add canonical or compatibility protocol exports for the profile category.
 - Add exact runtime string assertions and compile-time shape compatibility checks against the current shared contract.
 - Decide and document an acyclic ownership/forwarding direction.
@@ -39,6 +40,7 @@ Profile negotiation has a clear request/accepted/rejected lifecycle, is smaller 
 - Payload fields remain identical and bidirectionally assignable.
 - `Faction` remains a dependency-neutral shared primitive unless architecture review decides otherwise.
 - `packages/shared` must not depend on `packages/protocol` if protocol imports `Faction` from shared.
+- Product Architect must confirm the canonical ownership of `RoomParticipant` (wire projection versus client UI model) and reaffirm `Faction` as a shared primitive before finalizing exports.
 
 ## Expected files
 
@@ -53,6 +55,7 @@ Profile negotiation has a clear request/accepted/rejected lifecycle, is smaller 
 - `npm run typecheck`
 - Exact runtime message-name assertions
 - Compile-time old/new payload assignability
+- A clean workspace package rebuild before compatibility assertions
 - Existing network callback diagnostic
 - Empty gameplay-behavior diff
 

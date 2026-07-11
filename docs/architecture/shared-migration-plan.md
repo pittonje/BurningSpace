@@ -16,7 +16,7 @@
 - Expected consumers: initially tests only; active applications remain on shared if compatibility is not proven.
 - Compatibility: define the existing message-name objects and one coherent payload group with identical property names, optionality, literal strings, and serialization meaning. Avoid parallel hand-written shapes by using type aliases/re-exports where acyclic.
 - Rollback: remove new protocol exports; applications remain on the old shared entry point.
-- Required tests: exact message-string equality, compile-time bidirectional assignability for payloads, package build/typecheck, existing callback diagnostic.
+- Required tests: clean removal/rebuild of package `dist` outputs through the normal workspace build, exact message-string equality, compile-time bidirectional assignability for payloads, package build/typecheck, existing callback diagnostic.
 - Reviewers: architecture, network, QA.
 - Non-goals: consumer cutover, wire changes, schema changes, gameplay changes, old export removal.
 
@@ -39,6 +39,7 @@
 - Required tests: value parity, movement/combat diagnostics, build/typecheck, multiplayer callback diagnostic.
 - Reviewers: gameplay, network where events expose values, QA.
 - Non-goals: rebalance, tuning, campaign values, local prototype migration unless separately scoped.
+- Open ownership decision: Product Architect must confirm whether `NETWORK_MAX_ACTIVE_PROJECTILES_PER_SHIP` is gameplay balance or server-only resource/abuse policy before migration.
 
 ## Phase 4 — Map and topology config
 
