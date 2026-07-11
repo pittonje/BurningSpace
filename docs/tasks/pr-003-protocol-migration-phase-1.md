@@ -21,11 +21,13 @@ Profile negotiation has a clear request/accepted/rejected lifecycle, is smaller 
 
 ## Scope
 
-- First declare the existing `@burningspace/shared` dependency in `apps/client/package.json` and synchronize the lockfile without changing versions; this removes reliance on workspace hoisting before protocol work.
+- Add only the `packages/protocol -> packages/shared` dependency required by the compatibility facade.
 - Add canonical or compatibility protocol exports for the profile category.
 - Add exact runtime string assertions and compile-time shape compatibility checks against the current shared contract.
 - Decide and document an acyclic ownership/forwarding direction.
 - Keep `NetworkClient` and `BattleRoom` imports on `@burningspace/shared` in this preparation PR unless reviewers approve an equally reversible coordinated cutover.
+
+The previously proposed `apps/client/package.json` dependency correction is superseded for this PR. It is deferred to the coordinated consumer-cutover PR, where application dependencies and imports can change together. PR-003 is compatibility-facade only.
 
 ## Non-goals
 
@@ -40,7 +42,7 @@ Profile negotiation has a clear request/accepted/rejected lifecycle, is smaller 
 - Payload fields remain identical and bidirectionally assignable.
 - `Faction` remains a dependency-neutral shared primitive unless architecture review decides otherwise.
 - `packages/shared` must not depend on `packages/protocol` if protocol imports `Faction` from shared.
-- Product Architect must confirm the canonical ownership of `RoomParticipant` (wire projection versus client UI model) and reaffirm `Faction` as a shared primitive before finalizing exports.
+- Product Architect confirmed `RoomParticipant` remains a shared-owned active definition exposed through the facade, and reaffirmed `Faction` as a dependency-neutral shared primitive for this PR.
 
 ## Expected files
 
@@ -75,3 +77,30 @@ Revert the new protocol exports and tests. Because active consumers remain on sh
 - No runtime application consumer changes unless client and server are moved together with explicit approval.
 - No field or message string changes.
 - Shared cleanup is deferred until a later zero-consumer phase.
+
+## Implemented compatibility facade
+
+Selected exports from the package root:
+
+- Runtime: `ClientMessages`, `ServerMessages`
+- Type-only: `JoinMode`, `JoinRequest`, `RoomParticipant`, `ProfileAcceptedMessage`, `ProfileRejectedMessage`
+
+The complete runtime message objects are re-exported to preserve strict identity. The profile surface currently uses only `ClientMessages.SET_PROFILE`, `ServerMessages.PROFILE_ACCEPTED`, and `ServerMessages.PROFILE_REJECTED`; temporary exposure of the other object properties is an accepted transitional trade-off.
+
+Implementation files:
+
+- `packages/protocol/src/profile.ts`
+- `packages/protocol/src/profile-compatibility-check.ts`
+- `packages/protocol/src/index.ts`
+- protocol/root manifests and narrow lockfile metadata
+
+Verification:
+
+- strict runtime identity for both message objects
+- exact profile wire strings
+- bidirectional assignability for all five selected types
+- package-root import through `@burningspace/protocol`
+- `npm run check:protocol-profile`
+- workspace build and typecheck
+
+No client/server import, wire payload, Colyseus schema, room behavior, or gameplay change is complete in this PR.

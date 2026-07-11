@@ -12,6 +12,8 @@
 
 ## Phase 1 — Canonical protocol compatibility exports
 
+Status: profile compatibility-export preparation implemented in PR-003. Consumer cutover, ownership transfer, and shared cleanup remain incomplete.
+
 - Files affected: `packages/protocol/src`; focused protocol contract tests; package manifests only where an actual import is introduced.
 - Expected consumers: initially tests only; active applications remain on shared if compatibility is not proven.
 - Compatibility: define the existing message-name objects and one coherent payload group with identical property names, optionality, literal strings, and serialization meaning. Avoid parallel hand-written shapes by using type aliases/re-exports where acyclic.
