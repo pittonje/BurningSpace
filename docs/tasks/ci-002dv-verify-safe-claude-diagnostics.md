@@ -1,5 +1,7 @@
 # CI-002DV — Verify Safe Claude Invocation Diagnostics
 
+Status: Safe but inconclusive
+
 ## Goal
 
 Verify the safe diagnostic path added by CI-002D on a normal pull request after

@@ -400,10 +400,14 @@ CI-002R — Deterministic Claude QA Comment Delivery (merged; diagnostic follow-
 - CI-002D adds safe allowlisted execution-file diagnostics while retaining
   `show_full_output: false`; the underlying invocation error remains pending
   CI-002DV post-merge evidence.
+- CI-002DV remotely exercised the safe diagnostic path. It produced
+  `unknown_safe_error`; diagnostics and deterministic failure publication were
+  safe and reliable, with no observed secret exposure, but the result is
+  inconclusive and CI-003 remains blocked pending CI-002D2 refinement.
 
 Recommended order:
 
-1. CI-002DV — post-merge verification of safe invocation diagnostics.
+1. CI-002D2 — refine safe diagnostics for `unknown_safe_error`.
 2. CI-003 — Routed Claude Reviews (blocked until invocation reliability is proven).
 3. PR-007 — Narrow Profile Message Consumer Imports (deferred).
 
