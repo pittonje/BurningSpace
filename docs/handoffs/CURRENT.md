@@ -1,82 +1,40 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-07-11
-Updated by: Claude — CI-002D2 planning complete
+Updated by: Claude — CI-002QAV verification prepared
 
 ## Repository state
 
-- Base branch: `main`
-- Active branch: `main` (planning-only documentation; no implementation
-  branch created yet)
-- Upstream: `origin/main`; the planning commit is local-only pending Product
-  Architect review (not pushed, per the CI-002D2 planning brief)
-- Stable checkpoint before this task: `829007ae9e78dee87b22017bd39fa3e0d9cf3d28`
-  (PR #18 merge commit)
-- Pull request: None for CI-002D2 (planning phase; no PR is opened)
+- Base branch: `main` (origin at `829007a`; local main additionally carries
+  planning commit `00788f6`, included in this branch)
+- Active branch: `ci/reverify-full-claude-qa`
+- Pull request: to be recorded after creation
 
 ## Current task
 
-- Task ID: `CI-002D2`
-- Task title: Isolate Claude Invocation Failure
-- Task file: `docs/tasks/ci-002d2-isolate-claude-invocation-failure.md`
-- Analysis: `docs/reviews/ci-002d2-invocation-analysis.md`
-- Status: Planning complete, implementation not started
+- Task ID: `CI-002QAV`
+- Task title: Re-verify Full Claude QA
+- Task file: `docs/tasks/ci-002qav-reverify-full-claude-qa.md`
+- Status: Awaiting remote full-QA verification
 
-## Selected experiment
+## Context
 
-Single variable: **remove `--json-schema` from `claude_args`** in
-`.github/workflows/claude-qa-review-pilot.yml`, changing nothing else.
-Rationale: it is the only invocation input present in every failing run
-(one turn, zero cost, `is_error: true`) and absent from every known-good run
-(CI-002V, 18–19 turns, non-zero cost) at identical action SHA, CLI version,
-agent, tool mechanism, and model alias. Static analysis this session
-additionally verified: `claude_args` parse into exactly four clean
-flag/value pairs, the 609-byte schema is valid JSON, and `--json-schema` is
-a documented flag of CLI 2.1.207 (identical local version checked) — so the
-suspect is the flag's runtime path, not syntax, transport, or flag
-existence. The workflow's own validator remains the authoritative output
-gate, so removing the schema weakens no security boundary and preserves the
-one-comment deterministic publication contract in every outcome.
+The Product Architect decided to retain the full Claude QA workflow
+(`--agent qa-reviewer` + `--json-schema` + read-only tools + deterministic
+validation/publication). The previous one-turn, zero-cost failures are
+believed to have coincided with exhausted Claude token availability. This
+documentation-only PR exercises the unchanged trusted workflow on `main`
+now that token availability has returned.
 
-## Files created
-
-- `docs/tasks/ci-002d2-isolate-claude-invocation-failure.md`
-- `docs/reviews/ci-002d2-invocation-analysis.md`
-
-## Files modified
-
-- `docs/handoffs/CURRENT.md` (this file)
-
-No workflow changes have been made. `PROJECT_CONTEXT.md` is unchanged
-(planning produces no durable verified facts yet).
-
-## Validation
-
-| Check | Result |
-|---|---|
-| `git diff --check` | Clean |
-| Workflow YAML parse (local PyYAML) | Pass (read-only validation; file unchanged) |
-| `claude_args` token reconstruction | Pass — four flag/value pairs |
-| JSON Schema parse | Pass — valid 609-byte object schema |
-| Forbidden-path diffs | Empty |
-
-Build/gameplay diagnostics intentionally not run: no executable code changed.
-
-## Preserved invariants
-
-- CI-001, runtime, packages, manifests, lockfile, reviewer definitions:
-  unchanged.
-- No secret accessed or exposed; local Claude settings untouched.
-- CI-003 remains blocked; PR-007 remains deferred.
-
-## Open blockers and decisions
-
-- None for planning. The experiment itself requires Product Architect
-  authorization before any workflow edit.
+- Workflow changes in this task: **none**.
+- PR #19 (CI-002D2 schema-removal experiment) remains open and unmerged;
+  its disposition depends on this verification's result: success supersedes
+  it (close without merging); repeated immediate failure keeps it available.
+- CI-003 remains blocked. PR-007 remains deferred.
 
 ## Next safe action
 
-Product Architect review of the selected single-variable experiment
-(remove `--json-schema`), then a scoped implementation task on a dedicated
-branch with its own PR, post-merge diagnostic run, and CI-002D2V evidence
-recording. Do not start CI-003.
+Observe CI-001 and the full Claude QA run on this PR, record safe evidence
+in `docs/reviews/ci-002qav-full-qa-verification.md`, classify the result
+(Full QA restored / Full QA still failing / Inconclusive), and act per the
+task file's decision rules. Do not merge the verification PR.
