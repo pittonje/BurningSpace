@@ -1,0 +1,81 @@
+name: Claude QA Review Pilot
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+concurrency:
+  group: claude-qa-pilot-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  qa-review:
+    if: >
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login == github.repository_owner &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Run Claude QA reviewer
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          track_progress: "false"
+          use_sticky_comment: "false"
+          prompt: |
+            You are running as the read-only qa-reviewer agent for the
+            BurningSpace repository, invoked automatically by the CI-002
+            Claude QA Review Pilot workflow on pull request
+            #${{ github.event.pull_request.number }}.
+
+            Before reviewing:
+            1. Read PROJECT_CONTEXT.md.
+            2. Read AGENTS.md.
+            3. Read docs/handoffs/CURRENT.md.
+            4. Read the active task file referenced there, if one exists.
+
+            Then:
+            5. Run `gh pr view ${{ github.event.pull_request.number }}` and
+               `gh pr diff ${{ github.event.pull_request.number }}` to
+               inspect this pull request's description and diff.
+            6. Review the diff against the active task file's scope,
+               allowed/forbidden files, and acceptance criteria.
+
+            Strict rules:
+            - Do not edit, create, or delete any file.
+            - Do not create commits.
+            - Do not push.
+            - Do not implement fixes.
+            - Do not run destructive commands.
+            - Do not expand task scope beyond reviewing this pull request.
+
+            Finally, post exactly one top-level pull request comment with
+            `gh pr comment ${{ github.event.pull_request.number }} --body
+            "<review>"` containing exactly these four sections, in this
+            order, and nothing else:
+
+            ## Blockers
+            ## Important suggestions
+            ## Minor suggestions
+            ## Approval status
+
+            Do not post more than one comment. Do not use inline review
+            comments.
+          claude_args: |
+            --agent qa-reviewer
+            --allowedTools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*)"
+            --disallowedTools "Write,Edit,NotebookEdit"

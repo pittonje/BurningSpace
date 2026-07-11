@@ -368,12 +368,22 @@ Completed workflow-validation work:
 - Historical documents that called the narrow profile import task PR-006 are superseded by the confirmed Product Architect decision below.
 - PR-006 is complete.
 
+Completed CI-workflow-baseline work:
+
+- CI-001 — Core Pull Request Checks
+- Branch: `ci/core-pr-checks`
+- PR [#11](https://github.com/pittonje/BurningSpace/pull/11) was merged into `main` as `e7ecefa`.
+- `.github/workflows/pr-checks.yml` is active and runs on pull-request open/update: `npm ci`, `npm run build`, `npm run typecheck`, `npm run check:protocol-profile`, the network callback diagnostic, the movement diagnostic, and the combat diagnostic.
+- Node.js 22 is used (no `engines`, `.nvmrc`, `.node-version`, or Volta evidence exists anywhere in the repository).
+- No Claude integration, secrets, runtime changes, dependency changes, protocol changes, or gameplay changes were introduced.
+- Local checks and GitHub Actions both passed; Security, QA, and Architecture reviews approved.
+- CI-001 is complete.
+
 Recommended order:
 
-1. CI-001 — Core Pull Request Checks.
-2. CI-002 — Claude Review Pilot.
-3. CI-003 — Routed Claude Reviews.
-4. PR-007 — Narrow Profile Message Consumer Imports.
+1. CI-002 — Claude Review Pilot.
+2. CI-003 — Routed Claude Reviews.
+3. PR-007 — Narrow Profile Message Consumer Imports.
 
 Any implementation PR must define a narrow scope and explicit non-goals.
 
