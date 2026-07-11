@@ -295,20 +295,30 @@ PR-001 — Structure Foundation & Agent Workflow:
 - Five reviewers reported no confirmed blockers.
 - Branch `feature/project-bootstrap` is pushed to `origin/feature/project-bootstrap`.
 - Commit `db3242d` contains the main PR-001 structure and workflow changes.
-- PR [#4](https://github.com/pittonje/BurningSpace/pull/4) is open against `main` and awaiting final review and merge.
+- PR [#4](https://github.com/pittonje/BurningSpace/pull/4) was merged into `main` as `2b61d80`.
+- PR-001 is complete.
 - No runtime gameplay files were intentionally modified.
 
 Known follow-ups include real use of `PROTOCOL_VERSION`, incremental shared/protocol/balance/config migration, stronger technical guardrails for Bash-enabled reviewers, a visual style/faction identity brief, and dependency audit review as a separate task.
 
 ## 12. Next recommended PRs
 
-Keep names flexible while preserving the order:
+Current planning work:
 
-1. PR-002 — Review archive and project-context verification, if needed; no runtime changes.
-2. PR-003 — Incremental protocol/balance/config migration from `packages/shared`.
-3. PR-004 — Server-side campaign lifecycle skeleton.
-4. PR-005 — World graph config loader.
-5. PR-006 — Persistent campaign storage planning.
+- PR-002 — Shared Package Boundary Audit & Migration Plan
+- Branch: `planning/shared-package-boundary-audit`
+- Scope: documentation, dependency audit, ownership classification, and migration planning only
+- PR: [#5](https://github.com/pittonje/BurningSpace/pull/5), open and awaiting human review
+- Current state: 44 public shared exports inventoried; build and typecheck pass; no runtime migration or runtime source changes
+
+Recommended order after the audit:
+
+1. PR-003 — Protocol Compatibility Exports: Profile Messages.
+2. A coordinated profile-protocol consumer cutover after compatibility is proven.
+3. Incremental balance migration with exact value-parity checks.
+4. Incremental world topology/config migration with behavior-parity checks.
+5. Server-side campaign lifecycle skeleton only after package boundaries stabilize.
+6. Persistent campaign storage planning.
 
 Any implementation PR must define a narrow scope and explicit non-goals.
 
