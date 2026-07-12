@@ -1,8 +1,8 @@
 import { Client, Room, getStateCallbacks } from 'colyseus.js';
 import type { MapSchema } from '@colyseus/schema';
 import {
-  ClientMessages as ProfileClientMessages,
-  ServerMessages as ProfileServerMessages,
+  ProfileClientMessages,
+  ProfileServerMessages,
   type JoinMode,
   type JoinRequest,
   type ProfileAcceptedMessage,
