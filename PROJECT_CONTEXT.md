@@ -403,11 +403,39 @@ CI-002R — Deterministic Claude QA Comment Delivery (merged; diagnostic follow-
 - CI-002DV remotely exercised the safe diagnostic path. It produced
   `unknown_safe_error`; diagnostics and deterministic failure publication were
   safe and reliable, with no observed secret exposure, but the result is
-  inconclusive and CI-003 remains blocked pending CI-002D2 refinement.
+  inconclusive and CI-003 remains blocked pending further diagnosis.
+- CI-002QAV re-verified the unchanged full QA workflow after suspecting
+  exhausted Claude token availability. That hypothesis was **not**
+  supported: the run completed 25 genuine turns at non-trivial cost with
+  `is_error: false`, yet `structured_output` was still absent. The Action's
+  own log explicitly stated the reason: `--json-schema was provided but
+  Claude did not return structured_output`.
+- CI-002D3 removed only nonessential JSON Schema constraints (`maxItems`,
+  `maxLength`, `pattern`), preserving the six-field output contract and the
+  unchanged, independently authoritative deterministic validator.
+  CI-002D3V verified this simplification post-merge: **the simplified
+  schema was exonerated** — a second genuine multi-turn run (18 turns,
+  non-trivial cost, `is_error: false`) still produced no
+  `structured_output`, with the identical explicit Action error and safe
+  diagnostic category (`structured_output_error`) as before simplification.
+- CI-AUDIT-001 (full system audit) found the actual root cause: the
+  `qa-reviewer` agent definition declares an explicit `tools:` allowlist
+  that implicitly excludes the Claude Code CLI's internal `StructuredOutput`
+  tool unless named — any agent with an explicit tool list combined with
+  `--json-schema` cannot emit structured output regardless of schema
+  content, fully explaining every prior CI-002QAV/CI-002D3V observation.
+  Confirmed by eight local reproductions (E1–E8a) on the identical pinned
+  Claude Code CLI version (2.1.207); fixed by adding `StructuredOutput` to
+  the agent's `tools:` line. The audit also added explicit
+  prompt-injection-resistance instructions and a new 41-check deterministic
+  test suite (`.github/scripts/test-claude-qa-audit.py`). The fix is
+  locally proven but not yet live-verified — CI-AUDIT-001V (post-merge,
+  documentation-only) is required before it is considered fully resolved.
 
 Recommended order:
 
-1. CI-002D2 — refine safe diagnostics for `unknown_safe_error`.
+1. CI-AUDIT-001V — live post-merge verification of the structured-output
+   fix (after CI-AUDIT-001 merges).
 2. CI-003 — Routed Claude Reviews (blocked until invocation reliability is proven).
 3. PR-007 — Narrow Profile Message Consumer Imports (deferred).
 
