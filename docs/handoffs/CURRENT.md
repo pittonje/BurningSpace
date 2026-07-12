@@ -8,7 +8,8 @@ Updated by: Claude — CI-AUDIT-001 audit and hardening complete
 - Base branch: `main` (at `e94965c6012ee4d64b50125d29f6f0fc36844ee7`, PR #21
   merge commit)
 - Active branch: `ci/audit-system-hardening`
-- Pull request: to be recorded after creation
+- Pull request: [#25 — CI-AUDIT-001 — Full Claude QA System Audit and Hardening](https://github.com/pittonje/BurningSpace/pull/25)
+- Pull request state: Open, not merged
 
 ## Current task
 
