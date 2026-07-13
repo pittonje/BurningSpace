@@ -19,10 +19,19 @@ Read `PROJECT_CONTEXT.md` first, then this file, `docs/handoffs/CURRENT.md`, the
 ## Agent roles
 
 - Product Architect owns requirements and resolves design conflicts.
-- Codex is the primary implementer.
+- Codex is the sole production-code writer. Other agents prepare, design tests, review, validate, or report.
 - Claude reviewers are read-only by default and report findings rather than editing.
 - The Visual Design Lead owns visual direction.
 - Graphics, VFX, and UI/UX agents stay within approved briefs and do not edit gameplay authority code.
+
+## Collaboration system
+
+- [Agent system](docs/agents/AGENT_SYSTEM.md)
+- [Risk-based routing](docs/agents/AGENT_ROUTING.md)
+- [Artifact contracts](docs/agents/ARTIFACT_CONTRACTS.md)
+- [Implementation Packet template](docs/tasks/IMPLEMENTATION_PACKET_TEMPLATE.md)
+- [Preparation Agent](.claude/agents/preparation-agent.md)
+- [Technical-debt register](docs/debt/TECHNICAL_DEBT.md)
 
 ## PR expectations
 
