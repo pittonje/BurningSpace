@@ -6,12 +6,18 @@ export default defineConfig({
     alias: {
       '@burningspace/shared': fileURLToPath(
         new URL('./packages/shared/src/index.ts', import.meta.url)
+      ),
+      '@burningspace/protocol': fileURLToPath(
+        new URL('./packages/protocol/src/index.ts', import.meta.url)
       )
     }
   },
   test: {
     environment: 'node',
-    include: ['apps/server/test/**/*.test.ts'],
+    include: [
+      'apps/server/test/**/*.test.ts',
+      'packages/protocol/test/**/*.test.ts'
+    ],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
