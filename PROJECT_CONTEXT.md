@@ -421,21 +421,31 @@ CI-002R — Deterministic Claude QA Comment Delivery (merged; diagnostic follow-
   Action error and safe diagnostic category (`structured_output_error`) as
   before simplification. Token exhaustion and the tested schema
   constraints are both ruled out as causes.
-- CI-AUDIT-001 (full system audit, not yet merged) found the actual root
-  cause: the `qa-reviewer` agent definition declares an explicit `tools:`
-  allowlist that implicitly excludes the Claude Code CLI's internal
-  `StructuredOutput` tool unless named — any agent with an explicit tool
-  list combined with `--json-schema` cannot emit structured output
-  regardless of schema content, fully explaining every prior
+- CI-AUDIT-001 (full system audit, merged into `main` as `de770d9`, PR
+  [#25](https://github.com/pittonje/BurningSpace/pull/25)) found the
+  confirmed root cause: the `qa-reviewer` agent definition declared an
+  explicit `tools:` allowlist that implicitly excluded the Claude Code
+  CLI's internal `StructuredOutput` tool unless named — any agent with an
+  explicit tool list combined with `--json-schema` cannot emit structured
+  output regardless of schema content, fully explaining every prior
   CI-002QAV/CI-002D3V observation and superseding CI-002D3V's originally
-  planned next step (removing `--agent` entirely). Confirmed by eight
-  local reproductions (E1–E8a) on the identical pinned Claude Code CLI
-  version (2.1.207); fixed by adding `StructuredOutput` to the agent's
-  `tools:` line. The audit also added explicit prompt-injection-resistance
-  instructions and a new 41-check deterministic test suite
-  (`.github/scripts/test-claude-qa-audit.py`). The fix is locally proven
-  but not yet live-verified — CI-AUDIT-001V (post-merge, documentation-
-  only) is required before it is considered fully resolved.
+  planned next step (removing `--agent` entirely). Fixed by adding
+  `StructuredOutput` to the agent's `tools:` line; the audit also added
+  explicit prompt-injection-resistance instructions and a new 41-check
+  deterministic test suite (`.github/scripts/test-claude-qa-audit.py`).
+- CI-AUDIT-001V (PR [#27](https://github.com/pittonje/BurningSpace/pull/27),
+  documentation-only, not yet merged) **live-verified the fix on trusted
+  `main`: Full Claude QA restored.** Run `29250081295` on a normal PR
+  produced `structured_output` present (safe diagnostic category
+  `success` — the first time this category has ever been observed in the
+  entire CI-002 lineage), the deterministic validator accepted it, and
+  exactly one normal four-heading QA comment was published (no
+  sanitized-failure comment), correctly bound to the tested HEAD SHA. 20
+  turns, $0.3914 cost, `is_error: false` — comparable scale to every
+  prior run, confirming this is not a token-availability artifact.
+  Read-only and secret-safety boundaries held. Full Claude QA is now
+  **ready for controlled use**. CI-003 remains blocked until the Product
+  Architect explicitly authorizes it.
 
 HYG-001 — Repository Hygiene Foundation (merged):
 
@@ -473,9 +483,9 @@ TEST-001 — Unit Test Foundation (merged):
 
 Recommended order:
 
-1. CI-AUDIT-001V — live post-merge verification of the structured-output
-   fix (after CI-AUDIT-001 merges).
-2. CI-003 — Routed Claude Reviews (blocked until invocation reliability is proven).
+1. Product Architect review and authorization decision for CI-003 —
+   Routed Claude Reviews (invocation reliability is now proven; CI-003
+   itself remains blocked pending explicit authorization).
 
 Any implementation PR must define a narrow scope and explicit non-goals.
 
