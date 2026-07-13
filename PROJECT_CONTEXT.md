@@ -413,22 +413,69 @@ CI-002R — Deterministic Claude QA Comment Delivery (merged; diagnostic follow-
 - CI-002D3 removed only nonessential JSON Schema constraints (`maxItems`,
   `maxLength`, `pattern`), preserving the six-field output contract and the
   unchanged, independently authoritative deterministic validator.
-  CI-002D3V verified this simplification post-merge: **the simplified
-  schema is exonerated** — a second genuine multi-turn run (18 turns,
-  non-trivial cost, `is_error: false`) still produced no
-  `structured_output`, with the identical explicit Action error and safe
-  diagnostic category (`structured_output_error`) as before simplification.
-  Token exhaustion and the tested schema constraints are both ruled out as
-  causes. The next candidate experiment is removing only `--agent
-  qa-reviewer`, keeping the (simplified) `--json-schema` and all other
-  invocation variables unchanged.
+  CI-002D3V verified this simplification post-merge (PR
+  [#22](https://github.com/pittonje/BurningSpace/pull/22), merged into
+  `main` as `3c36a47`): **the simplified schema is exonerated** — a second
+  genuine multi-turn run (18 turns, non-trivial cost, `is_error: false`)
+  still produced no `structured_output`, with the identical explicit
+  Action error and safe diagnostic category (`structured_output_error`) as
+  before simplification. Token exhaustion and the tested schema
+  constraints are both ruled out as causes.
+- CI-AUDIT-001 (full system audit, not yet merged) found the actual root
+  cause: the `qa-reviewer` agent definition declares an explicit `tools:`
+  allowlist that implicitly excludes the Claude Code CLI's internal
+  `StructuredOutput` tool unless named — any agent with an explicit tool
+  list combined with `--json-schema` cannot emit structured output
+  regardless of schema content, fully explaining every prior
+  CI-002QAV/CI-002D3V observation and superseding CI-002D3V's originally
+  planned next step (removing `--agent` entirely). Confirmed by eight
+  local reproductions (E1–E8a) on the identical pinned Claude Code CLI
+  version (2.1.207); fixed by adding `StructuredOutput` to the agent's
+  `tools:` line. The audit also added explicit prompt-injection-resistance
+  instructions and a new 41-check deterministic test suite
+  (`.github/scripts/test-claude-qa-audit.py`). The fix is locally proven
+  but not yet live-verified — CI-AUDIT-001V (post-merge, documentation-
+  only) is required before it is considered fully resolved.
+
+HYG-001 — Repository Hygiene Foundation (merged):
+
+- PR [#23](https://github.com/pittonje/BurningSpace/pull/23) merged into
+  `main` as `3cb8689`. Adds `.gitattributes` (LF normalization for source/
+  docs/config/PowerShell/shell files, CRLF for Windows batch/command
+  files, binary marking for common media/archive/font/PDF/audio formats)
+  and `.editorconfig` (UTF-8, final newline, LF, two-space indent by
+  default), plus a dependency-free safe source-archive script
+  (`scripts/create-source-archive.mjs`,
+  `docs/operations/source-archives.md`) that excludes `.git`,
+  dependencies, build output, logs, temporary files, and local Claude
+  settings. No runtime, dependency, or workflow changes.
+
+PR-007 — Narrow Profile Protocol Imports (merged):
+
+- PR [#24](https://github.com/pittonje/BurningSpace/pull/24) merged into
+  `main` as `e69a38d`. `NetworkClient` and `BattleRoom` now import
+  `ProfileClientMessages`/`ProfileServerMessages` directly from
+  `@burningspace/protocol` instead of the broad `ClientMessages`/
+  `ServerMessages` aliases; `packages/shared` remains the canonical
+  contract owner and `packages/protocol` remains the transitional
+  re-export boundary. No wire-format, validation, or gameplay change.
+
+TEST-001 — Unit Test Foundation (merged):
+
+- PR [#26](https://github.com/pittonje/BurningSpace/pull/26) merged into
+  `main` as `c0cb629`. Adds Vitest 3.2.4 as the only new root development
+  dependency (pinned for the existing Vite 5 workspace) plus a root
+  `vitest.config.ts` and two deterministic server-side test files
+  covering player-input validation and combat damage. **2 files / 15
+  tests** pass repeatably (`npm test`, verified twice). No runtime
+  behavior change; existing diagnostic scripts remain the broader smoke
+  checks.
 
 Recommended order:
 
-1. CI-002D4 — isolate the Claude agent definition (remove only `--agent
-   qa-reviewer`, pending Product Architect authorization).
+1. CI-AUDIT-001V — live post-merge verification of the structured-output
+   fix (after CI-AUDIT-001 merges).
 2. CI-003 — Routed Claude Reviews (blocked until invocation reliability is proven).
-3. PR-007 — Narrow Profile Message Consumer Imports (deferred).
 
 Any implementation PR must define a narrow scope and explicit non-goals.
 
