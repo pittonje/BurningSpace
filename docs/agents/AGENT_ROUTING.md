@@ -52,3 +52,7 @@ Allowed levels are `none`, `low`, `medium`, and `high`.
 ## Current limitation
 
 Routing is documentation-only. No workflow, label, bot, or automatic agent invocation implements this table yet.
+
+## Preparation Agent model routing
+
+Preparation model selection is risk-based. Sonnet is the current default for medium- and high-risk preparation, while Haiku is limited to low-risk mechanical preparation. Architecture uncertainty routes to the Product Architect, and model escalation cannot authorize scope expansion. See the [Preparation Agent Guide](PREPARATION_AGENT_GUIDE.md).
