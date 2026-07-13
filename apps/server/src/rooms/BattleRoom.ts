@@ -1,8 +1,8 @@
 import { performance } from 'node:perf_hooks';
 import { Client, Room } from 'colyseus';
 import {
-  ClientMessages as ProfileClientMessages,
-  ServerMessages as ProfileServerMessages,
+  ProfileClientMessages,
+  ProfileServerMessages,
   type JoinMode,
   type JoinRequest,
   type ProfileAcceptedMessage,
