@@ -10,7 +10,7 @@ The repository had diagnostic scripts but no formal test framework, root test co
 
 ## Test framework decision
 
-Vitest 4.1.10 is added as the only new root development dependency. It supports the repository's ESM TypeScript setup and runs the selected source modules directly in a Node environment. A test-only alias resolves `@burningspace/shared` to its canonical source entry because the package runtime export targets build output that may not exist before a test run.
+Vitest 3.2.4 is added as the only new root development dependency and pinned exactly for compatibility with the existing Vite 5 workspace. It supports the repository's ESM TypeScript setup and runs the selected source modules directly in a Node environment. A test-only alias resolves `@burningspace/shared` to its canonical source entry because the package runtime export targets build output that may not exist before a test run.
 
 ## Selected test targets
 
