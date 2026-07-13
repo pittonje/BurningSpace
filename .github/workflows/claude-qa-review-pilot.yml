@@ -25,16 +25,235 @@ jobs:
       github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout trusted PR-risk classifier
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        continue-on-error: true
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: trusted-ci
+
+      - name: Determine trusted PR-risk routing
+        id: routing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set +e
+
+          # Fail closed before any network, JSON, metadata, or classifier work.
+          printf '%s\n' \
+            'qa_required=true' \
+            'risk_level=unknown' \
+            'risk_areas=[]' \
+            'manual_reviewers_required=[]' \
+            'post_merge_verification_required=false' \
+            'reason_codes=["classifier_error"]' \
+            'tested_base_sha=unavailable' \
+            'tested_head_sha=unavailable' >> "$GITHUB_OUTPUT"
+
+          qa_required=true
+          risk_level=unknown
+          risk_areas='[]'
+          manual_reviewers_required='[]'
+          post_merge_verification_required=false
+          reason_codes='["classifier_error"]'
+          tested_base_sha=unavailable
+          tested_head_sha=unavailable
+          failure_reason=classifier_error
+
+          route_pr() {
+            metadata_file="$RUNNER_TEMP/pr-metadata.json"
+            pages_file="$RUNNER_TEMP/pr-files-pages.json"
+            changes_file="$RUNNER_TEMP/pr-files.json"
+            classifier_result="$RUNNER_TEMP/pr-risk-result.json"
+
+            if ! gh api \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "/repos/$REPO/pulls/$PR_NUMBER" \
+              --jq '{base_sha:.base.sha,head_sha:.head.sha,changed_files:.changed_files}' \
+              > "$metadata_file"; then
+              failure_reason=retrieval_error
+              return 1
+            fi
+
+            if ! gh api --paginate --slurp \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "/repos/$REPO/pulls/$PR_NUMBER/files?per_page=100" \
+              > "$pages_file"; then
+              failure_reason=retrieval_error
+              return 1
+            fi
+
+            if ! jq -e '
+              type == "array" and
+              all(.[]; type == "array") and
+              all(.[][];
+                type == "object" and
+                (.filename | type == "string") and
+                (.status | type == "string" and length > 0) and
+                ((has("previous_filename") | not) or
+                 .previous_filename == null or
+                 (.previous_filename | type == "string")))
+            ' "$pages_file" > /dev/null; then
+              failure_reason=retrieval_error
+              return 1
+            fi
+
+            if ! jq '[.[][] | {
+              filename: .filename,
+              previous_filename: (.previous_filename // null),
+              status: .status
+            }]' "$pages_file" > "$changes_file"; then
+              failure_reason=retrieval_error
+              return 1
+            fi
+
+            if ! jq -e '
+              type == "object" and
+              (.base_sha | type == "string") and
+              (.head_sha | type == "string") and
+              (.changed_files | type == "number" and . >= 0 and floor == .)
+            ' "$metadata_file" > /dev/null; then
+              failure_reason=retrieval_error
+              return 1
+            fi
+
+            live_base_sha=$(jq -r '.base_sha' "$metadata_file")
+            live_head_sha=$(jq -r '.head_sha' "$metadata_file")
+            changed_files=$(jq -r '.changed_files' "$metadata_file")
+            decoded_count=$(jq -r 'length' "$changes_file")
+
+            if [[ ! "$live_base_sha" =~ ^[0-9a-f]{40}$ ]] ||
+               [[ ! "$live_head_sha" =~ ^[0-9a-f]{40}$ ]] ||
+               [[ ! "$EVENT_BASE_SHA" =~ ^[0-9a-f]{40}$ ]] ||
+               [[ ! "$EVENT_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              failure_reason=retrieval_error
+              return 1
+            fi
+
+            if [ "$live_base_sha" != "$EVENT_BASE_SHA" ] ||
+               [ "$live_head_sha" != "$EVENT_HEAD_SHA" ]; then
+              failure_reason=stale_pr_state
+              return 1
+            fi
+
+            if [ "$changed_files" -gt 3000 ] ||
+               [ "$decoded_count" -ne "$changed_files" ]; then
+              failure_reason=retrieval_error
+              return 1
+            fi
+
+            if ! python3 trusted-ci/.github/scripts/classify-pr-risk.py \
+              --input "$changes_file" \
+              --expected-count "$changed_files" \
+              --base-sha "$live_base_sha" \
+              --head-sha "$live_head_sha" \
+              > "$classifier_result" 2> "$RUNNER_TEMP/classifier-error.txt"; then
+              failure_reason=classifier_error
+              return 1
+            fi
+
+            if ! jq -e --arg base "$live_base_sha" --arg head "$live_head_sha" '
+              type == "object" and
+              (keys == ["manual_reviewers_required",
+                        "post_merge_verification_required",
+                        "qa_required",
+                        "reason_codes",
+                        "risk_areas",
+                        "risk_level",
+                        "tested_base_sha",
+                        "tested_head_sha"]) and
+              (.qa_required | type == "boolean") and
+              (.post_merge_verification_required | type == "boolean") and
+              (.risk_level | IN("none", "low", "medium", "high", "unknown")) and
+              (.risk_areas | type == "array" and length <= 8 and
+                length == (unique | length) and
+                all(.[]; IN("workflow_security", "dependency", "test_only",
+                           "documentation_only", "network_room",
+                           "gameplay_authority", "protocol_api", "unknown"))) and
+              (.reason_codes | type == "array" and length > 0 and length <= 12 and
+                length == (unique | length) and
+                all(.[]; IN("docs_only", "tests_only", "docs_and_tests_only",
+                           "production_change", "workflow_security_change",
+                           "dependency_change", "unknown_path", "empty_change_set",
+                           "malformed_path", "retrieval_error", "classifier_error",
+                           "stale_pr_state"))) and
+              (.manual_reviewers_required | type == "array" and length <= 6 and
+                length == (unique | length) and
+                all(.[]; IN("Documentation Keeper", "Test Architect", "API Guardian",
+                           "Multiplayer Reviewer", "Security/CI Reviewer",
+                           "Dependency Guardian"))) and
+              .tested_base_sha == $base and
+              .tested_head_sha == $head
+            ' "$classifier_result" > /dev/null; then
+              failure_reason=classifier_error
+              return 1
+            fi
+
+            qa_required=$(jq -r '.qa_required | tostring' "$classifier_result")
+            risk_level=$(jq -r '.risk_level' "$classifier_result")
+            risk_areas=$(jq -c '.risk_areas' "$classifier_result")
+            manual_reviewers_required=$(jq -c '.manual_reviewers_required' "$classifier_result")
+            post_merge_verification_required=$(jq -r '.post_merge_verification_required | tostring' "$classifier_result")
+            reason_codes=$(jq -c '.reason_codes' "$classifier_result")
+            tested_base_sha=$(jq -r '.tested_base_sha' "$classifier_result")
+            tested_head_sha=$(jq -r '.tested_head_sha' "$classifier_result")
+
+            printf '%s\n' \
+              "qa_required=$qa_required" \
+              "risk_level=$risk_level" \
+              "risk_areas=$risk_areas" \
+              "manual_reviewers_required=$manual_reviewers_required" \
+              "post_merge_verification_required=$post_merge_verification_required" \
+              "reason_codes=$reason_codes" \
+              "tested_base_sha=$tested_base_sha" \
+              "tested_head_sha=$tested_head_sha" >> "$GITHUB_OUTPUT"
+            return 0
+          }
+
+          route_pr
+          route_status=$?
+          if [ "$route_status" -ne 0 ]; then
+            case "$failure_reason" in
+              retrieval_error) reason_codes='["retrieval_error"]' ;;
+              stale_pr_state) reason_codes='["stale_pr_state"]' ;;
+              *) reason_codes='["classifier_error"]' ;;
+            esac
+            printf 'reason_codes=%s\n' "$reason_codes" >> "$GITHUB_OUTPUT"
+          fi
+
+          {
+            echo '## Trusted PR-risk routing'
+            echo
+            echo "- QA required: $qa_required"
+            echo "- Risk level: $risk_level"
+            echo "- Risk areas: $risk_areas"
+            echo "- Manual reviewers: $manual_reviewers_required"
+            echo "- Post-merge verification: $post_merge_verification_required"
+            echo "- Reason codes: $reason_codes"
+            echo "- Tested base SHA: $tested_base_sha"
+            echo "- Tested head SHA: $tested_head_sha"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
       - name: Checkout repository
+        if: steps.routing.outputs.qa_required != 'false'
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       - name: Run Claude QA reviewer
         id: claude_review
+        if: steps.routing.outputs.qa_required != 'false'
         uses: anthropics/claude-code-action@e90deca47693f9457b72f2b53c17d7c445a87342 # v1.0.171
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           track_progress: "false"
           use_sticky_comment: "false"
+          show_full_output: false
           prompt: |
             You are running as the read-only qa-reviewer agent for the
             BurningSpace repository, invoked automatically by the CI-002R
@@ -105,7 +324,7 @@ jobs:
             --json-schema '{"type":"object","additionalProperties":false,"required":["blockers","important_suggestions","minor_suggestions","approval_status","reviewed_commit","summary"],"properties":{"blockers":{"type":"array","items":{"type":"string"}},"important_suggestions":{"type":"array","items":{"type":"string"}},"minor_suggestions":{"type":"array","items":{"type":"string"}},"approval_status":{"type":"string"},"reviewed_commit":{"type":"string"},"summary":{"type":"string"}}}'
 
       - name: Summarize safe Claude invocation diagnostic
-        if: always()
+        if: always() && steps.routing.outputs.qa_required != 'false'
         env:
           EXECUTION_FILE: ${{ steps.claude_review.outputs.execution_file }}
           RUN_ID: ${{ github.run_id }}
@@ -122,7 +341,7 @@ jobs:
 
       - name: Validate and render QA review
         id: render_review
-        if: always()
+        if: always() && steps.routing.outputs.qa_required != 'false'
         env:
           STRUCTURED_OUTPUT: ${{ steps.claude_review.outputs.structured_output }}
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
@@ -341,7 +560,7 @@ jobs:
           echo "exit_code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Publish QA review comment
-        if: always()
+        if: always() && steps.routing.outputs.qa_required != 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
