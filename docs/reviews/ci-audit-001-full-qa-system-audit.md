@@ -297,3 +297,46 @@ clarity are hardened; a real automated test suite now exists where none
 did before. The one open item is mandatory: a live post-merge run
 (CI-AUDIT-001V) to confirm the fix in production, since this PR's own
 workflow change cannot prove itself.
+
+## Reconciliation with current main (2026-07-13)
+
+Between this audit's original commits and its review, four PRs merged
+into `main` ahead of it: PR #22 (CI-002D3V — confirmed the simplified
+schema was exonerated, now the canonical conclusion this audit's F-1
+supersedes with the actual root cause), PR #23 (HYG-001 — repository
+hygiene: `.gitattributes`, `.editorconfig`, safe source-archive tooling),
+PR #24 (PR-007 — narrowed `NetworkClient`/`BattleRoom` profile imports to
+`packages/protocol`), and PR #26 (TEST-001 — Vitest 3.2.4 unit-test
+foundation, 15 deterministic server tests).
+
+`origin/main` was merged into this branch with `git merge --no-ff`
+(commit `89dabe8`), preserving full history of all four PRs. The merge
+conflicted only in `PROJECT_CONTEXT.md` and `docs/handoffs/CURRENT.md`
+(both mutable/durable documentation files expected to diverge across
+concurrent branches); both were resolved by hand to keep every fact from
+both sides rather than choosing one side wholesale, and
+`PROJECT_CONTEXT.md` was additionally updated to record the HYG-001/
+PR-007/TEST-001 durable facts, which neither branch had previously
+captured.
+
+None of the four merged PRs touch Claude QA infrastructure: forbidden-
+path diffs against `origin/main` for `apps/**`, `packages/**`,
+`package.json`, `package-lock.json`, `vitest.config.ts`, `assets/**`,
+`scripts/create-source-archive.mjs`,
+`docs/operations/source-archives.md`, and the TEST-001/PR-007 task files
+are all empty after reconciliation. `.gitattributes`'s generic
+`* text=auto` rule does not disrupt the audit's Python script (already
+LF, no CR bytes); TEST-001's Vitest dependency has no bearing on the
+Claude Code CLI invocation this audit reasons about.
+
+All 41 audit checks pass unchanged after reconciliation, confirming F-1/
+F-2/F-3 remain exactly as implemented. `npm run build` and
+`npm run typecheck` both pass (exit 0, only the pre-existing chunk-size
+warning). `npm test` could not be exercised locally — the `vitest` binary
+was absent from this environment's `node_modules` despite the directory
+existing, a pre-existing environment gap unrelated to this branch; no
+`npm install` was run per this task's constraints, and CI-001 will
+validate `npm test` remotely on the updated PR.
+
+Live post-merge verification (CI-AUDIT-001V) remains required and
+unstarted; this reconciliation changes no conclusion above.
