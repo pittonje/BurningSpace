@@ -68,7 +68,13 @@ Default outputs require QA with `unknown` risk, empty bounded collections, `clas
 
 ## Self-modifying limitation
 
-The CI-003 implementation pull request cannot demonstrate a live skip because its base does not contain the trusted classifier. Its expected live result is `classifier_error`, `qa_required=true`, execution of the full existing Claude pipeline, and a successful job. This fail-safe result is evidence of the trust boundary, not a routing defect.
+Workflow-changing pull requests cannot use the modified Claude workflow as proof of their own correctness. Anthropic Action requires the workflow file in a pull request to have identity with the default-branch version; when the workflow differs, its anti-tamper validation prevents Claude execution.
+
+On PR #32, implementation HEAD `0203f65` before this documentation correction produced the expected trusted-base routing result because the old base did not contain the classifier: `qa_required=true`, `risk_level=unknown`, and `reason_codes=["classifier_error"]`. All five Phase-2 steps were activated, but Anthropic workflow-identity validation prevented Claude execution and produced no `execution_file`. The unchanged sanitizer, validator, and publisher chain then failed closed.
+
+CI-001 passed, including the deterministic classifier and workflow audits. The Claude QA failure is therefore a known self-modifying workflow limitation, not evidence that the classifier or routing logic failed. It does not constitute Claude QA approval.
+
+Acceptance of PR #32 requires deterministic CI-001, Product Architect review, the independent Security/CI challenge-review artifact, a narrowly scoped human merge exception, and mandatory CI-003V after merge. The exception applies only to the expected workflow-identity failure and does not authorize ignoring unrelated Claude QA failures.
 
 ## CI-003V requirement
 

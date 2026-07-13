@@ -8,15 +8,28 @@ Updated by: Codex — CI-003 implementation checkpoint
 - Base branch: `main` at `a7bcfed` (PR #31, AGENT-004, merged).
 - Active branch: `ci/risk-based-reviewer-routing`.
 - Active task: CI-003 — Risk-Based Reviewer Routing.
-- Pull request: to be opened from the active branch after local validation.
-- Merge state: not merged.
+- Pull request: [#32 — CI-003 — Risk-Based Reviewer Routing](https://github.com/pittonje/BurningSpace/pull/32).
+- Implementation HEAD before the documentation correction: `0203f65`.
+- Pull request state: open and mergeable; unstable only because Claude QA failed its expected workflow-identity check.
 
 ## Authorization and status
 
 - The Product Architect authorized CI-003 implementation after Preparation Agent review and an independent CI/security challenge.
+- The Product Architect accepted the implementation architecture and authorized a human merge exception limited to the expected Claude workflow-identity failure.
 - Implementation adds trusted-base, path-based routing for the existing Claude QA workflow.
 - CI-003 remains unverified until merge and successful completion of both CI-003V phases.
 - This task does not authorize dependency, Action, permission, runtime, agent-definition, or `PROJECT_CONTEXT.md` changes.
+
+## Validation state
+
+- CI-001: passed.
+- Claude QA: expected workflow-identity failure; Anthropic Action did not execute Claude because the pull request modifies its workflow relative to the default branch.
+- Classifier tests: 29/29 passed.
+- Vitest: 31/31 passed.
+- Build: passed.
+- Typecheck: passed.
+- QA workflow audit: passed.
+- Exactly eight CI-003 implementation-scope files changed.
 
 ## Security boundaries
 
@@ -30,9 +43,9 @@ Updated by: Codex — CI-003 implementation checkpoint
 ## Review routing
 
 - Deterministic classifier tests and the Claude QA workflow audit are required in CI-001.
-- Claude QA is expected to run on the CI-003 implementation PR through the fail-safe path because the old base lacks the trusted classifier.
-- Security/CI specialist review is manual and documented in `docs/reviews/ci-003-security-review.md`; no automated specialist reviewer is claimed.
-- Product Architect review is required before human merge. No agent may merge the pull request.
+- PR #32 emitted fail-safe `qa_required=true`, `risk_level=unknown`, and `reason_codes=["classifier_error"]`; all five Phase-2 steps were activated before workflow-identity validation prevented Claude execution.
+- Security/CI specialist review is manual and documented through the Fable challenge review and `docs/reviews/ci-003-security-review.md`; no automated specialist reviewer or Claude approval is claimed.
+- The human merge exception applies only to the expected workflow-identity failure. Unrelated Claude QA failures remain blocking, and no agent may merge the pull request.
 
 ## Post-merge verification
 
@@ -45,4 +58,9 @@ Do not call CI-003 verified and do not update `PROJECT_CONTEXT.md` before both p
 
 ## Next safe action
 
-Complete local validation, open the CI-003 pull request, observe CI-001 and Claude QA, obtain Product Architect review, and perform a human merge only after approval. Then execute CI-003V Phase A and Phase B.
+1. Verify the final documentation-only commit.
+2. Human-merge PR #32 under the narrowly authorized workflow-identity exception.
+3. Run CI-003V Phase A.
+4. Run CI-003V Phase B.
+
+`PROJECT_CONTEXT.md` must remain unchanged until both CI-003V phases pass.

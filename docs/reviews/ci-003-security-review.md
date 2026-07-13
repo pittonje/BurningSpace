@@ -49,6 +49,17 @@ Resolution: exactly five Phase-2 steps are gated. Checkout and Claude invocation
 
 Changed paths remain only in runner-temp JSON. The routing summary contains booleans, fixed risk words, fixed reviewer names, fixed reason codes, and validated SHAs. No new secret is introduced, and no permission is expanded.
 
+## Live PR #32 evidence and merge exception
+
+- The trusted classifier was absent from the old base as expected.
+- Routing emitted fail-safe `qa_required=true`, `risk_level=unknown`, and `reason_codes=["classifier_error"]`.
+- All five Phase-2 steps were activated.
+- Anthropic workflow-identity validation prevented Claude execution because PR #32 modifies `claude-qa-review-pilot.yml` relative to the default branch.
+- No `execution_file` was produced, and the unchanged sanitizer and publisher failed closed.
+- CI-001 passed, including all deterministic classifier and workflow audits.
+
+Fable challenge review and Product Architect review substitute only for this workflow-self-modification blind spot. They do not constitute Claude QA approval or an automated Security/CI Reviewer execution. A narrowly scoped human merge exception is authorized only for the expected workflow-identity failure; unrelated Claude QA failures remain blocking.
+
 ## Self-modifying limitation and CI-003V
 
-The implementation PR's old base lacks the trusted classifier, so fail-safe `classifier_error` and full QA execution are expected. This PR cannot prove the skip path. After merge, CI-003V Phase A must verify a real ordinary docs-only skip with no QA comment, and Phase B must verify a genuine QA-required PR with one SHA-bound valid comment and preserved stale-run protection. CI-003 must remain unverified until both phases pass.
+PR #32 cannot prove either live routing path through its modified workflow. After the authorized human merge exception, CI-003V Phase A must verify a real ordinary docs-only skip with no QA comment, and Phase B must verify a genuine QA-required PR with one SHA-bound valid comment and preserved stale-run protection. CI-003 remains unverified until both phases pass.
