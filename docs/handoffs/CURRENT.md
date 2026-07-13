@@ -1,35 +1,36 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-07-14
-Updated by: Codex — CI-003 implementation checkpoint
+Updated by: Codex — CI-003V Phase B verification candidate
 
 ## Repository state
 
-- Base branch: `main` at `a7bcfed` (PR #31, AGENT-004, merged).
-- Active branch: `ci/risk-based-reviewer-routing`.
-- Active task: CI-003 — Risk-Based Reviewer Routing.
-- Pull request: [#32 — CI-003 — Risk-Based Reviewer Routing](https://github.com/pittonje/BurningSpace/pull/32).
-- Implementation HEAD before the documentation correction: `0203f65`.
-- Pull request state: open and mergeable; unstable only because Claude QA failed its expected workflow-identity check.
+- Base branch: `main` at `a88e28d` (PR #33, CI-003V Phase A, merged).
+- Active branch: `docs/ci-003v-phase-b`.
+- Active task: CI-003V Phase B — QA-Required Routing Verification.
+- CI-003 implementation: merged through PR #32.
+- CI-003V Phase A: merged through PR #33.
+- Current pull request: Phase B live verification candidate to be opened from the active branch.
+- Verification state: Phase B pending live workflow evidence.
 
 ## Authorization and status
 
-- The Product Architect authorized CI-003 implementation after Preparation Agent review and an independent CI/security challenge.
-- The Product Architect accepted the implementation architecture and authorized a human merge exception limited to the expected Claude workflow-identity failure.
-- Implementation adds trusted-base, path-based routing for the existing Claude QA workflow.
-- CI-003 remains unverified until merge and successful completion of both CI-003V phases.
-- This task does not authorize dependency, Action, permission, runtime, agent-definition, or `PROJECT_CONTEXT.md` changes.
+- The Product Architect accepted the CI-003 architecture, and CI-003 is implemented on `main` through PR #32.
+- CI-003V Phase A is verified and merged through PR #33.
+- CI-003 status: implemented; Phase A verified; Phase B pending.
+- This operational handoff update is the genuine governance-documentation candidate for live Phase B verification.
+- This task does not authorize workflow, script, dependency, Action, permission, runtime, test, agent-definition, or `PROJECT_CONTEXT.md` changes.
 
 ## Validation state
 
-- CI-001: passed.
-- Claude QA: expected workflow-identity failure; Anthropic Action did not execute Claude because the pull request modifies its workflow relative to the default branch.
-- Classifier tests: 29/29 passed.
-- Vitest: 31/31 passed.
-- Build: passed.
-- Typecheck: passed.
-- QA workflow audit: passed.
-- Exactly eight CI-003 implementation-scope files changed.
+- Phase A classification: `documentation_only`.
+- Phase A `qa_required`: `false`.
+- Phase A CI-001: passed.
+- Phase A QA routing job: passed.
+- Phase A Claude-dependent steps: all five skipped.
+- Phase A QA comments: zero.
+- Phase B expected classification: `workflow_security`.
+- Phase B expected `qa_required`: `true`.
 
 ## Security boundaries
 
@@ -43,24 +44,24 @@ Updated by: Codex — CI-003 implementation checkpoint
 ## Review routing
 
 - Deterministic classifier tests and the Claude QA workflow audit are required in CI-001.
-- PR #32 emitted fail-safe `qa_required=true`, `risk_level=unknown`, and `reason_codes=["classifier_error"]`; all five Phase-2 steps were activated before workflow-identity validation prevented Claude execution.
-- Security/CI specialist review is manual and documented through the Fable challenge review and `docs/reviews/ci-003-security-review.md`; no automated specialist reviewer or Claude approval is claimed.
-- The human merge exception applies only to the expected workflow-identity failure. Unrelated Claude QA failures remain blocking, and no agent may merge the pull request.
+- Because `docs/handoffs/CURRENT.md` is governance documentation, Phase B must route through `workflow_security` with `qa_required=true`.
+- Expected Phase B evidence: all five Claude-dependent steps execute, exactly one deterministic QA comment is posted, `reviewed_commit` matches the live pull-request HEAD, and stale-run protection remains active.
+- Phase B is not yet verified, and no agent may merge the pull request.
 
 ## Post-merge verification
 
-CI-003V is mandatory and has two phases:
+CI-003V remains incomplete until Phase B succeeds:
 
-- Phase A: a real ordinary docs-only PR must report `qa_required=false`, correct tested SHAs, five skipped Phase-2 steps, a successful job, and zero QA comments.
-- Phase B: the next genuine QA-required PR must report `qa_required=true`, execute the full pipeline, post exactly one valid QA comment bound to live HEAD, and preserve stale-run protection.
+- Phase A: verified through PR #33 with `documentation_only`, `qa_required=false`, successful CI-001 and routing job, five skipped Claude-dependent steps, and zero QA comments.
+- Phase B: pending on this governance-documentation candidate; it must report `workflow_security`, `qa_required=true`, execute all five Claude-dependent steps, post exactly one valid QA comment bound to live HEAD, and preserve stale-run protection.
 
 Do not call CI-003 verified and do not update `PROJECT_CONTEXT.md` before both phases pass.
 
 ## Next safe action
 
-1. Verify the final documentation-only commit.
-2. Human-merge PR #32 under the narrowly authorized workflow-identity exception.
-3. Run CI-003V Phase A.
-4. Run CI-003V Phase B.
+1. Verify the single-file Phase B documentation commit.
+2. Open the Phase B pull request.
+3. Wait for CI-001 and the complete Claude QA pipeline.
+4. Confirm exactly one QA comment is bound to the live pull-request HEAD and stale-run protection remains active.
 
-`PROJECT_CONTEXT.md` must remain unchanged until both CI-003V phases pass.
+`PROJECT_CONTEXT.md` must remain unchanged until Phase B succeeds and is merged.
