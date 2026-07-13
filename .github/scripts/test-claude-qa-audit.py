@@ -64,6 +64,13 @@ def extract_block(text: str, header_re: str) -> str:
     return "\n".join(lines)
 
 
+def workflow_steps(text: str) -> dict[str, str]:
+    matches = re.finditer(
+        r"(?ms)^      - name: ([^\n]+)\n(.*?)(?=^      - name: |\Z)", text
+    )
+    return {match.group(1).strip(): match.group(0) for match in matches}
+
+
 def test_invocation_contract(text: str) -> None:
     args_block = extract_block(text, r"claude_args: \|\n")
     tokens = shlex.split(args_block)
@@ -86,9 +93,76 @@ def test_invocation_contract(text: str) -> None:
           set(schema["required"]) == expected and set(schema["properties"]) == expected)
     check("schema forbids additional properties", schema["additionalProperties"] is False)
 
-    check("show_full_output is not enabled", "show_full_output" not in text)
+    check("show_full_output remains exactly false",
+          text.count("show_full_output:") == 1
+          and re.search(r"^\s+show_full_output: false\s*$", text, re.MULTILINE) is not None)
     check("pull_request_target is absent", "pull_request_target" not in text)
-    check("GH_TOKEN is scoped to exactly one step", text.count("GH_TOKEN") == 1)
+
+    steps = workflow_steps(text)
+    token_steps = [name for name, block in steps.items() if "GH_TOKEN:" in block]
+    check("GH_TOKEN is scoped to routing and publisher only",
+          token_steps == ["Determine trusted PR-risk routing", "Publish QA review comment"],
+          str(token_steps))
+
+    checkout_pin = "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10"
+    claude_pin = "anthropics/claude-code-action@e90deca47693f9457b72f2b53c17d7c445a87342"
+    uses = re.findall(r"^\s+uses:\s+(\S+)", text, re.MULTILINE)
+    check("Action pins remain unchanged",
+          uses == [checkout_pin, checkout_pin, claude_pin], str(uses))
+
+    trusted = steps.get("Checkout trusted PR-risk classifier", "")
+    check("trusted checkout uses the existing pinned checkout Action",
+          f"uses: {checkout_pin}" in trusted)
+    check("trusted checkout is bound to pull-request base SHA",
+          "ref: ${{ github.event.pull_request.base.sha }}" in trusted)
+    check("trusted checkout uses isolated trusted-ci path", "path: trusted-ci" in trusted)
+    check("trusted checkout continues on error", "continue-on-error: true" in trusted)
+
+    routing = steps.get("Determine trusted PR-risk routing", "")
+    check("routing step has exactly one routing id",
+          text.count("id: routing") == 1 and "id: routing" in routing)
+    check("live classifier begins with trusted-ci path",
+          re.search(r"python3\s+trusted-ci/\.github/scripts/classify-pr-risk\.py", routing)
+          is not None)
+    check("PR-head classifier is not executed for live routing",
+          re.search(r"python3\s+\.github/scripts/classify-pr-risk\.py", routing) is None)
+    check("fail-safe defaults precede fallible routing operations",
+          routing.index("qa_required=true") < routing.index("gh api")
+          < routing.index("trusted-ci/.github/scripts/classify-pr-risk.py"))
+
+    first_gate = "steps.routing.outputs.qa_required != 'false'"
+    last_gate = "always() && steps.routing.outputs.qa_required != 'false'"
+    phase_two = {
+        "Checkout repository": first_gate,
+        "Run Claude QA reviewer": first_gate,
+        "Summarize safe Claude invocation diagnostic": last_gate,
+        "Validate and render QA review": last_gate,
+        "Publish QA review comment": last_gate,
+    }
+    gated_blocks = [block for block in steps.values()
+                    if "steps.routing.outputs.qa_required" in block]
+    check("exactly five Phase-2 steps are gated", len(gated_blocks) == 5)
+    for name, condition in phase_two.items():
+        block = steps.get(name, "")
+        match = re.search(r"^\s+if:\s+(.+?)\s*$", block, re.MULTILINE)
+        actual = match.group(1) if match else ""
+        check(f"{name} uses exact routing gate", actual == condition, actual)
+
+    expected_permissions = (
+        "permissions:\n"
+        "  contents: read\n"
+        "  pull-requests: write\n"
+        "  id-token: write"
+    )
+    check("workflow permissions remain unchanged", expected_permissions in text)
+    expected_job_gate = (
+        "github.event.pull_request.head.repo.full_name == github.repository &&\n"
+        "      github.event.pull_request.user.login == github.repository_owner &&\n"
+        "      github.event.pull_request.draft == false"
+    )
+    check("fork owner and draft job condition remains unchanged",
+          expected_job_gate in text)
+    check("existing validator heredoc marker remains unique", text.count("<<'PYEOF'") == 1)
 
     prompt_block = extract_block(text, r"prompt: \|\n")
     check("prompt contains prompt-injection resistance section",
