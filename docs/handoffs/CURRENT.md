@@ -1,15 +1,21 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-07-11
-Updated by: Claude — CI-AUDIT-001 audit and hardening complete
+Last updated: 2026-07-13
+Updated by: Claude — CI-AUDIT-001 reconciled with current main
 
 ## Repository state
 
-- Base branch: `main` (at `e94965c6012ee4d64b50125d29f6f0fc36844ee7`, PR #21
-  merge commit)
+- Base branch: `main`, currently at `c0cb629` (PR #26 merge commit),
+  which includes PR #22 (CI-002D3V, merged `3c36a47`), PR #23 (HYG-001,
+  merged `3cb8689`), PR #24 (PR-007, merged `e69a38d`), and PR #26
+  (TEST-001, merged `c0cb629`)
 - Active branch: `ci/audit-system-hardening`
 - Pull request: [#25 — CI-AUDIT-001 — Full Claude QA System Audit and Hardening](https://github.com/pittonje/BurningSpace/pull/25)
 - Pull request state: Open, not merged
+- This branch has been reconciled with current `main` via
+  `git merge --no-ff origin/main` (conflicts in `PROJECT_CONTEXT.md` and
+  this file resolved to preserve both the CI-002D3V/HYG-001/PR-007/
+  TEST-001 facts already on `main` and the CI-AUDIT-001 findings)
 
 ## Current task
 
@@ -17,30 +23,22 @@ Updated by: Claude — CI-AUDIT-001 audit and hardening complete
 - Task title: Full Claude QA System Audit and Hardening
 - Task file: `docs/tasks/ci-audit-001-full-qa-system-audit.md`
 - Audit report: `docs/reviews/ci-audit-001-full-qa-system-audit.md`
-- Status: Audit and fixes complete, not post-merge verified
-
-## Also completed this session: CI-002D3V (PR #22, unmerged)
-
-- Task file: `docs/tasks/ci-002d3v-verify-simplified-claude-schema.md`
-- Report: `docs/reviews/ci-002d3v-verification.md`
-- Result: **Simplified schema exonerated** — 18 genuine turns, $0.3609
-  cost, `is_error: false`, `structured_output` still absent, identical
-  Action error and diagnostic category as before simplification.
-- PR #22 remains open, unmerged. This audit branch was created from `main`
-  (which does not yet include PR #22), so `PROJECT_CONTEXT.md` on this
-  branch has been updated to record both CI-002D3V's confirmed result and
-  this audit's finding together, since they are both established facts.
+- Status: Audit and fixes complete, reconciled with current main, not
+  post-merge verified
 
 ## Audit result summary
 
 **Audit system usable with documented limitations.** Root cause found for
 the `structured_output_error` that has affected every run since
-CI-002RV: the `qa-reviewer` agent definition's explicit `tools:` allowlist
-implicitly excludes the CLI's internal `StructuredOutput` tool. Confirmed
-by 8 local reproductions (E1–E8a) on Claude Code CLI 2.1.207 (identical to
-the pinned action's installed version). Fixed with a one-line addition.
+CI-002RV, including CI-002QAV and CI-002D3V (both merged, both confirmed
+the schema-content path was not the cause): the `qa-reviewer` agent
+definition's explicit `tools:` allowlist implicitly excludes the CLI's
+internal `StructuredOutput` tool. Confirmed by 8 local reproductions
+(E1–E8a) on Claude Code CLI 2.1.207 (identical to the pinned action's
+installed version). Fixed with a one-line addition, superseding
+CI-002D3V's originally planned next step (removing `--agent` entirely).
 
-## Confirmed defects and fixes
+## Confirmed defects and fixes (unchanged after reconciliation)
 
 | ID | Severity | Defect | Fixed | File |
 |---|---|---|---|---|
@@ -51,23 +49,25 @@ the pinned action's installed version). Fixed with a one-line addition.
 No blockers found. Full detail, evidence, and confidence levels in the
 audit report.
 
-## Tests added
+## Tests
 
 `.github/scripts/test-claude-qa-audit.py` — stdlib-only, 41 deterministic
 checks (invocation contract, embedded validator/renderer, sanitizer
-redaction). All 41 pass. No new dependency.
+redaction). Re-ran after reconciliation: all 41 pass. No new dependency.
 
 ## Validation results
 
 | Check | Result |
 |---|---|
 | `git diff --check` | Clean |
-| Audit test suite | 41/41 pass |
-| Forbidden-path diffs | Empty |
+| Audit test suite (post-reconciliation) | 41/41 pass |
+| Forbidden-path diffs vs. current `origin/main` | Empty |
 | Local structured-output reproduction (E8a, CI-exact config) | Pass — `structured_output` present, `is_error: false`, 2 turns |
 
-Build/gameplay diagnostics intentionally not run — no runtime code changed;
-CI-001 validates remotely.
+CI-001 validates remotely; TEST-001's `npm test`/build/typecheck were not
+re-run locally in this reconciliation pass (no runtime code touched by
+CI-AUDIT-001; TEST-001's own 15/15 test result is unaffected and recorded
+durably in `PROJECT_CONTEXT.md`).
 
 ## Files created
 
@@ -75,13 +75,14 @@ CI-001 validates remotely.
 - `docs/reviews/ci-audit-001-full-qa-system-audit.md`
 - `.github/scripts/test-claude-qa-audit.py`
 
-## Files modified
+## Files modified (CI-AUDIT-001 scope, unchanged by reconciliation)
 
 - `.github/workflows/claude-qa-review-pilot.yml` (prompt-injection block
   added; no invocation-argument change)
 - `.claude/agents/qa-reviewer.md` (`StructuredOutput` tool added;
   prompt-injection sentence; format-precedence sentence)
-- `PROJECT_CONTEXT.md` (CI-002D3V + CI-AUDIT-001 durable facts recorded)
+- `PROJECT_CONTEXT.md` (CI-002D3V/HYG-001/PR-007/TEST-001 durable facts
+  from current main preserved; CI-AUDIT-001 findings appended)
 - `docs/handoffs/CURRENT.md` (this file)
 
 ## Preserved invariants
@@ -94,23 +95,24 @@ CI-001 validates remotely.
   unchanged.
 - No permission expansion; no write-capable tool granted to Claude; no
   secret accessed or exposed.
-- CI-003 remains blocked; PR-007 remains deferred.
+- CI-003 remains blocked. PR-007 is complete (merged as #24) — no longer
+  deferred.
 
 ## Remaining limitations
 
-- The structured-output fix is locally proven on the identical CLI version
-  but not yet exercised on a live GitHub Actions run — this PR's own
-  workflow/agent changes cannot self-verify (self-modifying-workflow skip,
-  consistent with every prior CI-002D* PR). CI-AUDIT-001V (documentation-
-  only, post-merge) is required.
+- The structured-output fix is locally proven on the identical CLI
+  version but not yet exercised on a live GitHub Actions run — this PR's
+  own workflow/agent changes cannot self-verify (self-modifying-workflow
+  skip, consistent with every prior CI-002D* PR). CI-AUDIT-001V
+  (documentation-only, post-merge) is required.
 - Other reviewer agent definitions share the pre-fix `tools:` pattern and
   would hit the same defect if ever given `--json-schema`; not currently
   affected, deferred to CI-003 planning.
 
 ## Next safe action
 
-Human review and merge of the CI-AUDIT-001 pull request, followed by
-CI-AUDIT-001V — live post-merge verification that structured output is
-now produced, the validator accepts it, and exactly one normal four-
-heading QA comment is published. Do not implement CI-AUDIT-001V now. Do
-not start CI-003.
+Human review and merge of the CI-AUDIT-001 pull request, followed by a
+documentation-only CI-AUDIT-001V post-merge verification confirming
+structured output is now produced, the validator accepts it, and exactly
+one normal four-heading QA comment is published. Do not implement
+CI-AUDIT-001V now. Do not start CI-003.
