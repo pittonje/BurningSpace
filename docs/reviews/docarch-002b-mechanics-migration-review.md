@@ -1,8 +1,27 @@
 # DOCARCH-002B1 — Mechanics Migration Conformance Review
 
-Reviewed commit:
+Reviewed implementation commit:
 
 `0f38880f30c355b600f2fda6264538eaab8be14d`
+
+Review evidence commit:
+
+`57e3b4ff394605ba9d21c86b0dcfc28ca1fcec51`
+
+Scope note:
+
+The independent review checked the DOCARCH-002B1 implementation at
+`0f38880f30c355b600f2fda6264538eaab8be14d`. The review artifact itself was
+then updated and committed as review evidence in
+`57e3b4ff394605ba9d21c86b0dcfc28ca1fcec51`. Later PR heads may contain this
+review evidence plus clarification-only edits.
+
+Independence note:
+
+The implementer created the review skeleton but did not fill independent review
+verdicts. Gameplay and documentation-consistency verdicts were filled during a
+separate review pass. They are evidence for Product Architect review, not a
+substitute for Product Architect approval or Claude QA.
 
 ## Record conformance matrix
 
