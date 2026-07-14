@@ -31,12 +31,13 @@ This file is non-canonical navigation. Individual decision files are authoritati
 | `BS-ARCH-005` | protocol as transitional public compatibility boundary | accepted | Architecture — protocol and package dependency direction | `BS-ARCH-004` | [record](BS-ARCH-005.md) |
 | `BS-ARCH-006` | Balance and configuration package boundaries | accepted | Architecture — balance and configuration separation | none | [record](BS-ARCH-006.md) |
 | `BS-ARCH-007` | Local GameScene prototype is non-authoritative | accepted | Architecture — client prototype boundary | `BS-ARCH-001` | [record](BS-ARCH-007.md) |
+| `BS-PROC-001` | Human-only merge authority | accepted | Process governance — merge authority | none | [record](BS-PROC-001.md) |
+| `BS-PROC-002` | Separation of governance responsibilities | accepted | Process governance — role boundaries and independent review | `BS-PROC-001` | [record](BS-PROC-002.md) |
+| `BS-PROC-003` | Durable governance roles are independent of model or vendor | accepted | Process governance — role identity | `BS-PROC-002` | [record](BS-PROC-003.md) |
+| `BS-PROC-004` | Required review evidence before human merge | accepted | Process governance — review evidence and merge preconditions | `BS-PROC-001`, `BS-PROC-002` | [record](BS-PROC-004.md) |
 
 ## Approved, pending migration — DOCARCH-002C
 
-- `BS-PROC-001`
-- `BS-PROC-002`
-- `BS-PROC-003`
 - `CI-003-D1`
 
 ## Reserved — do not create files
