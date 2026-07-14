@@ -24,6 +24,20 @@ This file is non-canonical navigation. Individual decision files are authoritati
 | `BS-MECH-022` | Outpost shield sector threshold | accepted | Mechanics — outpost shield eligibility | `BS-MECH-021` | [record](BS-MECH-022.md) |
 | `BS-MECH-024` | Sector capture does not restore turrets | accepted | Mechanics — turret persistence | none | [record](BS-MECH-024.md) |
 | `BS-MECH-028` | Sector and outpost contest metrics | accepted | Mechanics — capture metrics | none | [record](BS-MECH-028.md) |
+| `BS-ARCH-001` | Server-authoritative multiplayer model | accepted | Architecture — multiplayer authority | none | [record](BS-ARCH-001.md) |
+| `BS-ARCH-002` | npm-workspaces TypeScript monorepo | accepted | Architecture — repository structure and workspace tooling | none | [record](BS-ARCH-002.md) |
+| `BS-ARCH-003` | Current client and server framework retention | accepted | Architecture — application frameworks | none | [record](BS-ARCH-003.md) |
+| `BS-ARCH-004` | shared as current canonical runtime contract owner | accepted | Architecture — contract ownership | none | [record](BS-ARCH-004.md) |
+| `BS-ARCH-005` | protocol as transitional public compatibility boundary | accepted | Architecture — protocol and package dependency direction | `BS-ARCH-004` | [record](BS-ARCH-005.md) |
+| `BS-ARCH-006` | Balance and configuration package boundaries | accepted | Architecture — balance and configuration separation | none | [record](BS-ARCH-006.md) |
+| `BS-ARCH-007` | Local GameScene prototype is non-authoritative | accepted | Architecture — client prototype boundary | `BS-ARCH-001` | [record](BS-ARCH-007.md) |
+
+## Approved, pending migration — DOCARCH-002C
+
+- `BS-PROC-001`
+- `BS-PROC-002`
+- `BS-PROC-003`
+- `CI-003-D1`
 
 ## Reserved — do not create files
 
