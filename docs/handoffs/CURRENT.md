@@ -1,32 +1,27 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-07-14
-Updated by: Codex — DOCARCH-002B1 mechanics migration
+Updated by: Codex — DOCARCH-002B2 mechanics migration
 
 ## Repository state
 
-- Verified DOCARCH-002B1 base: `9a766d956ac6a9fabd2583bb7c4aca6eddef5cfe`.
-- Active branch: `docs/docarch-002b1-mechanics-migration`.
-- Active task: DOCARCH-002B1 — Existing-ID Mechanics Decision Migration.
+- PR #38 / DOCARCH-002B1 is merged.
+- B1 accepted decision records exist.
+- Active branch: `docs/docarch-002b2-new-mechanics`.
+- Active task: DOCARCH-002B2 — New-ID Mechanics Decision Migration.
 - Task file: `docs/tasks/docarch-002b-confirmed-mechanics-migration.md`.
-- Conformance review: `docs/reviews/docarch-002b-mechanics-migration-review.md`.
-- DOCARCH-002A: merged.
+- Conformance review: `docs/reviews/docarch-002b2-mechanics-migration-review.md`.
 
 ## Authorization and status
 
-- DOCARCH-002B1 migrates ten Product Architect-approved existing-ID records.
-- The registry contains ten accepted records plus `DECISION_INDEX.md`, `README.md`, and `DECISION_TEMPLATE.md`.
-- DOCARCH-002B2 is pending and is not active.
-- No runtime, design baseline, roadmap, architecture implementation, workflow, dependency, test, or agent change occurred.
-- Merge authority remains human-only.
-
-## Review routing
-
-- Expected classification: `workflow_security`.
-- Expected `qa_required`: `true`.
-- Required reviewers: Product Architect, Gameplay Reviewer, Claude QA, and documentation consistency review.
-- Independent reviewer verdicts remain empty until those reviewers assess the committed SHA.
+- The B1 review artifact gap is acknowledged as operationally closed by the merged PR and Product Architect guidance; do not reopen B1.
+- DOCARCH-002B2 is active.
+- B2 creates eight new accepted decision records and does not modify B1 decision records.
+- Conflict-reserved IDs remain excluded.
+- DOCARCH-002C and later stages remain out of scope.
+- B2 does not modify runtime, tests, design baselines, architecture, workflows, dependencies, `PROJECT_CONTEXT.md`, or agent adapters.
+- Required review: Product Architect, Gameplay Reviewer, Claude QA, documentation consistency review, human-only merge.
 
 ## Next safe action
 
-Required reviewers complete the DOCARCH-002B1 mechanics migration conformance review.
+Required reviewers complete the DOCARCH-002B2 mechanics migration conformance review.
