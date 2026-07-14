@@ -23,8 +23,8 @@ Decision authority is defined by `docs/GOVERNANCE.md`. Only the Product Architec
 
 - DOCARCH-002C1 — completed and merged via PR #40.
 - DOCARCH-002C2 — completed and merged via PR #41.
-- DOCARCH-002C3 — active in this PR.
-- DOCARCH-002C4 — pending.
+- DOCARCH-002C3 — completed and merged via PR #42.
+- DOCARCH-002C4 — active in this PR as the C-stage closure pass.
 
 ## DOCARCH-002C1 accepted IDs
 
@@ -132,7 +132,7 @@ Every path outside the C3 allowed-file list is forbidden. C3 must not change wor
 - Human-only merge authority remains mandatory.
 - Required reviewers are Product Architect, Security/CI Reviewer, Architecture Reviewer, Documentation consistency review, and Claude QA.
 - BS-PROC-004 requires each required review role to record a verdict and evidence bound to the reviewed commit, with required checks passing on the final pull-request head.
-- C4 remains pending. DOCARCH-002D remains separate broader reconciliation after C4.
+- C3 is complete and merged via PR #42. DOCARCH-002D remains separate broader reconciliation after C4.
 - AGENT-004 and detailed portability policy remain deferred to DOCARCH-005.
 - This task introduces no workflow, script, setting, or branch-protection enforcement change.
 
@@ -144,12 +144,64 @@ Every path outside the C3 allowed-file list is forbidden. C3 must not change wor
 - No mechanics/task-local decision file changes and no C2/C3/AGENT-004 records are created.
 - Do not run dependency installation, tests, builds, typechecks, or runtime diagnostics.
 
+## DOCARCH-002C4 purpose
+
+Close DOCARCH-002C after C1, C2, and C3 without creating decision records,
+changing accepted decision semantics, or reconciling broader project
+documentation.
+
+## C4 closure validation
+
+- `BS-ARCH-001` through `BS-ARCH-007` remain accepted.
+- `BS-PROC-001` through `BS-PROC-004` remain accepted.
+- `CI-003-D1` remains accepted.
+- The accepted decision-record count remains 30.
+- C4 creates no decision records and does not modify decision records or
+  `docs/decisions/DECISION_INDEX.md`.
+- C4 closes only DOCARCH-002C after human merge.
+- DOCARCH-002D remains pending and separate for broader reconciliation,
+  including `PROJECT_CONTEXT.md` reconciliation and any `docs/architecture/**`
+  refresh.
+- TestBattleRoom / SEC-006 remains deferred to a dedicated security task.
+- Branch-protection enforcement remains deferred to a possible future CI-004.
+- The `important_suggestions[0]` length failure remains a known QA/workflow
+  issue and is not fixed by C4.
+- AGENT-004 and detailed model/vendor portability remain deferred to
+  DOCARCH-005.
+
+## C4 allowed files
+
+- `docs/reviews/docarch-002c4-c-stage-closure-review.md`
+- `docs/tasks/docarch-002c-architecture-process-decision-migration.md`
+- `docs/handoffs/CURRENT.md`
+- `docs/decisions/README.md` only when its C-stage status wording is stale.
+
+## C4 forbidden files
+
+Every path outside the C4 allowed-file list is forbidden. In particular, C4
+must not change decision records, `docs/decisions/DECISION_INDEX.md`,
+governance, templates, durable context, entrypoints, agent, architecture, or
+design documents; workflows, scripts, GitHub settings, runtime applications,
+packages, manifests, lockfiles, dependencies, historical review artifacts, or
+CI behavior.
+
+## C4 review and evidence requirements
+
+- Human-only merge authority remains mandatory.
+- Required reviewers are Product Architect, Architecture Reviewer,
+  Documentation consistency review, and Claude QA.
+- BS-PROC-004 requires each required review role to record a verdict and
+  evidence bound to the reviewed commit, with required checks passing on the
+  final pull-request head.
+- Security/CI Reviewer is not required for C4 because C4 makes no workflow,
+  script, CI-security, or CI-routing semantic changes.
+
 ## Required reviewers
 
 - Product Architect
 - Architecture Reviewer
-- Claude QA
 - Documentation consistency review
+- Claude QA
 
 Human-only merge authority remains mandatory.
 
