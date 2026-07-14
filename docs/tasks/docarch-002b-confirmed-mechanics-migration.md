@@ -14,8 +14,8 @@ Migrate Product Architect-approved mechanics decisions into canonical decision r
 
 ## Stage status
 
-- DOCARCH-002B1 — existing-ID mechanics migration: active.
-- DOCARCH-002B2 — approved new-ID mechanics migration: pending.
+- DOCARCH-002B1 — existing-ID mechanics migration: completed and merged via PR #38.
+- DOCARCH-002B2 — approved new-ID mechanics migration: active in this PR.
 
 ## Approved canonical statements — DOCARCH-002B1
 
@@ -67,7 +67,7 @@ After the current ship is docked at the faction’s main base and the player ent
 
 There is no additional cooldown, preparation timer, or role-change delay. The physical return to the main faction base is the complete switching cost.
 
-## Approved canonical statements — DOCARCH-002B2 pending
+## Approved canonical statements — DOCARCH-002B2
 
 The IDs and meanings below are approved. DOCARCH-002B1 must not create their instance files.
 

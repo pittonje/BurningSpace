@@ -16,19 +16,14 @@ This file is non-canonical navigation. Individual decision files are authoritati
 | `BS-MECH-013` | Remote ship control from allied outposts | accepted | Mechanics — ship control | none | [record](BS-MECH-013.md) |
 | `BS-MECH-014` | Ending current ship control requires main-base docking | accepted | Mechanics — ship control | `BS-MECH-013` | [record](BS-MECH-014.md) |
 | `BS-MECH-015` | No additional delay after valid main-base return | accepted | Mechanics — ship control | `BS-MECH-013`, `BS-MECH-014` | [record](BS-MECH-015.md) |
-
-## Approved, pending migration — DOCARCH-002B2
-
-The meanings and IDs below are Product Architect approved, but instance files are not yet created:
-
-- `BS-MECH-016`
-- `BS-MECH-017`
-- `BS-MECH-018`
-- `BS-MECH-019`
-- `BS-MECH-021`
-- `BS-MECH-022`
-- `BS-MECH-024`
-- `BS-MECH-028`
+| `BS-MECH-016` | Initial sector ownership, no neutral start | accepted | Mechanics — sector ownership | none | [record](BS-MECH-016.md) |
+| `BS-MECH-017` | Non-adjacent enemy-sector attacks | accepted | Mechanics — sector attack eligibility | none | [record](BS-MECH-017.md) |
+| `BS-MECH-018` | Turret-gated sector capture | accepted | Mechanics — sector capture prerequisites | none | [record](BS-MECH-018.md) |
+| `BS-MECH-019` | Combat-unit capture weighting | accepted | Mechanics — sector capture progress | none | [record](BS-MECH-019.md) |
+| `BS-MECH-021` | Outpost sector governance cardinality | accepted | Mechanics — outpost governance | none | [record](BS-MECH-021.md) |
+| `BS-MECH-022` | Outpost shield sector threshold | accepted | Mechanics — outpost shield eligibility | `BS-MECH-021` | [record](BS-MECH-022.md) |
+| `BS-MECH-024` | Sector capture does not restore turrets | accepted | Mechanics — turret persistence | none | [record](BS-MECH-024.md) |
+| `BS-MECH-028` | Sector and outpost contest metrics | accepted | Mechanics — capture metrics | none | [record](BS-MECH-028.md) |
 
 ## Reserved — do not create files
 
