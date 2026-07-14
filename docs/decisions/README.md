@@ -6,9 +6,9 @@ This registry will contain BurningSpace architecture, design, mechanics, process
 
 ## Current status
 
-The registry is intentionally empty after DOCARCH-001. DOCARCH-001 defines authority and record structure only; it creates no decision instance files.
+Accepted decision records now exist after DOCARCH-002B1. Each individual record is authoritative within its accepted scope.
 
-DOCARCH-002 will inventory and recover existing decisions.
+[`DECISION_INDEX.md`](DECISION_INDEX.md) is the complete non-canonical navigation listing for accepted, pending, reserved, and unrecovered IDs.
 
 ## Authority
 
@@ -29,15 +29,17 @@ Decision IDs are stable and domain-scoped:
 
 DOCARCH-001 does not rename, normalize, or migrate existing identifiers.
 
-## Allowed files after DOCARCH-001
+## Allowed registry files
 
-Only these files should exist in `docs/decisions/` after DOCARCH-001:
+The registry may contain:
 
 - `README.md`
 - `DECISION_TEMPLATE.md`
+- `DECISION_INDEX.md`
+- accepted decision records named `<ID>.md`
 
-No decision instance file is created by this task.
+The index is derived navigation and does not create decision authority. Accepted authority resides in individual decision records.
 
 ## Future migration
 
-DOCARCH-002 will decide how to preserve legacy identifiers, including `BS-MECH-*` and `GAME-001-D*`, while inventorying and recovering decisions.
+DOCARCH-002B1 preserves approved existing identifiers. Later approved stages may add records for already approved pending IDs; reserved and unrecovered IDs must not receive placeholder files.
