@@ -1,6 +1,6 @@
 # BurningSpace Project Context
 
-_Last updated: 2026-07-11_  
+_Last updated: 2026-07-14_
 _Context owner: Product Architect / ChatGPT_  
 _Update rule: Codex must update this file whenever project structure, stack, architecture, agent workflow, or accepted design baseline changes._
 
@@ -402,8 +402,8 @@ CI-002R — Deterministic Claude QA Comment Delivery (merged; diagnostic follow-
   CI-002DV post-merge evidence.
 - CI-002DV remotely exercised the safe diagnostic path. It produced
   `unknown_safe_error`; diagnostics and deterministic failure publication were
-  safe and reliable, with no observed secret exposure, but the result is
-  inconclusive and CI-003 remains blocked pending further diagnosis.
+  safe and reliable, with no observed secret exposure, but the result was
+  inconclusive at that stage and was superseded by the later root-cause evidence below.
 - CI-002QAV re-verified the unchanged full QA workflow after suspecting
   exhausted Claude token availability. That hypothesis was **not**
   supported: the run completed 25 genuine turns at non-trivial cost with
@@ -443,9 +443,9 @@ CI-002R — Deterministic Claude QA Comment Delivery (merged; diagnostic follow-
   sanitized-failure comment), correctly bound to the tested HEAD SHA. 20
   turns, $0.3914 cost, `is_error: false` — comparable scale to every
   prior run, confirming this is not a token-availability artifact.
-  Read-only and secret-safety boundaries held. Full Claude QA is now
-  **ready for controlled use**. CI-003 remains blocked until the Product
-  Architect explicitly authorizes it.
+  Read-only and secret-safety boundaries held. Full Claude QA was therefore
+  **ready for controlled use**, enabling the later CI-003 authorization and
+  implementation.
 
 HYG-001 — Repository Hygiene Foundation (merged):
 
@@ -481,11 +481,14 @@ TEST-001 — Unit Test Foundation (merged):
   behavior change; existing diagnostic scripts remain the broader smoke
   checks.
 
-Recommended order:
+CI-003 — Risk-Based Reviewer Routing (implemented and fully verified):
 
-1. Product Architect review and authorization decision for CI-003 —
-   Routed Claude Reviews (invocation reliability is now proven; CI-003
-   itself remains blocked pending explicit authorization).
+- Deterministic risk-based reviewer routing is implemented through PR #32.
+- Live verification completed through PR #33 and PR #34; both the
+  documentation-only skip path and the required-QA path passed.
+- CI-003 is fully verified. Evidence resides in
+  `docs/reviews/ci-003v-phase-a.md` and
+  `docs/reviews/ci-003v-phase-b.md`.
 
 Any implementation PR must define a narrow scope and explicit non-goals.
 

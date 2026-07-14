@@ -1,67 +1,44 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-07-14
-Updated by: Codex — CI-003V Phase B verification candidate
+Updated by: Codex — DOCARCH-000 truth reconciliation
 
 ## Repository state
 
-- Base branch: `main` at `a88e28d` (PR #33, CI-003V Phase A, merged).
-- Active branch: `docs/ci-003v-phase-b`.
-- Active task: CI-003V Phase B — QA-Required Routing Verification.
+- Verified reconciliation baseline before DOCARCH-000: `8076585bbed07ba0cec5dbd6ba8c61aae1505226`.
+- Active branch: `docs/docarch-000-truth-reconciliation`.
+- Active task: DOCARCH-000 — Repository Truth Reconciliation.
+- Task file: `docs/tasks/docarch-000-repository-truth-reconciliation.md`.
 - CI-003 implementation: merged through PR #32.
-- CI-003V Phase A: merged through PR #33.
-- Current pull request: Phase B live verification candidate to be opened from the active branch.
-- Verification state: Phase B pending live workflow evidence.
+- CI-003V Phase A: verified through PR #33.
+- CI-003V Phase B: verified through PR #34.
+- CI-003 overall: implemented and fully verified.
+- No CI-003 verification task remains active.
+
+The DOCARCH-000 task and pull request provide traceability for the later merge; this baseline SHA is not a claim about the future post-merge HEAD.
 
 ## Authorization and status
 
-- The Product Architect accepted the CI-003 architecture, and CI-003 is implemented on `main` through PR #32.
-- CI-003V Phase A is verified and merged through PR #33.
-- CI-003 status: implemented; Phase A verified; Phase B pending.
-- This operational handoff update is the genuine governance-documentation candidate for live Phase B verification.
-- This task does not authorize workflow, script, dependency, Action, permission, runtime, test, agent-definition, or `PROJECT_CONTEXT.md` changes.
+- The Product Architect accepted DOCARCH-000 as a documentation-only factual reconciliation task.
+- No governance hierarchy is introduced, no decisions are migrated, and no architecture, roadmap item, or model-routing rule changes.
+- Runtime code, tests, workflows, scripts, agents, dependencies, governance documents, and decision documents remain unchanged.
 
-## Validation state
+## Verification state
 
-- Phase A classification: `documentation_only`.
-- Phase A `qa_required`: `false`.
-- Phase A CI-001: passed.
-- Phase A QA routing job: passed.
-- Phase A Claude-dependent steps: all five skipped.
-- Phase A QA comments: zero.
-- Phase B expected classification: `workflow_security`.
-- Phase B expected `qa_required`: `true`.
-
-## Security boundaries
-
-- Live routing executes the classifier only from the pull request base SHA under `trusted-ci/`.
-- Fail-safe outputs require QA before all fallible work.
-- Changed paths remain JSON data; rename, deletion, pagination, count, truncation, malformed input, and stale-state cases fail closed.
-- Only a complete successful classification of ordinary documentation and explicit test-directory paths can produce `qa_required=false`.
-- All five Claude Phase-2 steps share the accepted complete-pipeline gate.
-- Existing permissions, pins, invocation, sanitizer, validator, renderer, publisher, and stale-run protection remain preserved.
+- Phase A final status: `Verified`; classification `documentation_only`; `qa_required=false`; CI-001 and routing succeeded; all five Claude-dependent steps skipped; zero QA comments.
+- Phase B final status: `Verified`; classification `workflow_security`; `qa_required=true`; CI-001 and Claude QA succeeded; all five Claude-dependent steps succeeded; one approved deterministic QA comment matched the source HEAD; stale-run protection remained active.
+- Evidence: `docs/reviews/ci-003v-phase-a.md` and `docs/reviews/ci-003v-phase-b.md`.
 
 ## Review routing
 
-- Deterministic classifier tests and the Claude QA workflow audit are required in CI-001.
-- Because `docs/handoffs/CURRENT.md` is governance documentation, Phase B must route through `workflow_security` with `qa_required=true`.
-- Expected Phase B evidence: all five Claude-dependent steps execute, exactly one deterministic QA comment is posted, `reviewed_commit` matches the live pull-request HEAD, and stale-run protection remains active.
-- Phase B is not yet verified, and no agent may merge the pull request.
-
-## Post-merge verification
-
-CI-003V remains incomplete until Phase B succeeds:
-
-- Phase A: verified through PR #33 with `documentation_only`, `qa_required=false`, successful CI-001 and routing job, five skipped Claude-dependent steps, and zero QA comments.
-- Phase B: pending on this governance-documentation candidate; it must report `workflow_security`, `qa_required=true`, execute all five Claude-dependent steps, post exactly one valid QA comment bound to live HEAD, and preserve stale-run protection.
-
-Do not call CI-003 verified and do not update `PROJECT_CONTEXT.md` before both phases pass.
+- This pull request is expected to classify as `workflow_security` because it changes `docs/handoffs/CURRENT.md` and `PROJECT_CONTEXT.md`.
+- Expected checks: deterministic documentation validation, CI-001, and automatically routed Claude QA.
+- Product Architect review is required.
+- Documentation Keeper is conceptually relevant; no automated Documentation Keeper execution is claimed.
+- Multiplayer Reviewer, API Guardian, and Security/CI Reviewer are not required because multiplayer, protocol/API, workflow implementation, permissions, secrets, and security boundaries do not change.
 
 ## Next safe action
 
-1. Verify the single-file Phase B documentation commit.
-2. Open the Phase B pull request.
-3. Wait for CI-001 and the complete Claude QA pipeline.
-4. Confirm exactly one QA comment is bound to the live pull-request HEAD and stale-run protection remains active.
+Prepare DOCARCH-001 — Documentation Authority Bootstrap.
 
-`PROJECT_CONTEXT.md` must remain unchanged until Phase B succeeds and is merged.
+DOCARCH-001 is not active.

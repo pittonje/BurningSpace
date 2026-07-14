@@ -19,18 +19,16 @@ It does not change:
 - dependencies;
 - project context or operational handoff state.
 
-## Expected routing result
+## Routing evidence
 
-The trusted CI-003 classifier should report:
+The trusted CI-003 classifier reported:
 
 - risk area: `documentation_only`;
-- Claude QA required: `false`;
-- manual reviewer requirement: `Documentation Keeper`;
-- post-merge verification required: `false`.
+- Claude QA required: `false`.
 
-## Expected workflow result
+## Workflow evidence
 
-The following Claude-dependent steps should be skipped:
+The following Claude-dependent steps were skipped:
 
 1. Checkout repository
 2. Run Claude QA reviewer
@@ -38,12 +36,25 @@ The following Claude-dependent steps should be skipped:
 4. Validate and render QA review
 5. Publish QA review comment
 
-The routing job and CI-001 should complete successfully.
+The routing job and CI-001 completed successfully.
 
-No Claude QA comment should be posted.
+Zero Claude QA comments were posted.
 
 ## Verification state
 
-Pending live pull-request evidence.
+- Final status: `Verified`.
+- Pull request: PR #33.
+- Source HEAD: `ee8536caf56486df6537bacced3490ed91f80b65`.
+- Merge commit: `a88e28d8fcc7fc6f55811d7e03eeb7d0301f2997`.
+- Workflow run ID: `29287696998`.
+- Workflow job ID: `86944036955`.
+- Classification: `documentation_only`.
+- `qa_required`: `false`.
+- CI-001: succeeded.
+- Routing job: succeeded.
+- Claude-dependent steps: all five skipped.
+- QA comments: zero.
 
-This document does not declare CI-003 verified. Phase B remains required after Phase A succeeds.
+CI-003V Phase A passed.
+
+Phase A alone did not fully verify CI-003; the separate Phase B verification remained required and subsequently passed.
