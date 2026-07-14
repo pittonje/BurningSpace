@@ -35,10 +35,11 @@ This file is non-canonical navigation. Individual decision files are authoritati
 | `BS-PROC-002` | Separation of governance responsibilities | accepted | Process governance — role boundaries and independent review | `BS-PROC-001` | [record](BS-PROC-002.md) |
 | `BS-PROC-003` | Durable governance roles are independent of model or vendor | accepted | Process governance — role identity | `BS-PROC-002` | [record](BS-PROC-003.md) |
 | `BS-PROC-004` | Required review evidence before human merge | accepted | Process governance — review evidence and merge preconditions | `BS-PROC-001`, `BS-PROC-002` | [record](BS-PROC-004.md) |
+| `CI-003-D1` | Deterministic trusted-base PR-risk routing for Claude QA | accepted | CI governance — PR QA routing and QA evidence binding | `BS-PROC-001`, `BS-PROC-004` | [record](CI-003-D1.md) |
 
-## Approved, pending migration — DOCARCH-002C
+## Pending — DOCARCH-002C4
 
-- `CI-003-D1`
+C-stage reconciliation, index cleanup, and closure remain pending.
 
 ## Reserved — do not create files
 
