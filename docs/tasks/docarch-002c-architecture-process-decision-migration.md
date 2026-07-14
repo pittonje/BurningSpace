@@ -22,8 +22,8 @@ Decision authority is defined by `docs/GOVERNANCE.md`. Only the Product Architec
 ## Stage status
 
 - DOCARCH-002C1 — completed and merged via PR #40.
-- DOCARCH-002C2 — active in this PR.
-- DOCARCH-002C3 — pending.
+- DOCARCH-002C2 — completed and merged via PR #41.
+- DOCARCH-002C3 — active in this PR.
 - DOCARCH-002C4 — pending.
 
 ## DOCARCH-002C1 accepted IDs
@@ -104,7 +104,39 @@ Every path outside the C2 allowed-file list is forbidden. In particular, C2 must
 - PR #40 established the complete-review-evidence precedent.
 - Security/CI Reviewer is not required because C2 changes no workflow, script, or repository setting. CI classifier suggestions are advisory unless this task explicitly requires them.
 
-## Validation expectations
+## DOCARCH-002C3 purpose
+
+Migrate the Product Architect-approved CI-003-D1 governance decision without changing workflows, scripts, GitHub settings, runtime code, packages, dependencies, or CI behavior.
+
+## C3 accepted IDs
+
+- `CI-003-D1`
+
+CI-003-D1 is Product Architect-approved for C3.
+
+## C3 allowed files
+
+- `docs/decisions/CI-003-D1.md`
+- `docs/reviews/docarch-002c3-ci-routing-migration-review.md`
+- `docs/decisions/DECISION_INDEX.md`
+- `docs/decisions/README.md`
+- `docs/tasks/docarch-002c-architecture-process-decision-migration.md`
+- `docs/handoffs/CURRENT.md`
+
+## C3 forbidden files
+
+Every path outside the C3 allowed-file list is forbidden. C3 must not change workflows, scripts, GitHub settings, branch protection, CI bugs, agent adapters, governance, architecture or design documents, runtime applications, packages, manifests, lockfiles, or historical review artifacts.
+
+## C3 review and evidence requirements
+
+- Human-only merge authority remains mandatory.
+- Required reviewers are Product Architect, Security/CI Reviewer, Architecture Reviewer, Documentation consistency review, and Claude QA.
+- BS-PROC-004 requires each required review role to record a verdict and evidence bound to the reviewed commit, with required checks passing on the final pull-request head.
+- C4 remains pending. DOCARCH-002D remains separate broader reconciliation after C4.
+- AGENT-004 and detailed portability policy remain deferred to DOCARCH-005.
+- This task introduces no workflow, script, setting, or branch-protection enforcement change.
+
+## C1 historical validation expectations
 
 - Exactly twelve changed paths and seven new architecture decision records.
 - Twenty-five accepted decision records after C1.
