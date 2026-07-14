@@ -1,40 +1,41 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-07-14
-Updated by: Codex — DOCARCH-001 authority bootstrap
+Updated by: Codex — DOCARCH-002A decision inventory
 
 ## Repository state
 
-- Verified DOCARCH-001 base: `5a83e5222296780b48b0c73c7056e215b38e765e`.
-- Active branch: `docs/docarch-001-authority-bootstrap`.
-- Active task: DOCARCH-001 — Documentation Authority Bootstrap.
-- Task file: `docs/tasks/docarch-001-documentation-authority-bootstrap.md`.
-- DOCARCH-000: complete.
+- Verified DOCARCH-002A base: `e5257d3642ed60bb7740850e3ecb37253cb72c62`.
+- Active branch: `docs/docarch-002-decision-inventory`.
+- Active task: DOCARCH-002A — Decision Inventory and Approval Matrix.
+- Task file: `docs/tasks/docarch-002-decision-inventory-and-recovery.md`.
+- Recovery report: `docs/reviews/docarch-002-decision-recovery-report.md`.
+- DOCARCH-001: merged; documentation authority rules established.
 - CI-003: implemented and fully verified.
 
 ## Authorization and status
 
-- DOCARCH-001 establishes documentation authority rules only.
-- The decision registry is intentionally empty; no decisions were migrated or instantiated.
-- No runtime architecture or package boundary changed.
-- No roadmap content changed.
-- No workflow, CI, script, dependency, model-routing, or agent-adapter behavior changed.
+- DOCARCH-002A inventories evidence and presents approval questions only.
+- The decision registry still contains only `README.md` and `DECISION_TEMPLATE.md`.
+- No decision instance files exist and no decisions were migrated.
+- No runtime, architecture implementation, design baseline, roadmap, workflow, script, dependency, model-routing, or agent-adapter change occurred.
+- Repository conflicts are documented and remain unresolved at implementation level.
 
-## Documentation state
+## Inventory state
 
-- `docs/GOVERNANCE.md` defines the authority hierarchy, conflict rules, document classes, decision vocabulary, transition rules, and migration order.
-- `docs/decisions/README.md` and `docs/decisions/DECISION_TEMPLATE.md` establish the empty registry structure for later migration.
-- `PROJECT_CONTEXT.md` and `CLAUDE.md` remain unchanged by DOCARCH-001.
+- Existing stable IDs are preserved.
+- Product Architect-confirmed meaning is separated from proposed ID approval.
+- Proposed IDs remain unapproved.
+- Five conflict clusters remain blocked pending explicit supersession and separately scoped implementation reconciliation.
+- Missing ID ranges remain unrecovered and no placeholder records were created.
 
 ## Review routing
 
 - Expected classification: `workflow_security`.
 - Expected `qa_required`: `true`.
-- Required review: Product Architect and automatically routed Claude QA.
-- Architecture Reviewer is optional if requested by the Product Architect; it is not required by default because no runtime, package-boundary, CI, or protocol architecture changes occur.
+- Required review: Product Architect approval-matrix/conflict review and automatically routed Claude QA.
+- DOCARCH-002B is not active.
 
 ## Next safe action
 
-Prepare DOCARCH-002 — Decision Inventory and Recovery.
-
-DOCARCH-002 is not active yet.
+Product Architect reviews and accepts the approval matrix and conflict register in `docs/reviews/docarch-002-decision-recovery-report.md`.
