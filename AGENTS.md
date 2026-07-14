@@ -26,6 +26,7 @@ Read `PROJECT_CONTEXT.md` first, then this file, `docs/handoffs/CURRENT.md`, the
 
 ## Collaboration system
 
+- [Documentation governance](docs/GOVERNANCE.md)
 - [Agent system](docs/agents/AGENT_SYSTEM.md)
 - [Risk-based routing](docs/agents/AGENT_ROUTING.md)
 - [Artifact contracts](docs/agents/ARTIFACT_CONTRACTS.md)
