@@ -42,14 +42,15 @@ This file is non-canonical navigation. Individual decision files are authoritati
 | `BS-PROC-004` | Required review evidence before human merge | accepted | Process governance — review evidence and merge preconditions | `BS-PROC-001`, `BS-PROC-002` | [record](BS-PROC-004.md) |
 | `CI-003-D1` | Deterministic trusted-base PR-risk routing for Claude QA | accepted | CI governance — PR QA routing and QA evidence binding | `BS-PROC-001`, `BS-PROC-004` | [record](CI-003-D1.md) |
 
-## DOCARCH-002C status
+## DOCARCH-002D status
 
-DOCARCH-002C is complete. DOCARCH-002D1 is merged, and DOCARCH-002D2 migrates
-five approved mechanics records in this PR. The accepted decision-record count
-is 35 in this PR state.
-
-DOCARCH-002D3 remains pending documentation reconciliation and creates no
-decision ID by default. AGENT-004 remains deferred to DOCARCH-005.
+- DOCARCH-002C is complete.
+- DOCARCH-002D1 merged through PR #44.
+- DOCARCH-002D2 merged through PR #45.
+- DOCARCH-002D3 is the active final reconciliation and closure candidate; it is not yet merged and creates no decision records.
+- The accepted decision-record count remains 35.
+- After D3 human merge, DOCARCH-003 — Canonical Development Roadmap is the next repository task.
+- AGENT-004 remains deferred to DOCARCH-005.
 
 ## Not recovered — do not assign
 
