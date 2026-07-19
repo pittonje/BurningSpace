@@ -1,86 +1,73 @@
 # Shared Dependency Map
 
-## Actual current workspace graph
+## Purpose and authority
+
+This document separates the declared workspace graph, observed imports,
+accepted architecture, and future package direction. Manifests and imports are
+current implementation evidence. Accepted package authority and dependency
+direction come from `BS-ARCH-004`, `BS-ARCH-005`, and `BS-ARCH-006`.
+
+## Declared workspace dependencies
 
 ```text
-apps/client ──(source import, undeclared manifest dependency)──> packages/shared
-apps/server ──(declared "*")──────────────────────────────────> packages/shared
+apps/client   -> packages/shared
+apps/client   -> packages/protocol
+apps/server   -> packages/shared
+apps/server   -> packages/protocol
+packages/protocol -> packages/shared
 
-packages/protocol   (no package dependencies; no consumers)
-packages/balance    (no package dependencies; no consumers)
-packages/config     (no package dependencies; no consumers)
-packages/shared     (no package dependencies)
+packages/shared   (no workspace dependencies)
+packages/balance  (no workspace dependencies)
+packages/config   (no workspace dependencies)
 ```
 
-The root npm workspace glob links all packages. `apps/server/package.json` explicitly declares `@burningspace/shared`; `apps/client/package.json` does not, despite seven client source/script files importing it. The client currently succeeds through root workspace installation/hoisting, which is an undeclared dependency risk for isolated workspace installs and future package cutovers.
+Both application manifests declare `@burningspace/shared` and
+`@burningspace/protocol`. The protocol manifest declares
+`@burningspace/shared`. No shared-to-protocol dependency exists, so there is no
+shared/protocol package cycle.
 
-## Current import relationships
+## Actual current consumers and imports
 
-- Client runtime: `gameConfig`, `NetworkClient`, network scenes, and network entity views import the public `@burningspace/shared` entry point.
-- Client diagnostic: `network-client-callback-check.ts` imports constants and snapshot types.
-- Server runtime: `BattleRoom`, `TestBattleRoom`, movement/combat/spawn systems, and input validation import the public entry point.
-- Server diagnostics: movement and combat checks import constants and `PlayerInputMessage`.
-- No source imports `packages/protocol`, `packages/balance`, or `packages/config`.
-- No deep imports such as `@burningspace/shared/src/messages` were found.
-- No relative source import bypasses the package public entry point.
+- Client runtime and diagnostic sources import broad runtime contracts from `@burningspace/shared`.
+- Client networking and scene sources import profile contracts from `@burningspace/protocol`.
+- Server runtime, validation, systems, tests, and diagnostics import broad runtime contracts from `@burningspace/shared`.
+- `BattleRoom` imports profile contracts from `@burningspace/protocol`.
+- Protocol sources re-export profile contracts from shared and also expose protocol-version, message-envelope, and snapshot surfaces through their public entrypoint.
+- No application or package source currently imports `@burningspace/balance` or `@burningspace/config`.
+- No shared source imports `@burningspace/protocol`.
 
-## Public entry point and resolution
+These relationships were re-audited from the workspace manifests and source
+imports during DOCARCH-002D3. They describe the repository at that point; they
+do not independently change accepted ownership.
 
-`packages/shared/package.json` resolves types to `src/index.ts` and runtime JavaScript to `dist/index.js`. This split is intentional but creates a dual-resolution constraint:
+## Accepted architectural direction
 
-- TypeScript sees current source declarations.
-- Node runtime requires the package to have been built.
-- Runtime constants and message-name objects cannot be migrated as type-only aliases.
-- A stale `dist` can disagree with source types if consumers run without a fresh workspace build.
-- New packages copy the same export pattern, so consumer cutover requires those packages to build before runtime diagnostics/server startup.
+- `packages/shared` is the current canonical owner of broad runtime and profile contracts.
+- `packages/protocol` is an active transitional public compatibility boundary that may expose or re-export stable public contracts while depending on shared.
+- The accepted direction is `protocol -> shared`.
+- The forbidden direction is `shared -> protocol` unless `BS-ARCH-005` is explicitly superseded.
+- `packages/protocol` is not yet the fully separated canonical owner of broad runtime contracts.
+- `packages/balance` and `packages/config` are retained future boundaries; their integration and maturity must not be overstated.
 
-## Target dependency graph
+## Current public resolution
 
-```text
-apps/client ──────> packages/protocol ──────> packages/shared
-      │                       │
-      ├──────────> packages/balance (presentation values only)
-      └──────────> packages/config  (world presentation/topology)
+Shared and protocol publish TypeScript declarations from `src/index.ts` and
+runtime JavaScript from `dist/index.js`. Consumers therefore rely on public
+package entrypoints and fresh workspace builds for runtime exports. No deep
+imports or application-to-package source bypass is established by the audited
+consumer set.
 
-apps/server ──────> packages/protocol ──────> packages/shared
-      │
-      ├──────────> packages/balance (authoritative values)
-      └──────────> packages/config  (authoritative topology)
+## Future intended boundaries
 
-packages/shared   -X-> packages/protocol
-packages/balance  (dependency-light)
-packages/config   (dependency-light)
-```
+Future approved work may move contract ownership, integrate balance data, or
+populate configuration incrementally. Such work must update direct manifest
+dependencies, preserve compatibility, and keep client/server consumers
+coordinated. This document neither proposes nor performs that migration.
 
-Every source import should have a matching direct dependency in the consuming workspace manifest. PR-002 documents this target but intentionally changes no manifest.
+## Dependency safety rules
 
-## Circular-dependency risks
-
-- `packages/protocol` may depend on `packages/shared` only for generic primitives such as `Faction` or `Vector2`.
-- `packages/shared` must never import or re-export from `packages/protocol`; doing so while protocol imports shared creates a cycle and reverses ownership.
-- Compatibility should be provided from the old package by re-export only if protocol does not itself depend on shared declarations involved in that re-export. Prefer canonical definitions in protocol plus temporary consumer-by-consumer cutover, or type forwarding with a verified acyclic direction.
-- Balance/config must not import application code or protocol payloads.
-- Applications must not become dependencies of any package.
-
-## Package dependency gaps
-
-- Confirmed: `apps/client` uses `@burningspace/shared` without declaring it.
-- Future: both applications must explicitly declare each new package before importing it.
-- No current missing declaration exists for server-to-shared.
-- Structural packages currently have no source imports and correctly declare no dependencies.
-
-## Deep-import and public-surface findings
-
-- Deep imports: none.
-- Public-entry bypasses: none.
-- All shared modules are exposed wholesale through `export *`; consumers can couple to every constant and payload.
-- There are no package subpath exports, deprecation aliases, or compatibility entry points today.
-
-## Migration hazards
-
-1. Changing `ClientMessages`/`ServerMessages` identity or string values breaks live dispatch even if TypeScript passes.
-2. Moving type-only payloads without runtime message maps creates a split contract that can drift.
-3. Moving world dimensions separately from spawn coordinates can desynchronize client rendering and server clamps.
-4. Moving authoritative balance values can silently change gameplay if values are reformatted or duplicated.
-5. Adding protocol-to-shared and shared-to-protocol re-exports can create NodeNext cycles.
-6. Client manifest gaps can be masked by workspace hoisting.
+- Packages must not depend on application code.
+- Shared must not import or re-export protocol.
+- Protocol may depend on shared during the accepted transitional state.
+- Balance and config must remain environment-neutral and dependency-light.
+- Runtime message values, snapshots, and world constants must not be moved independently in a way that desynchronizes client and server.

@@ -6,12 +6,13 @@ This registry will contain BurningSpace architecture, design, mechanics, process
 
 ## Current status
 
-DOCARCH-002C is complete, and DOCARCH-002D1 is merged. DOCARCH-002D2 is active
-in this PR and migrates five Product Architect-approved mechanics decisions.
-The accepted decision-record count becomes 35 when this PR merges.
-DOCARCH-002D3 remains pending for context, architecture, and design
-reconciliation. Each individual record is authoritative within its accepted
-scope.
+DOCARCH-002C is complete. DOCARCH-002D1 merged via PR #44, and DOCARCH-002D2
+merged via PR #45. DOCARCH-002D3 is the active final reconciliation and closure
+candidate. It creates no decision records, so the accepted count remains 35.
+Active architecture and design summaries are being reconciled to the accepted
+registry, while `balance-v0.1.md` is explicitly historical and
+non-authoritative. After D3 human merge, DOCARCH-002 closes and DOCARCH-003 —
+Canonical Development Roadmap becomes the next repository task.
 
 [`DECISION_INDEX.md`](DECISION_INDEX.md) remains the canonical decision-navigation
 source. Do not duplicate its detailed registry here.
@@ -23,8 +24,7 @@ Decision authority is defined by [`docs/GOVERNANCE.md`](../GOVERNANCE.md).
 - Only the Product Architect can mark a decision `accepted`.
 - Agents may prepare `draft` or `proposed` records within an accepted task.
 - Observed implementation is evidence and is not automatically an accepted decision.
-- `PROJECT_CONTEXT.md` is transitional, is not decision authority, and is
-  reconciled only in DOCARCH-002D3.
+- `PROJECT_CONTEXT.md` is a durable entrypoint and summary, not decision authority.
 
 ## ID policy
 
@@ -48,6 +48,8 @@ The registry may contain:
 
 The index is derived navigation and does not create decision authority. Accepted authority resides in individual decision records.
 
-## Future migration
+## Reconciliation boundary
 
-DOCARCH-002B1 preserves approved existing identifiers. Later approved stages may add records for already approved pending IDs; reserved and unrecovered IDs must not receive placeholder files.
+DOCARCH-002D3 changes navigation and lower-authority summaries only. Accepted
+decision semantics remain in the individual records, and unrecovered IDs must
+not receive placeholder files.

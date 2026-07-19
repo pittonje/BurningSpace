@@ -35,7 +35,7 @@ No decision records.
 
 ### DOCARCH-002D2 — Approved Mechanics Decision Migration
 
-Active in this PR.
+Completed and merged via PR #45.
 
 Creates exactly:
 
@@ -45,7 +45,7 @@ Creates exactly:
 - `BS-MECH-026`
 - `BS-MECH-027`
 
-The five records are created in this PR. The accepted count becomes 35.
+Five records were migrated, and the accepted count is 35.
 
 Exact dependencies:
 
@@ -55,23 +55,25 @@ Exact dependencies:
 - `BS-MECH-026` -> `BS-MECH-028`
 - `BS-MECH-027` -> `BS-MECH-026`
 
-D2 changes no runtime behavior or balance constants and makes no changes to
-architecture documents, design documents, or `PROJECT_CONTEXT.md`.
+D2 changed no runtime behavior or balance constants.
 
 The Product Architect-approved meanings are recorded below.
 
 ### DOCARCH-002D3 — Context, Architecture and Design Reconciliation
 
-Pending after D2.
+Active as the final reconciliation and closure candidate.
 
 Scope:
 
-- reduce root `PROJECT_CONTEXT.md` to durable entrypoint/summary;
-- reconcile stale architecture documents;
+- reduce root `PROJECT_CONTEXT.md` to a durable entrypoint;
+- correct `shared-dependency-map.md`;
+- correct `package-boundaries.md`;
 - mark `balance-v0.1.md` historical/non-authoritative;
 - reconcile `mvp-game-design.md` to accepted mechanics;
-- close DOCARCH-002;
-- make DOCARCH-003 the sole next safe action.
+- update the registry, decision README, and `CURRENT.md`;
+- create the D3 review artifact;
+- create no decisions;
+- change no runtime behavior or balance constants.
 
 ## Approved D2 mechanics
 
@@ -169,8 +171,8 @@ D3:
 - Claude QA
 - human-only merge
 
-Security/CI Reviewer is not required unless scope expands into CI/security
-semantics or `.github` files.
+Security/CI Reviewer is not required for D3 because D3 changes no security or
+CI semantics.
 
 For D1, Product Architect approval confirms status and authority semantics;
 Architecture Reviewer confirms the authority boundary; documentation consistency
@@ -186,13 +188,26 @@ Claude QA verifies the migration evidence. Architecture, Network, Security/CI,
 and Visual reviewers are not required because D2 changes no architecture,
 protocol, security/CI semantics, runtime, balance constants, or presentation.
 
+For D3, Product Architect approval confirms authority-aware reconciliation;
+Architecture Reviewer confirms package and authority summaries;
+Gameplay/Product Reviewer confirms the active design summary; documentation
+consistency review confirms cross-document alignment; and Claude QA verifies
+the closure evidence. Network and Visual reviewers are not required because D3
+changes no protocol, runtime networking, assets, UI, or presentation.
+
 ## Final closure condition
 
 DOCARCH-002 closes only after:
 
-- D1, D2, and D3 are merged;
-- five D2 records are accepted and indexed;
-- accepted count is 35;
-- `PROJECT_CONTEXT` and active architecture/design docs are reconciled;
-- no unresolved stale claim is silently retained;
-- DOCARCH-003 becomes the sole next safe action.
+- D3 conformance review is complete;
+- Product Architect approval evidence is recorded;
+- Claude QA evidence is recorded;
+- final required checks pass;
+- a human merges the D3 pull request.
+
+## Post-merge next task
+
+After D3 human merge, the next repository task is DOCARCH-003 — Canonical
+Development Roadmap. DOCARCH-003 must define the scopes of DOCARCH-004 —
+Architect Takeover Protocol and DOCARCH-005 — Role and Model Portability. Those
+tasks are not implemented here.
