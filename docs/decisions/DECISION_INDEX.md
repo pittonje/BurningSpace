@@ -37,17 +37,20 @@ This file is non-canonical navigation. Individual decision files are authoritati
 | `BS-PROC-004` | Required review evidence before human merge | accepted | Process governance — review evidence and merge preconditions | `BS-PROC-001`, `BS-PROC-002` | [record](BS-PROC-004.md) |
 | `CI-003-D1` | Deterministic trusted-base PR-risk routing for Claude QA | accepted | CI governance — PR QA routing and QA evidence binding | `BS-PROC-001`, `BS-PROC-004` | [record](CI-003-D1.md) |
 
-## Pending — DOCARCH-002C4
+## DOCARCH-002C status
 
-C-stage reconciliation, index cleanup, and closure remain pending.
+DOCARCH-002C is complete. The accepted decision-record count remains 30.
 
-## Reserved — do not create files
+## Approved, pending migration — DOCARCH-002D2
 
-- `BS-MECH-020` — signed sector meter
-- `BS-MECH-023` — post-capture 4/6 state
-- `BS-MECH-025` — turret restoration conditions
-- `BS-MECH-026` — zero-HP outpost capture
-- `BS-MECH-027` — retained HP/resources
+- `BS-MECH-020`
+- `BS-MECH-023`
+- `BS-MECH-025`
+- `BS-MECH-026`
+- `BS-MECH-027`
+
+DOCARCH-002D3 is documentation reconciliation and creates no decision ID by
+default. AGENT-004 remains deferred to DOCARCH-005.
 
 ## Not recovered — do not assign
 
