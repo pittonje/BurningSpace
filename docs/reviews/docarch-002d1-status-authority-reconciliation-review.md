@@ -22,6 +22,7 @@
 | DOCARCH-002 closure | Not prematurely closed | `CURRENT.md`: "DOCARCH-002 remains open until D3 merges"; task closure condition gates on D1–D3 merged | Pass |
 | DOCARCH-003 status | Not prematurely active | DOCARCH-003 appears only as the future sole next safe action after D3; nothing marks it active | Pass |
 | Permanent deferrals | Preserved | Task and `CURRENT.md` keep TestBattleRoom / SEC-006 → dedicated security task, branch protection / possible CI-004 → dedicated CI task, AGENT-004 and detailed portability → DOCARCH-005 | Pass |
+| D2 approved meanings preserved | Task matches Product Architect-approved meanings, no additions | `BS-MECH-020`, `023`, `026`, `027` match the recovery-report approved meanings; `BS-MECH-025` matches the Product Architect clarification comment on PR #44 (see Resolved findings), which supersedes the recovery-report combat-gating wording | Pass |
 
 ## Product Architect
 
@@ -33,8 +34,8 @@
 
 ## Architecture Reviewer
 
-- Verdict: CHANGES REQUIRED
-- Findings: The authority boundary itself is clean: `packages/shared` is stated
+- Verdict: APPROVED WITH NON-BLOCKING NOTES
+- Findings: The authority boundary is clean: `packages/shared` is stated
   as the current canonical broad runtime-contract owner and `packages/protocol`
   as an active transitional public compatibility boundary that may
   expose/re-export public contracts while depending on shared, with shared
@@ -42,24 +43,25 @@
   `BS-ARCH-005` exactly, with no overstatement of balance/config maturity
   (`BS-ARCH-006`). No decision record, governance, entrypoint, agent,
   architecture, design, workflow, runtime, package, or manifest path changed.
-  However, the D-stage task section that D2 will treat as the source of
-  Product Architect-approved decision semantics misstates the recorded
-  approved meaning of `BS-MECH-025` (see Blocking findings). Because the task
-  is the layer-6 authority feeding D2 record creation, that fidelity failure
-  blocks approval of this reconciliation pass; conditional approval is not
-  permitted.
+  The previously blocking `BS-MECH-025` approved-meaning finding is resolved:
+  the Product Architect clarification comment on PR #44 explicitly approves
+  the task's `BS-MECH-025` wording as the canonical meaning for future D2
+  migration and supersedes the older recovery-report combat-gating wording
+  (see Resolved findings). No implementation-file correction is needed.
+  Remaining notes are editorial only.
 - Reviewed commit: `715cfd63aa57770e9681e1f7e3cd031b5d0cbbd2`
 - Evidence source: Read-only inspection of the PR #44 five-path diff
   (`git diff origin/main...HEAD`), `docs/GOVERNANCE.md`,
   `docs/decisions/BS-ARCH-004.md`, `BS-ARCH-005.md`, `BS-ARCH-006.md`,
   `BS-PROC-001.md`, `BS-PROC-004.md`, `BS-MECH-024.md`,
-  `docs/reviews/docarch-002-decision-recovery-report.md`, and the C4 closure
-  review artifact
+  `docs/reviews/docarch-002-decision-recovery-report.md`, the C4 closure
+  review artifact, and the Product Architect clarification comment
+  <https://github.com/pittonje/BurningSpace/pull/44#issuecomment-5017096699>
 - Date: 2026-07-19
 
 ## Documentation consistency review
 
-- Verdict: CHANGES REQUIRED
+- Verdict: APPROVED WITH NON-BLOCKING NOTES
 - Findings: Registry, README, `CURRENT.md`, and the D-stage task are mutually
   consistent on status: C-stage closed, D1 active, D2/D3 pending, accepted
   count 30 until D2, DOCARCH-002 open, DOCARCH-003 inactive, deferrals
@@ -69,11 +71,14 @@
   `026`, `027`) accurately preserve the Product Architect-approved meanings
   recorded in `docs/reviews/docarch-002-decision-recovery-report.md`
   (confirmed-meaning table and conflicts C1, C2, C4, C5) without adding
-  numeric values beyond the approved ones. `BS-MECH-025` does not: the task
-  substitutes an "undamaged" outpost condition that appears nowhere in the
-  repository's recorded approved meaning and omits the recorded
-  combat-gating condition. This affects future D2 semantics and is therefore
-  blocking under the D1 verdict rules. Details in Blocking findings.
+  numeric values beyond the approved ones. `BS-MECH-025` now conforms: the
+  Product Architect clarification comment on PR #44, referencing the reviewed
+  implementation commit, explicitly approves the task's wording (same-faction
+  responsible outpost; outpost undamaged and sufficiently resourced; repair
+  speed and cost remain balance parameters; no separate active-combat gating
+  condition) and supersedes the older recovery-report combat-gating wording.
+  The task adds no semantics beyond that clarification. The formerly
+  blocking finding is resolved; details in Resolved findings.
 - Reviewed commit: `715cfd63aa57770e9681e1f7e3cd031b5d0cbbd2`
 - Evidence source: Read-only inspection of the PR #44 diff,
   `docs/decisions/DECISION_INDEX.md`, `docs/decisions/README.md`,
@@ -81,7 +86,8 @@
   `docs/tasks/docarch-002d-broader-reconciliation-and-closure.md`,
   `docs/reviews/docarch-002-decision-recovery-report.md` (lines 59–66,
   conflicts C1–C5), `docs/tasks/docarch-002b-confirmed-mechanics-migration.md`,
-  and repository-wide searches for the five D2 IDs and the term "undamaged"
+  and the Product Architect clarification comment
+  <https://github.com/pittonje/BurningSpace/pull/44#issuecomment-5017096699>
 - Date: 2026-07-19
 
 ## Claude QA
@@ -152,8 +158,8 @@
   the registry, count 30 until D2, `DECISION_INDEX.md` remains the canonical
   navigation source, and `PROJECT_CONTEXT.md` is explicitly stated as
   transitional and not decision authority.
-- Exception: the task's `BS-MECH-025` approved-meaning text fails
-  preservation verification — see Blocking findings.
+- The task's `BS-MECH-025` approved-meaning text conforms to the Product
+  Architect clarification recorded on PR #44 — see Resolved findings.
 
 ## Authority-boundary verification
 
@@ -198,26 +204,36 @@
 
 ## Blocking findings
 
-1. `BS-MECH-025` approved-meaning drift in
-   `docs/tasks/docarch-002d-broader-reconciliation-and-closure.md`
-   (Approved D2 mechanics section). The only Product Architect-approved
-   meaning recorded in the repository
-   (`docs/reviews/docarch-002-decision-recovery-report.md`, confirmed-meaning
-   row for `BS-MECH-025` and conflict C3) is: turrets restore only for a
-   same-faction responsible outpost, outside blocking active combat, and with
-   required resources; sector capture itself does not restore turrets. The
-   task instead states "automatic repair also requires the outpost to be
-   undamaged and sufficiently resourced". This (a) introduces an "undamaged"
-   outpost condition that appears nowhere in any recorded Product Architect
-   direction ("undamaged" occurs nowhere else in the repository), and
-   (b) omits the recorded combat-gating condition entirely. Because the D2
-   stage will create `BS-MECH-025.md` from this task text, the drift changes
-   future D2 decision semantics and cannot be non-blocking. Required fix:
-   restore the recorded approved conditions (same-faction responsible
-   outpost; not blocked by active combat; required resources available) or
-   obtain and cite an explicit new Product Architect export superseding the
-   recorded meaning. Reviewers must not guess between the two
-   (`docs/GOVERNANCE.md` conflict rules).
+None.
+
+## Resolved findings
+
+1. `BS-MECH-025` approved-meaning drift (formerly blocking) — RESOLVED.
+   The initial review found that the D-stage task's `BS-MECH-025` meaning
+   ("automatic repair also requires the outpost to be undamaged and
+   sufficiently resourced") diverged from the meaning recorded in
+   `docs/reviews/docarch-002-decision-recovery-report.md` (confirmed-meaning
+   row and conflict C3), which conditioned repair on being outside blocking
+   active combat and did not mention an undamaged-outpost condition. Per
+   `docs/GOVERNANCE.md` conflict rules, the discrepancy was returned to the
+   Product Architect instead of guessed. The Product Architect (project
+   owner, pittonje) resolved it with an explicit clarification comment on
+   PR #44 referencing reviewed implementation commit
+   `715cfd63aa57770e9681e1f7e3cd031b5d0cbbd2`:
+   <https://github.com/pittonje/BurningSpace/pull/44#issuecomment-5017096699>.
+   The clarification approves the task wording as the canonical `BS-MECH-025`
+   meaning for future D2 migration — sector capture itself does not restore
+   destroyed turrets; restoration is eligible only for a same-faction
+   responsible outpost; automatic repair additionally requires the
+   responsible outpost to be undamaged and to have sufficient resources;
+   repair speed and repair cost remain balance parameters; no separate
+   active-combat gating condition is established — and explicitly supersedes
+   the older recovery-report combat-gating wording as the current Product
+   Architect authority export. The task matches the clarification exactly
+   and adds no semantics beyond it; no task or implementation-file change is
+   required. This clarification is mechanics-authority evidence only and is
+   not the final BS-PROC-004 Product Architect merge approval, which remains
+   pending.
 
 ## Non-blocking notes
 
@@ -226,13 +242,9 @@
    "Approved D2 mechanics" section uniformly classify the five IDs as
    approved-pending. The heading refers to the formerly reserved set and no
    status listing marks the IDs reserved, so this is presentation-level, but
-   retitling to "Approved Mechanics Decision Migration" would remove the last
-   "reserved" wording and should be done alongside the blocking fix.
-2. The task's `BS-MECH-025` bullet "repair speed and cost remain balance
-   parameters" adds a parameter classification not present in the recorded
-   approved meaning. It decides nothing numeric and marks the parameters as
-   open, but it should be re-confirmed when the blocking finding is fixed.
-3. `docs/decisions/README.md` now calls `DECISION_INDEX.md` "the canonical
+   retitling to "Approved Mechanics Decision Migration" in a future editorial
+   pass would remove the last "reserved" wording. Editorial only.
+2. `docs/decisions/README.md` now calls `DECISION_INDEX.md` "the canonical
    decision-navigation source" while the index's own header says "This file
    is non-canonical navigation". The two are reconcilable (canonical place to
    navigate from versus no canonical decision authority, per
@@ -241,7 +253,11 @@
 
 ## Overall verdict
 
-CHANGES REQUIRED — solely for Blocking finding 1. All registry, status,
-scope, closure, deferral, and package-authority checks pass; the D1 change
-set is otherwise clean and may be approved once the `BS-MECH-025` meaning is
-corrected or an explicit superseding Product Architect export is cited.
+APPROVED WITH NON-BLOCKING NOTES. All registry, status, scope, closure,
+deferral, D-stage-split, and package-authority checks pass. The formerly
+blocking `BS-MECH-025` finding is resolved by the Product Architect
+clarification recorded in Resolved findings; the remaining notes are
+editorial presentation items that affect no decision status, count, future
+D2 semantics, package authority, stage boundary, closure state, or required
+review flow. Product Architect final merge approval and Claude QA evidence
+remain pending per BS-PROC-004; human-only merge.
