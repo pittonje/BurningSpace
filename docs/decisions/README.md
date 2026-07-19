@@ -6,11 +6,12 @@ This registry will contain BurningSpace architecture, design, mechanics, process
 
 ## Current status
 
-DOCARCH-002C is complete. DOCARCH-002D1 is active for status and authority
-reconciliation. DOCARCH-002D2 will migrate five Product Architect-approved
-mechanics records, and DOCARCH-002D3 will reconcile context, architecture, and
-design documentation. The accepted decision-record count remains 30 until D2
-merges. Each individual record is authoritative within its accepted scope.
+DOCARCH-002C is complete, and DOCARCH-002D1 is merged. DOCARCH-002D2 is active
+in this PR and migrates five Product Architect-approved mechanics decisions.
+The accepted decision-record count becomes 35 when this PR merges.
+DOCARCH-002D3 remains pending for context, architecture, and design
+reconciliation. Each individual record is authoritative within its accepted
+scope.
 
 [`DECISION_INDEX.md`](DECISION_INDEX.md) remains the canonical decision-navigation
 source. Do not duplicate its detailed registry here.
@@ -22,7 +23,8 @@ Decision authority is defined by [`docs/GOVERNANCE.md`](../GOVERNANCE.md).
 - Only the Product Architect can mark a decision `accepted`.
 - Agents may prepare `draft` or `proposed` records within an accepted task.
 - Observed implementation is evidence and is not automatically an accepted decision.
-- `PROJECT_CONTEXT.md` is transitional and is not decision authority.
+- `PROJECT_CONTEXT.md` is transitional, is not decision authority, and is
+  reconciled only in DOCARCH-002D3.
 
 ## ID policy
 

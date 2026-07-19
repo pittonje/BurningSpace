@@ -22,7 +22,7 @@ inventing architectural or product intent.
 
 ### DOCARCH-002D1 — Status and Authority Reconciliation
 
-Active in this PR.
+Completed and merged via PR #44.
 
 Scope:
 
@@ -33,9 +33,9 @@ Scope:
 
 No decision records.
 
-### DOCARCH-002D2 — Reserved Mechanics Decision Migration
+### DOCARCH-002D2 — Approved Mechanics Decision Migration
 
-Pending after D1.
+Active in this PR.
 
 Creates exactly:
 
@@ -45,7 +45,18 @@ Creates exactly:
 - `BS-MECH-026`
 - `BS-MECH-027`
 
-Accepted count after D2: 35.
+The five records are created in this PR. The accepted count becomes 35.
+
+Exact dependencies:
+
+- `BS-MECH-020` -> `BS-MECH-019`
+- `BS-MECH-023` -> `BS-MECH-021`, `BS-MECH-022`, `BS-MECH-026`
+- `BS-MECH-025` -> `BS-MECH-024`
+- `BS-MECH-026` -> `BS-MECH-028`
+- `BS-MECH-027` -> `BS-MECH-026`
+
+D2 changes no runtime behavior or balance constants and makes no changes to
+architecture documents, design documents, or `PROJECT_CONTEXT.md`.
 
 The Product Architect-approved meanings are recorded below.
 
@@ -167,6 +178,13 @@ review confirms registry, task, and handoff alignment; and Claude QA verifies
 the stated conformance evidence. Network, Security/CI, Gameplay/Product, and
 Visual reviewers are not required for D1 because it changes no runtime,
 protocol, security/CI semantics, gameplay, or presentation.
+
+For D2, Product Architect approval confirms the accepted decision semantics;
+Gameplay/Product Reviewer confirms mechanics fidelity; documentation
+consistency review confirms record, registry, task, and handoff alignment; and
+Claude QA verifies the migration evidence. Architecture, Network, Security/CI,
+and Visual reviewers are not required because D2 changes no architecture,
+protocol, security/CI semantics, runtime, balance constants, or presentation.
 
 ## Final closure condition
 

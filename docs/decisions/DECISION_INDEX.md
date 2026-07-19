@@ -20,9 +20,14 @@ This file is non-canonical navigation. Individual decision files are authoritati
 | `BS-MECH-017` | Non-adjacent enemy-sector attacks | accepted | Mechanics — sector attack eligibility | none | [record](BS-MECH-017.md) |
 | `BS-MECH-018` | Turret-gated sector capture | accepted | Mechanics — sector capture prerequisites | none | [record](BS-MECH-018.md) |
 | `BS-MECH-019` | Combat-unit capture weighting | accepted | Mechanics — sector capture progress | none | [record](BS-MECH-019.md) |
+| `BS-MECH-020` | Owner-relative signed sector-control meter | accepted | Sector control and ownership transition | `BS-MECH-019` | [record](BS-MECH-020.md) |
 | `BS-MECH-021` | Outpost sector governance cardinality | accepted | Mechanics — outpost governance | none | [record](BS-MECH-021.md) |
 | `BS-MECH-022` | Outpost shield sector threshold | accepted | Mechanics — outpost shield eligibility | `BS-MECH-021` | [record](BS-MECH-022.md) |
+| `BS-MECH-023` | Post-outpost-capture governed-sector state | accepted | Outpost ownership transition and shield state | `BS-MECH-021`, `BS-MECH-022`, `BS-MECH-026` | [record](BS-MECH-023.md) |
 | `BS-MECH-024` | Sector capture does not restore turrets | accepted | Mechanics — turret persistence | none | [record](BS-MECH-024.md) |
+| `BS-MECH-025` | Turret restoration eligibility | accepted | Sector defensive-turret restoration | `BS-MECH-024` | [record](BS-MECH-025.md) |
+| `BS-MECH-026` | Outpost capture at zero structural HP | accepted | Outpost capture trigger | `BS-MECH-028` | [record](BS-MECH-026.md) |
+| `BS-MECH-027` | Partial post-capture outpost condition | accepted | Outpost state immediately after ownership transition | `BS-MECH-026` | [record](BS-MECH-027.md) |
 | `BS-MECH-028` | Sector and outpost contest metrics | accepted | Mechanics — capture metrics | none | [record](BS-MECH-028.md) |
 | `BS-ARCH-001` | Server-authoritative multiplayer model | accepted | Architecture — multiplayer authority | none | [record](BS-ARCH-001.md) |
 | `BS-ARCH-002` | npm-workspaces TypeScript monorepo | accepted | Architecture — repository structure and workspace tooling | none | [record](BS-ARCH-002.md) |
@@ -39,18 +44,12 @@ This file is non-canonical navigation. Individual decision files are authoritati
 
 ## DOCARCH-002C status
 
-DOCARCH-002C is complete. The accepted decision-record count remains 30.
+DOCARCH-002C is complete. DOCARCH-002D1 is merged, and DOCARCH-002D2 migrates
+five approved mechanics records in this PR. The accepted decision-record count
+is 35 in this PR state.
 
-## Approved, pending migration — DOCARCH-002D2
-
-- `BS-MECH-020`
-- `BS-MECH-023`
-- `BS-MECH-025`
-- `BS-MECH-026`
-- `BS-MECH-027`
-
-DOCARCH-002D3 is documentation reconciliation and creates no decision ID by
-default. AGENT-004 remains deferred to DOCARCH-005.
+DOCARCH-002D3 remains pending documentation reconciliation and creates no
+decision ID by default. AGENT-004 remains deferred to DOCARCH-005.
 
 ## Not recovered — do not assign
 
