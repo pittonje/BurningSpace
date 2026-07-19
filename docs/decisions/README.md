@@ -6,7 +6,7 @@ This registry will contain BurningSpace architecture, design, mechanics, process
 
 ## Current status
 
-Accepted decision records now exist after DOCARCH-002B1, DOCARCH-002B2, DOCARCH-002C1, DOCARCH-002C2, and DOCARCH-002C3. DOCARCH-002C4 remains pending. Each individual record is authoritative within its accepted scope.
+Accepted decision records now exist after DOCARCH-002B1, DOCARCH-002B2, DOCARCH-002C1, DOCARCH-002C2, and DOCARCH-002C3. DOCARCH-002C4 is active as the C-stage closure pass. Each individual record is authoritative within its accepted scope.
 
 [`DECISION_INDEX.md`](DECISION_INDEX.md) is the complete non-canonical navigation listing for accepted, pending, reserved, and unrecovered IDs.
 
