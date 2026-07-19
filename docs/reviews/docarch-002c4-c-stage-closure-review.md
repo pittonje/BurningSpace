@@ -96,15 +96,21 @@ Task file (`docs/tasks/docarch-002c-architecture-process-decision-migration.md`)
 
 ## Product Architect
 
-Verdict:
+Verdict: APPROVED FOR HUMAN MERGE
 
-Findings:
+Findings: No blockers. Approval accepts the independent Architecture +
+Documentation Consistency review verdict of APPROVED WITH NON-BLOCKING NOTES.
+Non-blocking follow-ups are deferred to DOCARCH-002D or later editorial
+cleanup. Merge remains conditional on recorded Product Architect and Claude QA
+evidence and on required checks passing on the final PR head.
 
-Reviewed commit:
+Reviewed commit: `831a73f4562cb0c8a43af58fbdac103950aea3ea`
 
-Evidence source:
+Evidence source: Product Architect approval comment by the human project owner
+(pittonje) on PR #43:
+<https://github.com/pittonje/BurningSpace/pull/43#issuecomment-5016920803>
 
-Date:
+Date: 2026-07-19
 
 ## Architecture Reviewer
 
@@ -175,15 +181,30 @@ Date: 2026-07-14
 
 ## Claude QA
 
-Verdict:
+Verdict: Approved with suggestions
 
-Findings:
+Findings: No blockers. Important suggestion: before human merge, re-verify
+that the required checks (BS-PROC-004) actually pass on the final PR head
+`831a73f` rather than assumed, since `mergeStateStatus` reported UNSTABLE at
+review time while the QA check was still running. Minor suggestions: keep the
+deterministic QA workflow (not the committed skeleton) as the system of record
+for this verdict so the intentionally blank verdict rows are not mistaken for
+missing review after merge; the non-blocking notes already recorded in this
+artifact (stale "Pending — DOCARCH-002C4" `DECISION_INDEX.md` section and the
+task file's early "Stage split" wording) are accurate and correctly deferred
+to DOCARCH-002D rather than left open indefinitely.
 
-Reviewed commit:
+Reviewed commit: `831a73f4562cb0c8a43af58fbdac103950aea3ea`
 
-Evidence source:
+Evidence source: `qa-review` check, workflow run 29355807478
+(<https://github.com/pittonje/BurningSpace/actions/runs/29355807478>), final
+validated evidence comment
+<https://github.com/pittonje/BurningSpace/pull/43#issuecomment-4973119477>
+with footer binding the review to `831a73f`.
 
-Date:
+Check conclusion: SUCCESS
+
+Date: 2026-07-14
 
 ## Scope verification
 
