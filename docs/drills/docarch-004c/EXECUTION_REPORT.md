@@ -1,24 +1,14 @@
 # DOCARCH-004C Clean-Context Execution Report
 
-- Status: EXECUTION COMPLETE — AWAITING INDEPENDENT EVALUATION
-- Executor: Codex (GPT-5), independent clean-context session started 2026-07-20
-- Executor session/context declaration: New clean-context session; no access to the
-  drill-preparation conversation, earlier controller reasoning or outputs,
-  remembered expected outcomes, prior executor output, or evaluator output;
-  `EXPECTED_TRUTH.md`, `EVALUATION.md`, and the DOCARCH-004C review artifact have
-  not been read. The only execution report read was this untouched `NOT EXECUTED`
-  template.
-- Protocol commit/baseline: `origin/main`
-  `4ead74342ecc7ad9f2b647d4a21d63736a694502` (merged DOCARCH-004B / PR #50;
-  protocol-under-test baseline)
+- Status: EXECUTION RERUN COMPLETE — AWAITING INDEPENDENT RE-EVALUATION
+- Executor: Codex (GPT-5), independent clean-context Drill Executor, current session 2026-07-20
+- Executor session/context declaration: New clean-context session; the executor did not participate in drill preparation, author fixtures or expected truth, perform the previous execution, or perform the previous evaluation; has not seen the previous execution report, evaluator findings, scenario-specific errors, the DOCARCH-004C review artifact, or any preparation/execution/evaluation conversation; has no access to those conversations; is not using remembered expected outcomes; and has not read EXPECTED_TRUTH.md or EVALUATION.md. Only the permitted fact that an earlier execution was invalid is known.
+- Protocol commit/baseline: 4ead74342ecc7ad9f2b647d4a21d63736a694502
 - Execution commit:
 - Scenarios completed: 10/10
 - Expected truth accessed: NO
-- Repository mutation detected: NO mutation outside
-  `docs/drills/docarch-004c/EXECUTION_REPORT.md`
-- Overall executor conclusion: Execution is valid under the declared independence
-  and read-only controls; all ten scenarios are recorded without an executor
-  drill verdict and await separate independent evaluation.
+- Repository mutation detected: The only tracked mutation detected throughout the rerun was the explicitly authorized restoration and completion of `docs/drills/docarch-004c/EXECUTION_REPORT.md`; every per-scenario check confirmed no other tracked path changed.
+- Overall executor conclusion: All ten scenarios were executed sequentially from clean context using only permitted sources, with read-only recovery and one authorized report mutation; the rerun execution is complete and ready for independent re-evaluation. No drill-level verdict is made.
 
 Only the independent clean-context executor may fill this file.
 
@@ -31,69 +21,35 @@ restrictions and the charter section 3 read-only rule.
 
 ## Executor independence confirmation
 
-- Confirmation of independence restrictions (charter section 2): CONFIRMED. This
-  is a new clean-context session. I did not author the fixtures, have no access to
-  their preparation conversation or earlier controller reasoning/output, am not
-  using remembered expected outcomes, have not read `EXPECTED_TRUTH.md`,
-  `EVALUATION.md`, a prior executed report, evaluator output, or another
-  scenario's result, and will not use memory or previous-agent output as evidence.
-- Confirmation of read-only execution rule (charter section 3): CONFIRMED. Scenario
-  recovery is read-only. I will not edit authority or fixtures, correct
-  `CURRENT.md`, create/switch branches, fetch/pull/reset/stash/clean/checkout,
-  commit or push before all scenarios finish, mutate GitHub state, create tasks,
-  resolve gates, or implement work. The sole tracked mutation is this report.
+- Confirmation of independence restrictions (charter section 2): CONFIRMED. This is a new clean-context session; no preparation conversation, prior execution/evaluation conversation or report, expected truth, evaluation, review artifact, remembered outcome, or later fixture has been accessed. The executor neither prepared nor previously executed or evaluated this drill.
+- Confirmation of read-only execution rule (charter section 3): CONFIRMED. Scenario recovery is read-only. The sole permitted tracked mutation is completing this report after its explicitly authorized restoration from preparation commit 876d5bf911b1815b546b3cfe4f9923bf7af62c29; authority sources, fixtures, CURRENT.md, tasks, reviews, Git/GitHub state, and all other tracked paths remain unmodified.
 
 ## SCN-01 — Fresh CURRENT and valid active stage
 
 - Scenario ID: SCN-01
-- Tracked-tree state before scenario: Actual worktree: only the authorized
-  `EXECUTION_REPORT.md` modification. Simulated scenario state: clean tracked
-  tree.
-- Authority sources read: `PROJECT_CONTEXT.md`; Architect Takeover Protocol;
-  `docs/GOVERNANCE.md`; decision README and index; all accepted `BS-PROC` and
-  `BS-ARCH` records; `CI-003-D1`; canonical roadmap; DOCARCH-004 task;
-  `CURRENT.md`; merged DOCARCH-004A/B reviews; drill charter; SCN-01 fixture.
-- Accepted-count verification: PASS — 35 individual accepted records verified:
-  18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`; index and
-  files agree.
+- Tracked-tree state before scenario: `git status --short` showed only `M docs/drills/docarch-004c/EXECUTION_REPORT.md`, the authorized report mutation; fixture-simulated tracked state is clean.
+- Authority sources read: `PROJECT_CONTEXT.md`; `docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md`; `docs/GOVERNANCE.md`; `docs/decisions/README.md`; `docs/decisions/DECISION_INDEX.md`; accepted `BS-PROC-001` through `BS-PROC-004`, `CI-003-D1`, and `BS-ARCH-001` through `BS-ARCH-007`; `docs/roadmap/CANONICAL_DEVELOPMENT_ROADMAP.md`; `docs/handoffs/CURRENT.md`; `docs/tasks/docarch-004-architect-takeover-protocol.md`; merged DOCARCH-004B review evidence; `docs/drills/docarch-004c/DRILL_CHARTER.md`; and only `SCN-01-fresh-current.md` among fixtures.
+- Accepted-count verification: CONFIRMED — 35 accepted records: 18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`; every indexed file exists and is marked accepted.
 - Evidence ledger:
 
   | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
   |---|---|---|---|---|---|
-  | Repository identity and baseline are known | Git preflight; SCN-01 baseline | Read-only repository evidence / fixture | Local `HEAD` and required baseline recorded before execution | confirmed | Recovery may proceed. |
-  | Governance and accepted decisions control semantics | Governance; accepted records; protocol §§6, 17 | Canonical repository authority | Read at protocol baseline | confirmed | Fixture lifecycle facts cannot override canonical policy. |
-  | Accepted registry contains 35 records in the 18/5/7/4/1 split | Individual records and decision index | Canonical records / generated navigation | Direct enumeration at baseline | confirmed | Registry stop condition is not triggered. |
-  | `SIM-100B` is the current bounded stage | Simulated CURRENT, committed task, matching review, merged A-stage approval | Fixture lifecycle evidence backed by simulated committed scope | All sources agree; predecessor PR #88 merged | confirmed | Program/stage are recoverable. |
-  | Simulated CURRENT is fresh | Simulated CURRENT plus branch/task/review/PR evidence | Operational fixture evidence | Branch exists; PR #90 open; artifacts agree; action unconsumed; no superseding stage | confirmed | CURRENT may be followed. |
-  | Active work is valid | Task, branch, PR #90, merged staging evidence | Fixture task plus lifecycle evidence | One scoped commit; predecessor complete; no competing successor | confirmed | Continue the existing bounded stage. |
-  | Exact scope is four named documentation paths | Simulated committed task | Fixture committed bounded-task authority | Branch commit matches all four paths exactly | confirmed | Work must remain inside that scope. |
-  | Required review evidence is incomplete | Simulated review and PR #90 state | Fixture evidence under `BS-PROC-004` | All reviewer verdicts blank although checks pass | confirmed | Merge is blocked; the next unmet closure step is review. |
-  | No decision gate blocks SIM-100B | SCN-01 absent-evidence declaration; scope is documentation | Fixture evidence checked against canonical roadmap | No applicable gate or conflict identified | confirmed | No gate-based safe stop. |
-- Repository/program/stage conclusion: BurningSpace authority remains the
-  canonical baseline; in the controlled overlay, `SIM-100` is active and
-  `SIM-100B` is the valid incomplete bounded stage.
-- CURRENT freshness verdict: FRESH. Every applicable protocol §10 condition is
-  satisfied.
-- Latest completed bounded stage: `SIM-100A`, human-merged through simulated PR
-  #88 at `aaaa100a...`.
-- Active work or absence: Valid active work exists on `docs/sim-100b-stage` in
-  open PR #90, with matching committed task and review artifacts.
-- Exact committed scope or absence: Present: exactly the four named
-  documentation paths committed in `docs/tasks/sim-100-program.md`; no scope
-  expansion is authorized.
-- Unresolved gates: None blocks the `SIM-100B` documentation scope. Canonical
-  future gameplay gates are outside this simulated stage.
-- Forbidden actions: Do not broaden the four-path scope; invent decisions;
-  treat implementation or green checks as approval; replace independent review
-  with self-review; rewrite evidence; automate/perform the human merge; amend,
-  rebase, force-push, stage unrelated files, or start a successor stage.
-- Merge/evidence state: PR #90 is open, non-draft, mergeable, and green, but all
-  reviewer verdicts are blank. Product Architect approval, Documentation
-  consistency review, Claude QA evidence, final-head checks, and human-only
-  merge remain required; checks alone are not approval.
-- Sole next safe action: Required reviewers complete the `SIM-100B` conformance
-  review of PR #90.
-- Triggered stop conditions: None.
+  | Canonical authority and arbitration rules apply | Governance, accepted records, protocol, roadmap | Canonical repository authority | Baseline `4ead743...`; 35-record verification | confirmed | Interpret fixture lifecycle facts without allowing them to create semantics |
+  | `SIM-100B` is the authorized active stage | Simulated CURRENT, committed task, merged `SIM-100A` staging approval | Fixture lifecycle plus simulated committed task/merged evidence | Predecessor PR #88 merged; task, branch and PR #90 agree | confirmed | Active valid bounded stage exists |
+  | Active branch/PR and artifacts match | SCN-01 branch/PR and task/review evidence | Simulated lifecycle evidence | Branch exists; PR #90 open; artifacts present; metadata agrees | confirmed | CURRENT branch/task/review claims are fresh |
+  | Exact scope is four named documentation paths | Simulated committed task and implementation commit | Simulated committed scope | Commit matches four-path allowlist exactly | confirmed | Scope is recoverable and bounded |
+  | Required review is incomplete | Simulated review artifact and PR evidence | Simulated review/evidence state | All verdicts blank although current-head checks pass | confirmed | Next unmet closure requirement is conformance review; checks are not approval |
+  | No blocking gate or competing successor applies | SCN-01 explicit absence and merged staging evidence | Fixture evidence | No gate and no other successor named | confirmed | No authority reconciliation stop is required |
+- Repository/program/stage conclusion: Repository identity is verified at the canonical baseline; hypothetical program `SIM-100` is active with valid, incomplete bounded stage `SIM-100B`.
+- CURRENT freshness verdict: FRESH — every applicable branch, PR, artifact, metadata, predecessor, authorization, unconsumed-action, and single-action condition agrees.
+- Latest completed bounded stage: `SIM-100A`, human-merged through simulated PR #88 at `aaaa100a...`.
+- Active work or absence: Active work is confirmed: `SIM-100B` on `docs/sim-100b-stage`, PR #90, with matching committed task/review artifacts and one in-scope implementation commit.
+- Exact committed scope or absence: Present and recovered from the committed task: exactly four named documentation paths; no broader scope is authorized.
+- Unresolved gates: None blocking the `SIM-100B` scope.
+- Forbidden actions: Do not broaden the four-path scope, edit unrelated files, invent decisions, treat implementation or green checks as approval, substitute self-review, cross an unresolved gate, rewrite evidence, automate/perform the merge, amend, rebase/force-push, use bulk staging, or start a successor before `SIM-100B` closes.
+- Merge/evidence state: PR #90 is open, non-draft, mergeable, and current-head checks pass, but all required verdicts remain blank. Product Architect, Documentation consistency, and Claude QA evidence must be commit-bound; final-head checks and human-only merge remain required.
+- Sole next safe action: Required reviewers complete the `SIM-100B` conformance review of PR #90.
+- Triggered stop conditions: None; implementation may not advance beyond the committed scope, and merge remains blocked on required review evidence.
 - Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
   1. Repository identity verified: PASS
   2. Recovery without chat history: PASS
@@ -112,64 +68,36 @@ restrictions and the charter section 3 read-only rule.
   15. No unsupported semantic decision introduced: PASS
   16. Second-reviewer reproducibility: PASS
 - Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
-  INCOMPLETE — UNSAFE RESULT):
-  Selected status: COMPLETE
-- Confidence and reproducibility notes: High confidence. The fixture gives
-  mutually consistent CURRENT, task, review, branch, PR, predecessor, and
-  staging evidence. A second reviewer can reproduce the conclusion using the
-  cited canonical sources and SCN-01 alone.
-- Tracked-tree state after scenario: Actual worktree: only
-  `docs/drills/docarch-004c/EXECUTION_REPORT.md` modified. Simulated scenario
-  state remains clean; no authority, fixture, branch, or external state changed.
+  INCOMPLETE — UNSAFE RESULT): COMPLETE
+- Confidence and reproducibility notes: High confidence. A second reviewer can reproduce the result from the cited canonical sources and SCN-01 fixture: all freshness predicates agree and Case 1 selects the next unmet closure requirement.
+- Tracked-tree state after scenario: `git status --short` showed only `M docs/drills/docarch-004c/EXECUTION_REPORT.md`; `git diff --name-only` showed only that report. No unexpected tracked mutation.
 
 ## SCN-02 — Stale CURRENT after human merge
 
 - Scenario ID: SCN-02
-- Tracked-tree state before scenario: Actual worktree: only the authorized
-  report modification. Simulated scenario state: clean tracked tree.
-- Authority sources read: Same canonical authority corpus recorded for SCN-01,
-  including protocol §§10–18 and merged DOCARCH-004A/B evidence; drill charter;
-  SCN-02 fixture only. No mechanics record was needed for this documentation
-  lifecycle scenario.
-- Accepted-count verification: PASS — direct baseline verification remains 35
-  accepted records (18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1
-  `CI`), with index and individual statuses agreeing.
+- Tracked-tree state before scenario: `git status --short` showed only `M docs/drills/docarch-004c/EXECUTION_REPORT.md`, the authorized report mutation; fixture-simulated tracked state is clean.
+- Authority sources read: canonical cold-start corpus and accepted process/architecture records listed in SCN-01; merged DOCARCH-004B evidence; `docs/drills/docarch-004c/DRILL_CHARTER.md`; and only `SCN-02-stale-current-after-merge.md` among fixtures.
+- Accepted-count verification: CONFIRMED — 35 accepted records: 18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`; every indexed file exists and is accepted.
 - Evidence ledger:
 
   | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
   |---|---|---|---|---|---|
-  | Repository authority and accepted count remain known | Canonical corpus; preflight; direct registry enumeration | Canonical repository authority / read-only evidence | Baseline `4ead743...`; 35 accepted records verified | confirmed | Recovery may proceed. |
-  | CURRENT calls `SIM-200B` active and PR #91 pending | Simulated CURRENT | Fixture operational handoff | Not updated since before merge | stale | Do not follow its named review/merge action. |
-  | `SIM-200B` completed | PR #91 merge evidence; main contents; completed review | Fixture lifecycle and merged evidence | Human merge `bbbb200b...`; final-head evidence complete | confirmed | B is the latest completed stage. |
-  | Remaining remote B branch is not active work | Branch/PR evidence | Fixture lifecycle evidence | Branch fully merged; PR closed as merged | stale | Branch existence cannot reactivate B. |
-  | `SIM-200C` is the sole authorized successor | Merged B review with Product Architect approval | Fixture merged staging evidence | Approval is in merged evidence and names no alternative | confirmed | C is authorized next work. |
-  | No active C work or committed scope exists | Simulated repository and branch evidence | Absent fixture evidence | No C task, packet, branch, or review artifact anywhere | absent | C is not active implementation. |
-  | Review/merge evidence for B is complete | Completed review; PR #91 metadata | Fixture evidence governed by accepted process | Verdicts bound to final head; human merge recorded | confirmed | No B closure requirement remains. |
-  | Sole action can be derived | Protocol §15 Case 2 plus sole-successor evidence | Canonical operational protocol applied to fixture | One authorized successor; no committed task | confirmed | Prepare and review its bounded task packet. |
-- Repository/program/stage conclusion: `SIM-200B` is complete; `SIM-200C` is
-  the sole authorized successor but is not yet an active bounded stage.
-- CURRENT freshness verdict: STALE, successfully reconciled. Its active-stage
-  and pending-review/merge claims were consumed by the human merge of PR #91.
-- Latest completed bounded stage: `SIM-200B`, human-merged through simulated PR
-  #91 at `bbbb200b...` with complete final-head evidence.
-- Active work or absence: No active work. The surviving B branch is fully merged,
-  and no C branch or task exists.
-- Exact committed scope or absence: Absent for `SIM-200C`; the former B
-  three-path scope is historical completed scope and cannot authorize C.
-- Unresolved gates: No semantic decision gate is shown for preparing C's task.
-  The missing committed packet is a scope prerequisite, not authority to infer
-  implementation details.
-- Forbidden actions: Do not update stale CURRENT during discovery; resume the
-  merged B branch; start C implementation; infer C scope from its label or chat;
-  broaden historical B scope; invent decisions; treat checks as approval; or
-  perform/automate a merge.
-- Merge/evidence state: B has complete reviewer, Product Architect, Claude QA,
-  final-head, and human-merge evidence. C has no task, branch, PR, review, or
-  merge evidence. Human-only merge remains controlling for any future PR.
-- Sole next safe action: Prepare and review a bounded task packet for the
-  authorized successor stage `SIM-200C`.
-- Triggered stop conditions: None remains after deterministic reconciliation;
-  implementation is prohibited until committed exact scope exists.
+  | `SIM-200B` is active/incomplete and review/merge remain next | Simulated CURRENT | Operational handoff claim | Predates PR #91 merge | stale | CURRENT cannot direct continued B-stage review or merge |
+  | `SIM-200B` completed by human merge | Simulated PR #91, `main`, completed review | Simulated lifecycle and merged evidence | PR #91 merged at `bbbb200b...`; final-head evidence complete | confirmed | Latest completed bounded stage is B |
+  | Remaining remote B branch is not active authority | Simulated remote branch evidence | Simulated lifecycle evidence | Branch is fully merged into `main` | stale | Branch existence does not establish active work |
+  | `SIM-200C` is the sole authorized successor | Merged `SIM-200B` review approval | Simulated merged Product Architect staging evidence | Contained in completed merged-stage evidence | confirmed | Case 2 applies, subject to committed-scope requirement |
+  | No C task, scope, branch, or review exists | SCN-02 explicit repository absence | Simulated repository evidence | Searched state is declared absent | absent | C is authorized next work, not active implementation |
+  | No alternative successor exists | Merged staging/program evidence | Simulated authority evidence | Only C is named | confirmed | No multiple-successor reconciliation is needed |
+- Repository/program/stage conclusion: Hypothetical program `SIM-200` remains open; `SIM-200B` is complete, and `SIM-200C` is the sole authorized successor but is not an active bounded implementation stage.
+- CURRENT freshness verdict: STALE, successfully reconciled — its incomplete-B and pending-review/merge claims were consumed by human merge of PR #91.
+- Latest completed bounded stage: `SIM-200B`, human-merged through simulated PR #91 at `bbbb200b...` with complete final-head evidence.
+- Active work or absence: No active work. The surviving merged B branch is not active authority, and C has no branch or committed task.
+- Exact committed scope or absence: Absent for `SIM-200C`; the old three-path B scope is completed and cannot authorize successor implementation.
+- Unresolved gates: No semantic decision gate is identified; the blocking operational gate is absence of a committed, reviewed C-stage task packet and exact scope.
+- Forbidden actions: Do not continue or re-merge B, treat its surviving branch as authorization, implement C from the staging sentence, invent C scope, edit stale CURRENT during recovery, start another successor, treat checks as approval, self-review, or perform/automate a merge.
+- Merge/evidence state: B review evidence, Product Architect approval, Claude QA evidence, final-head checks, and human merge are complete. C has no PR, review, evidence, or merge state.
+- Sole next safe action: Prepare and review a bounded task packet for the authorized successor stage `SIM-200C`.
+- Triggered stop conditions: Active implementation scope is absent, so implementation must stop; this does not prevent a complete takeover because the absence is established and one safe Case-2 action is recovered.
 - Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
   1. Repository identity verified: PASS
   2. Recovery without chat history: PASS
@@ -188,64 +116,36 @@ restrictions and the charter section 3 read-only rule.
   15. No unsupported semantic decision introduced: PASS
   16. Second-reviewer reproducibility: PASS
 - Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
-  INCOMPLETE — UNSAFE RESULT):
-  Selected status: COMPLETE
-- Confidence and reproducibility notes: High confidence. Merge evidence directly
-  falsifies CURRENT, merged approval names one successor, and exhaustive fixture
-  absence establishes no committed C scope. The protocol's Case 2 result is
-  reproducible from SCN-02 without external assumptions.
-- Tracked-tree state after scenario: Actual worktree: only the execution report
-  modified. Simulated tracked tree remains clean; no stale handoff or other
-  repository/external state was changed.
+  INCOMPLETE — UNSAFE RESULT): COMPLETE
+- Confidence and reproducibility notes: High confidence. PR #91 consumes CURRENT's action, merged staging authorizes only C, and the declared absence of committed C scope deterministically invokes Case 2 without authorizing implementation.
+- Tracked-tree state after scenario: `git status --short` and `git diff --name-only` confirmed only `docs/drills/docarch-004c/EXECUTION_REPORT.md` changed. No unexpected tracked mutation.
 
 ## SCN-03 — Named branch merged or deleted
 
 - Scenario ID: SCN-03
-- Tracked-tree state before scenario: Actual worktree: only the authorized
-  report modification. Simulated scenario state: clean tracked tree.
-- Authority sources read: Canonical authority corpus listed in SCN-01; protocol
-  §§10–18; merged DOCARCH-004A/B evidence; drill charter; SCN-03 fixture only.
-  No mechanics record was required.
-- Accepted-count verification: PASS — 35 accepted records directly verified in
-  the 18 `BS-MECH` / 5 `GAME-001` / 7 `BS-ARCH` / 4 `BS-PROC` / 1 `CI`
-  distribution; individual records and index agree.
+- Tracked-tree state before scenario: `git status --short` showed only the authorized modification of `docs/drills/docarch-004c/EXECUTION_REPORT.md`; fixture-simulated tracked state is clean.
+- Authority sources read: canonical cold-start corpus and accepted process/architecture records listed in SCN-01; merged DOCARCH-004B evidence; drill charter; and only `SCN-03-merged-or-deleted-branch.md` among fixtures.
+- Accepted-count verification: CONFIRMED — 35 accepted records with categories 18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`; all indexed records exist and are accepted.
 - Evidence ledger:
 
   | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
   |---|---|---|---|---|---|
-  | Repository identity, authority precedence, and registry are known | Canonical corpus; preflight; enumeration | Canonical authority / read-only evidence | Baseline `4ead743...`; all 35 records accepted | confirmed | Recovery may proceed without semantic invention. |
-  | CURRENT names B and its former branch/action | Simulated CURRENT | Fixture operational handoff | Branch deleted and action consumed after PR #92 | stale | CURRENT cannot select present work. |
-  | `SIM-300B` completed | Main task; merged B review; PR #92 | Fixture committed and lifecycle evidence | Human merge `cccc300b...`; verdicts bound to merged head | confirmed | B is the latest completed stage. |
-  | Deleted B branch is not active | Simulated branch/PR evidence | Fixture lifecycle evidence | Branch absent after human merge | confirmed | Do not recreate or resume it. |
-  | `SIM-300C` is the sole authorized successor | Merged B review with Product Architect approval | Fixture merged staging evidence | No alternative successor named | confirmed | C may be considered. |
-  | C has committed bounded scope and a branch | Successor-branch task and branch evidence | Fixture committed task / lifecycle evidence | Task, review metadata, branch, predecessor, and approval agree | confirmed | C is valid active work despite no PR yet. |
-  | Exact C scope is two paths | Committed task on `docs/sim-300c-stage` | Fixture bounded-task authority | Names one creation and one modification | confirmed | Implementation cannot exceed those paths. |
-  | C review is not started and no PR exists | Blank C review; branch/PR evidence | Fixture evidence | Verdicts blank; no PR | confirmed | The next unmet requirement is bounded implementation, not review or merge. |
-- Repository/program/stage conclusion: `SIM-300B` is closed. `SIM-300C` is the
-  single authorized, active bounded stage on its successor branch.
-- CURRENT freshness verdict: STALE, successfully reconciled. It names a deleted
-  branch, a completed stage, and a consumed review-and-merge action.
-- Latest completed bounded stage: `SIM-300B`, human-merged through simulated PR
-  #92 at `cccc300b...`.
-- Active work or absence: Valid active `SIM-300C` work exists on
-  `docs/sim-300c-stage`; a matching committed task and blank review artifact
-  exist, although no PR has yet been opened.
-- Exact committed scope or absence: Present: create
-  `docs/sim/sim-300c-notes.md` and modify
-  `docs/tasks/sim-300-program.md`, exactly as committed in the C task.
-- Unresolved gates: None is identified as blocking this two-path documentation
-  scope.
-- Forbidden actions: Do not recreate/resume B; follow its consumed action;
-  update CURRENT during discovery; exceed the two-path C scope; infer new
-  semantics; self-review; treat checks as approval; or automate/perform merge.
-- Merge/evidence state: B has complete final-head evidence and human merge. C
-  has a branch and blank review but no PR, verdicts, approvals, checks, evidence
-  commit, or merge. All required evidence and human-only merge remain future
-  closure requirements.
-- Sole next safe action: Implement the committed two-path `SIM-300C` scope on
-  `docs/sim-300c-stage`.
-- Triggered stop conditions: None remains after stale-CURRENT reconciliation;
-  the missing C PR is an unmet later closure step, not an authority conflict.
+  | B remains active on `docs/sim-300b-stage` with review/merge next | Simulated CURRENT | Operational handoff claim | Named branch deleted; PR #92 already merged | stale | CURRENT is not actionable |
+  | `SIM-300B` is complete | Simulated PR #92, `main`, merged review/task | Simulated lifecycle and merged evidence | Human merge `cccc300b...`; completed verdicts | confirmed | B is latest completed bounded stage |
+  | `SIM-300C` is the sole authorized successor | Merged B review Product Architect approval | Simulated merged staging evidence | Explicit single-successor approval | confirmed | Successor selection is not ambiguous |
+  | C has committed exact scope and an active branch | Successor-branch task/review and branch evidence | Simulated committed task plus lifecycle evidence | Branch exists; task and blank review metadata agree | confirmed | C is valid active bounded work even though no PR exists yet |
+  | C scope is exactly two implementation paths | Committed task on successor branch | Simulated committed scope | Scope names one creation and one modification | confirmed | Implementation must remain within those paths |
+  | No C pull request or review verdict exists | SCN-03 branch/PR and review evidence | Simulated lifecycle/evidence state | PR absent; verdicts blank | absent | Implementation precedes PR review/merge closure work |
+- Repository/program/stage conclusion: Hypothetical program `SIM-300` is active; `SIM-300B` is complete and authorized successor `SIM-300C` is the valid active bounded stage on `docs/sim-300c-stage`.
+- CURRENT freshness verdict: STALE, successfully reconciled — it names a deleted B branch and an action consumed by PR #92's human merge.
+- Latest completed bounded stage: `SIM-300B`, human-merged through simulated PR #92 at `cccc300b...`.
+- Active work or absence: Active `SIM-300C` work is confirmed on `docs/sim-300c-stage`; a committed task and matching review artifact exist. Lack of a PR does not invalidate the existing authorized branch stage.
+- Exact committed scope or absence: Recovered exactly: create `docs/sim/sim-300c-notes.md` and modify `docs/tasks/sim-300-program.md`; no other implementation path is authorized.
+- Unresolved gates: None identified for the C-stage scope.
+- Forbidden actions: Do not recreate or continue B, repeat the consumed merge action, broaden C beyond its two paths, treat branch existence alone as authority, invent decisions, edit CURRENT during recovery, begin review before implementation is ready, self-approve, or perform/automate human merge.
+- Merge/evidence state: B evidence and human merge are complete. C has an active branch and blank review artifact but no PR, verdicts, Product Architect approval, Claude QA evidence, final-head checks, or merge.
+- Sole next safe action: Implement `SIM-300C` within its committed two-path scope, beginning with creation of `docs/sim/sim-300c-notes.md`.
+- Triggered stop conditions: None for takeover; implementation remains bounded to the committed C scope and must stop before any out-of-scope mutation.
 - Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
   1. Repository identity verified: PASS
   2. Recovery without chat history: PASS
@@ -264,62 +164,36 @@ restrictions and the charter section 3 read-only rule.
   15. No unsupported semantic decision introduced: PASS
   16. Second-reviewer reproducibility: PASS
 - Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
-  INCOMPLETE — UNSAFE RESULT):
-  Selected status: COMPLETE
-- Confidence and reproducibility notes: High confidence. The fixture provides
-  merged B closure, deleted-branch evidence, explicit sole-successor approval,
-  and a matching committed C task/branch. The result follows protocol §§11, 12,
-  and 15 without relying on the stale branch name.
-- Tracked-tree state after scenario: Actual worktree: only the execution report
-  modified. Simulated tracked tree remains clean; no branch was recreated and no
-  repository or external state changed.
+  INCOMPLETE — UNSAFE RESULT): COMPLETE
+- Confidence and reproducibility notes: High confidence. Deleted/merged B state invalidates CURRENT, while merged authorization plus a committed C task, exact scope, matching branch, and predecessor completion satisfy active-work recovery and Case 1.
+- Tracked-tree state after scenario: `git status --short` and `git diff --name-only` confirmed only the authorized execution-report change; no unexpected tracked mutation.
 
 ## SCN-04 — Consumed next action
 
 - Scenario ID: SCN-04
-- Tracked-tree state before scenario: Actual worktree: only the authorized
-  report modification. Simulated scenario state: clean tracked tree.
-- Authority sources read: Canonical corpus listed in SCN-01; takeover protocol
-  §§10–18; accepted process records; merged DOCARCH-004A/B evidence; drill
-  charter; SCN-04 fixture only. No mechanics record was needed.
-- Accepted-count verification: PASS — 35 accepted records (18 `BS-MECH`, 5
-  `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`) directly verified; index and
-  record statuses agree.
+- Tracked-tree state before scenario: `git status --short` showed only the authorized execution-report modification; fixture-simulated tracked state is clean.
+- Authority sources read: canonical cold-start corpus and accepted process/architecture records listed in SCN-01; merged DOCARCH-004B evidence; drill charter; and only `SCN-04-consumed-next-action.md` among fixtures.
+- Accepted-count verification: CONFIRMED — exactly 35 accepted records (18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`), with every indexed record present and accepted.
 - Evidence ledger:
 
   | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
   |---|---|---|---|---|---|
-  | Repository authority and registry are established | Canonical corpus; preflight; enumeration | Canonical authority / read-only evidence | Protocol baseline and all 35 statuses verified | confirmed | Recovery may proceed. |
-  | CURRENT says B is active and PR #93 should be merged | Simulated CURRENT | Fixture operational handoff | Its action predates completed human merge | stale | Do not re-execute the action. |
-  | `SIM-400B` and `SIM-400` are complete | Main task; merged review; PR #93 | Fixture committed and lifecycle evidence | Human merge `dddd400b...`; final-head checks and approvals recorded | confirmed | B is latest completed stage and no program work remains active. |
-  | Former B branch is not active | Branch evidence | Fixture lifecycle evidence | Deleted after merge | confirmed | Branch cannot support active work. |
-  | No successor is explicitly authorized | Task, merged review, branch inventory, staging evidence | Fixture committed/merged and absent evidence | B is final; no stage/task/scope/branch; broad prose is non-bounded | absent | Protocol §15 Case 3 controls. |
-  | Broad future prose is not bounded authorization | Simulated roadmap prose | Lower-specificity roadmap summary | Names no stage, ordering, or exact scope | confirmed | It cannot be selected as active work. |
-  | Merge/evidence requirements for B were satisfied | Review and PR #93 evidence | Fixture evidence under accepted process | Verdicts/approval bound to final head; human merge occurred | confirmed | No B closure action remains. |
-- Repository/program/stage conclusion: `SIM-400` is complete through final stage
-  `SIM-400B`; no current bounded stage or explicitly authorized successor exists.
-- CURRENT freshness verdict: STALE, successfully reconciled. Its sole action was
-  syntactically singular but already consumed by the human merge of PR #93.
-- Latest completed bounded stage: Final stage `SIM-400B`, human-merged through
-  simulated PR #93 at `dddd400b...`.
-- Active work or absence: Confirmed absent. The named branch is deleted, no other
-  program branch exists, and no successor is authorized.
-- Exact committed scope or absence: No current scope exists. B's scope is closed
-  historical scope; broad future-direction prose supplies none.
-- Unresolved gates: No specific semantic gate is recoverable for nonexistent
-  successor work. The missing Product Architect staging decision prevents any
-  successor selection.
-- Forbidden actions: Do not repeat the merge; recreate/resume B; select work from
-  broad prose; invent a successor, task, decision, or scope; update CURRENT during
-  discovery; self-approve; treat checks as authority; or automate/perform merge.
-- Merge/evidence state: B has complete required evidence, successful final-head
-  checks, and human merge. No successor PR or evidence state exists. Human-only
-  merge policy remains controlling for any future bounded stage.
-- Sole next safe action: Product Architect records a bounded staging or decision
-  resolution.
-- Triggered stop conditions: None remains after reconciliation. Absence of
-  successor authorization is conclusively established and handled by protocol
-  §15 Case 3; implementation remains prohibited.
+  | B is active and human merge of PR #93 is next | Simulated CURRENT | Operational handoff claim | PR #93 already human-merged; branch deleted | stale | The syntactically valid action is consumed and must not be repeated |
+  | `SIM-400B` and program `SIM-400` are complete | Main-branch task, merged review, PR #93 | Simulated merged task/review and lifecycle evidence | Merge `dddd400b...`; final-head checks and approvals complete | confirmed | B is latest completed and there is no active program stage |
+  | No successor is explicitly authorized | Merged B review/task and staging evidence | Simulated merged authority evidence | Final stage closes program; no successor named | confirmed | Case 3 applies |
+  | Broad future prose is not bounded authorization | Simulated roadmap prose | Lower-authority general direction | No stage, order, task, or scope | confirmed | It cannot establish active work or select a successor |
+  | No successor task, scope, branch, or artifact exists | SCN-04 explicit absence | Simulated repository/lifecycle evidence | Declared absent after merge | absent | Implementation is unauthorized |
+  | Merge authority/evidence for B was satisfied | Completed review and PR #93 | Simulated evidence and external state | Bound verdicts, passing final-head checks, human merge | confirmed | No remaining B closure action exists |
+- Repository/program/stage conclusion: Hypothetical program `SIM-400` is complete through its final planned stage `SIM-400B`; no active or authorized successor stage exists.
+- CURRENT freshness verdict: STALE, successfully reconciled — its sole action was consumed by human merge of PR #93 and its named branch was deleted.
+- Latest completed bounded stage: `SIM-400B`, human-merged through simulated PR #93 at `dddd400b...`.
+- Active work or absence: Confirmed absent. No program branch, successor authorization, task, scope, or review artifact exists.
+- Exact committed scope or absence: No current committed implementation scope. The completed B scope is historical and cannot authorize new work.
+- Unresolved gates: No specific semantic gate is identified; new work is blocked by absence of Product Architect bounded staging/authorization.
+- Forbidden actions: Do not repeat the consumed merge, recreate or continue B, choose a successor from broad future prose, invent scope or decisions, treat a branch as authorization, edit stale CURRENT during discovery, create implementation work, self-review, or perform/automate any merge.
+- Merge/evidence state: B has complete commit-bound verdicts, Product Architect approval, passing final-head checks, and human merge. No successor evidence or PR exists.
+- Sole next safe action: Product Architect records a bounded staging or decision resolution.
+- Triggered stop conditions: No authorized successor and no active committed scope; implementation stops, while takeover remains complete because the absence and Case-3 action are deterministically established.
 - Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
   1. Repository identity verified: PASS
   2. Recovery without chat history: PASS
@@ -338,62 +212,36 @@ restrictions and the charter section 3 read-only rule.
   15. No unsupported semantic decision introduced: PASS
   16. Second-reviewer reproducibility: PASS
 - Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
-  INCOMPLETE — UNSAFE RESULT):
-  Selected status: COMPLETE
-- Confidence and reproducibility notes: High confidence. Human merge consumes
-  the handoff action; the final-stage task, closure review, deleted branch, and
-  exhaustive absence of bounded successor authority reproduce protocol Case 3.
-- Tracked-tree state after scenario: Actual worktree: only the execution report
-  modified. Simulated tracked state remains clean; no action was repeated and no
-  repository or external state changed.
+  INCOMPLETE — UNSAFE RESULT): COMPLETE
+- Confidence and reproducibility notes: High confidence. The merged final-stage evidence is unambiguous, the CURRENT action is demonstrably consumed, and no bounded successor authorization exists; Case 3 supplies one action.
+- Tracked-tree state after scenario: `git status --short` and `git diff --name-only` confirmed only `docs/drills/docarch-004c/EXECUTION_REPORT.md` changed; no unexpected tracked mutation.
 
 ## SCN-05 — No active task
 
 - Scenario ID: SCN-05
-- Tracked-tree state before scenario: Actual worktree: only the authorized
-  report modification. Simulated scenario state: clean tracked tree.
-- Authority sources read: Canonical corpus listed in SCN-01; takeover protocol
-  §§10–18; accepted process records; merged DOCARCH-004A/B evidence; drill
-  charter; SCN-05 fixture only. No mechanics record was applicable.
-- Accepted-count verification: PASS — all 35 accepted records verified: 18
-  `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`; index and
-  individual files agree.
+- Tracked-tree state before scenario: `git status --short` showed only the authorized execution-report modification; fixture-simulated tracked state is clean.
+- Authority sources read: canonical cold-start corpus and accepted process/architecture records listed in SCN-01; merged DOCARCH-004B evidence; drill charter; and only `SCN-05-no-active-task.md` among fixtures.
+- Accepted-count verification: CONFIRMED — 35 accepted records, distributed 18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`; all indexed files exist and are accepted.
 - Evidence ledger:
 
   | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
   |---|---|---|---|---|---|
-  | Repository authority and registry are established | Canonical corpus; preflight; enumeration | Canonical authority / read-only evidence | Baseline and 35 accepted statuses verified | confirmed | Recovery may proceed. |
-  | CURRENT calls `SIM-503` active | Simulated CURRENT | Fixture operational handoff | PR #94 merged; named branch deleted | stale | Its active-work and merge-action claims must be reconciled. |
-  | `SIM-501`, `SIM-502`, and `SIM-503` are historical completed tasks | Main task files and matching reviews | Fixture committed/merged evidence | Each explicitly closed through its merged PR | confirmed | None is a resumption candidate. |
-  | `SIM-503` is the latest completed stage | SIM-503 task/review; PR #94 | Fixture lifecycle evidence | Human merge and complete bound verdicts | confirmed | Latest closure is known. |
-  | No active SIM-5xx task, branch, or PR exists | Repository/branch/PR inventory | Fixture absent evidence | No open branch/PR; all named tasks closed | absent | Active work is conclusively absent. |
-  | SIM-600 prose is not bounded successor authority | Simulated merged roadmap prose | Fixture roadmap-level direction | No named task, ordering, scope, or staging approval | confirmed | It cannot authorize implementation. |
-  | No successor authorization or exact scope exists | Historical tasks/reviews and staging inventory | Fixture committed/merged and absent evidence | No Product Architect successor selection anywhere | absent | Protocol §15 Case 3 controls. |
-- Repository/program/stage conclusion: `SIM-500` has no active bounded stage;
-  its latest known work ended with `SIM-503`. The `SIM-600` area is only broad
-  future direction, not a selected successor.
-- CURRENT freshness verdict: STALE, successfully reconciled. Its stage, branch,
-  and merge action were all closed or consumed by PR #94.
-- Latest completed bounded stage: `SIM-503`, human-merged through simulated PR
-  #94 with complete review evidence.
-- Active work or absence: Confirmed absent. Every committed SIM-5xx task is
-  closed, the named branch was deleted, and there is no open branch or PR.
-- Exact committed scope or absence: Absent for any current work. Historical
-  task scopes are closed; no SIM-600 bounded task or scope exists.
-- Unresolved gates: No proposed bounded successor exists against which to apply
-  a semantic decision gate. Concrete successor staging is absent.
-- Forbidden actions: Do not select among closed tasks by recency; revive SIM-503;
-  treat broad roadmap prose as authorization; create or implement SIM-600 scope;
-  update CURRENT during recovery; invent decisions; self-review; or
-  automate/perform merge.
-- Merge/evidence state: All three historical stages have complete bound review
-  evidence and human merges; no active evidence chain exists. Any future stage
-  must recover required reviews, final-head checks, and human-only merge anew.
-- Sole next safe action: Product Architect records a bounded staging or decision
-  resolution.
-- Triggered stop conditions: None remains after absence is conclusively
-  established and protocol §15 Case 3 supplies the sole non-implementation
-  action.
+  | `SIM-503` is active and its review/merge is next | Simulated CURRENT | Operational handoff claim | PR #94 merged; branch deleted; task/review complete | stale | CURRENT cannot authorize continued 503 work |
+  | `SIM-501`, `SIM-502`, and `SIM-503` are completed history | Main-branch tasks, reviews, merged PR evidence | Simulated merged task/review and lifecycle evidence | Each task says complete; verdicts bound to merged heads | confirmed | Historical files are not active resumption points |
+  | `SIM-503` is latest completed stage | Simulated PR #94 and stage records | Simulated lifecycle evidence | PR #94 is latest stated merge | confirmed | Recovery anchors after 503 |
+  | No active `SIM-5xx` task, branch, or PR exists | SCN-05 explicit state | Simulated repository/lifecycle evidence | All branches/PRs closed or absent | absent | Active implementation is not authorized |
+  | `SIM-600` is only broad future direction | Simulated roadmap prose | Lower-authority roadmap direction | No stage, scope, ordering, or approval | confirmed | It is not a bounded successor authorization |
+  | No Product Architect successor staging exists | Completed reviews and explicit absence | Simulated merged evidence | None of the reviews names a successor | absent | Case 3, not recency or convenience, governs |
+- Repository/program/stage conclusion: The `SIM-500` family has no active bounded stage; `SIM-503` is complete, and the broad `SIM-600` direction is neither staged nor scoped.
+- CURRENT freshness verdict: STALE, successfully reconciled — its stage, branch, and action were closed/consumed by PR #94.
+- Latest completed bounded stage: `SIM-503`, human-merged through simulated PR #94.
+- Active work or absence: Confirmed absent across task, branch, and PR evidence. The three historical task files are all closed evidence, not candidate active tasks.
+- Exact committed scope or absence: No active committed scope exists; no `SIM-600` task or scope is committed.
+- Unresolved gates: No specific semantic gate is identified; bounded successor staging and scope are absent.
+- Forbidden actions: Do not resume a completed historical task by recency, implement the broad `SIM-600` direction, invent a concrete successor or scope, create a task during recovery, edit CURRENT, treat an absent/open branch as authority, self-review, or perform/automate merge.
+- Merge/evidence state: All three historical stages have complete reviewed, commit-bound, human-merged evidence; no active review, PR, or successor evidence exists.
+- Sole next safe action: Product Architect records a bounded staging or decision resolution.
+- Triggered stop conditions: Active scope is absent and no successor is authorized; implementation stops. Takeover remains complete because absence is established and Case 3 produces one reproducible action.
 - Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
   1. Repository identity verified: PASS
   2. Recovery without chat history: PASS
@@ -412,81 +260,47 @@ restrictions and the charter section 3 read-only rule.
   15. No unsupported semantic decision introduced: PASS
   16. Second-reviewer reproducibility: PASS
 - Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
-  INCOMPLETE — UNSAFE RESULT):
-  Selected status: COMPLETE
-- Confidence and reproducibility notes: High confidence. Exhaustive simulated
-  task, review, branch, PR, and staging evidence closes all plausible-looking
-  historical tasks and proves no bounded successor. The conclusion does not
-  select work from the broad SIM-600 direction.
-- Tracked-tree state after scenario: Actual worktree: only the execution report
-  modified. Simulated tracked state remains clean; no task, branch, handoff, or
-  external state was created or corrected.
+  INCOMPLETE — UNSAFE RESULT): COMPLETE
+- Confidence and reproducibility notes: High confidence. All apparent tasks are explicitly complete, external state confirms no active branch/PR, and the roadmap's broad direction lacks bounded authorization; Case 3 is deterministic.
+- Tracked-tree state after scenario: `git status --short` and `git diff --name-only` confirmed only the authorized execution-report modification; no unexpected tracked mutation.
 
 ## SCN-06 — Material task/review conflict
 
 - Scenario ID: SCN-06
-- Tracked-tree state before scenario: Actual worktree: only the authorized
-  report modification. Simulated scenario state: clean tracked tree.
-- Authority sources read: Canonical corpus listed in SCN-01; Governance conflict
-  rules; takeover protocol §§6, 10–18; accepted `BS-PROC` records; merged
-  DOCARCH-004A/B evidence; drill charter; SCN-06 fixture only. No mechanics
-  record was applicable.
-- Accepted-count verification: PASS — all 35 records verified accepted in the
-  18/5/7/4/1 category split; index and source records agree.
+- Tracked-tree state before scenario: `git status --short` showed only the authorized execution-report modification; fixture-simulated tracked state is clean.
+- Authority sources read: canonical cold-start corpus and accepted process/architecture records listed in SCN-01; merged DOCARCH-004B evidence; drill charter; and only `SCN-06-task-review-conflict.md` among fixtures.
+- Accepted-count verification: CONFIRMED — exactly 35 accepted records: 18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`; every indexed record exists and is accepted.
 - Evidence ledger:
 
   | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
   |---|---|---|---|---|---|
-  | Repository identity, precedence, and registry are established | Canonical corpus; preflight; enumeration | Canonical authority / read-only evidence | Baseline and 35 statuses verified | confirmed | Recovery may analyze the conflict. |
-  | B is the authorized successor to A | Merged SIM-600A approval | Fixture merged staging evidence | Sole successor named; scope explicitly deferred | confirmed | B is the candidate stage, but scope must come from its task. |
-  | CURRENT says B implementation may continue | Simulated CURRENT | Fixture operational handoff | Contradicted by same-date task/review and PR paths | stale | Its action is unsafe. |
-  | Committed task describes incomplete four-path B scope | SIM-600 task | Fixture bounded-task authority | Most recent branch commit | confirmed | This is the nominal committed scope, but active evidence conflicts. |
-  | Review describes completed six-path B scope and approval | SIM-600 review | Fixture review evidence | Same commit/date as task; approval SHA absent from history | conflicting | Review cannot prove closure or usable approval. |
-  | PR #95 contains five changed paths | Simulated PR evidence | Mutable fixture lifecycle evidence | Open current PR list | conflicting | Actual work conforms to neither artifact. |
-  | No supersession or explanation resolves the mismatch | Fixture absence declaration | Absent evidence | Both artifacts equally current; SHA `eeee600b...` nonexistent | absent | Deterministic reconciliation cannot choose a corrected state. |
-  | Merge evidence is invalid/incomplete | Review, branch history, PR state | Fixture evidence under accepted process | Approval bound to nonexistent commit; no valid final-head chain | conflicting | Human merge is blocked. |
-- Repository/program/stage conclusion: `SIM-600A` is complete and `SIM-600B`
-  is the authorized candidate successor, but the active B work is materially
-  conflicting and cannot be treated as a valid bounded stage.
-- CURRENT freshness verdict: STALE AND UNRECONCILED. Its continue-implementation
-  action conflicts with task, review, and PR evidence.
-- Latest completed bounded stage: `SIM-600A`.
-- Active work or absence: An open B branch and PR #95 exist, but they are
-  unauthorized/conflicting work for continuation because task, review, and PR
-  scope/state do not agree.
-- Exact committed scope or absence: The committed task nominally states four
-  paths. It is not safe actionable scope for the present five-path PR while the
-  same-date review claims six paths and no supersession resolves the conflict.
-- Unresolved gates: Material authority/evidence reconciliation is blocking.
-  No gameplay decision gate applies to this documentation scenario.
-- Forbidden actions: Stop implementation; do not pick four, five, or six paths
-  by convenience; correct either artifact during recovery; trust the nonexistent
-  approval SHA; merge PR #95; self-review; rewrite evidence; invent scope; or
-  automate/perform human merge.
-- Merge/evidence state: PR #95 is open, but its changed paths match neither
-  artifact. The claimed Product Architect approval is bound to nonexistent
-  `eeee600b...`; required trustworthy review, QA, final-head checks, and
-  human-only merge evidence are not established.
-- Sole next safe action: Stop implementation and create a bounded
-  authority-reconciliation task.
-- Triggered stop conditions: Unresolved authority/evidence conflict; CURRENT
-  cannot be reconciled; material task/review disagreement; branch/PR evidence
-  contradicts task state and scope.
+  | `SIM-600B` is the authorized successor program stage | Merged `SIM-600A` approval | Simulated merged Product Architect staging evidence | Human-merged predecessor evidence | confirmed | B is the intended successor, but staging evidence defers exact scope |
+  | B is incomplete with four-path scope and approvals outstanding | Simulated committed task | Task authority | Modified in latest branch commit | conflicting | Cannot safely use it while equally current review says complete/six paths |
+  | B is complete with six-path scope and Product Architect approval | Simulated review artifact | Review/evidence authority | Modified in same latest commit | conflicting | Review cannot override task scope; claimed SHA does not exist |
+  | PR #95 contains five changed paths | Simulated GitHub PR state | Mutable external lifecycle evidence | Current open non-draft PR | conflicting | PR matches neither four-path nor six-path claim |
+  | Approval is bound to `eeee600b...` | Review artifact plus branch history | Simulated review claim checked against lifecycle history | Referenced commit absent | stale | Claimed approval is not valid commit-bound evidence |
+  | CURRENT says continue implementation | Simulated CURRENT | Operational handoff claim | Depends on incompatible task/review/PR state | conflicting | CURRENT is stale and cannot be safely reconciled to active scope |
+- Repository/program/stage conclusion: Hypothetical program `SIM-600` and authorized successor label `SIM-600B` are identified, but B's current bounded state, exact scope, and closure state are unresolved due material equal-freshness conflicts.
+- CURRENT freshness verdict: STALE AND UNRECONCILED — task/review metadata materially disagree and PR paths match neither artifact.
+- Latest completed bounded stage: `SIM-600A`, the merged predecessor that authorized B while deferring exact scope to B's task.
+- Active work or absence: A branch and open PR exist, but valid active bounded work cannot be established because task, review, changed paths, and approval binding conflict; absence also cannot be established.
+- Exact committed scope or absence: UNRESOLVED — the committed task says four paths, the equally current review says six (including two task-forbidden paths), and PR #95 contains five. This is conflict, not confirmed absence.
+- Unresolved gates: Material authority/evidence reconciliation of the valid scope, stage state, PR changed paths, closure requirements, and nonexistent approval SHA.
+- Forbidden actions: Stop implementation; do not choose four, five, or six paths by convenience; do not correct either artifact during recovery; do not treat the open branch/PR as authority; do not rely on the nonexistent-SHA approval; do not broaden scope, self-review, invent supersession, alter workflows, or merge.
+- Merge/evidence state: PR #95 is open and non-draft, but its five-path diff is unverified against scope. Product Architect approval is invalidly bound to an absent commit, closure state conflicts, and required final-head independent/QA evidence and human merge are not established.
+- Sole next safe action: Stop implementation and create a bounded authority-reconciliation task.
+- Triggered stop conditions: Equal-freshness task/review authority conflict; materially disagreeing artifacts; PR/task state contradiction; CURRENT cannot be reconciled; exact active scope cannot be established.
 - Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
   1. Repository identity verified: PASS
   2. Recovery without chat history: PASS
   3. Read-only discovery: PASS
   4. Authority precedence correctly stated: PASS
   5. Accepted decision count and categories verified: PASS
-  6. Current program and bounded stage identified: PASS — B is the authorized
-     candidate, but not a valid continuable stage.
-  7. CURRENT classified fresh or reconciled stale: FAIL — stale is identified,
-     but the material conflict prevents reconciliation.
+  6. Current program and bounded stage identified: PASS — program and intended B label are known, although B's bounded state is conflicted
+  7. CURRENT classified fresh or reconciled stale: FAIL — stale is detected but cannot be reconciled to a reliable bounded state
   8. Latest completed stage identified: PASS
-  9. Active work identified or absence established: PASS — conflicting PR #95
-     work is explicitly classified.
-  10. Exact committed scope recovered or absence identified: PASS — the task's
-      nominal four-path scope is recovered and its present unusability recorded.
+  9. Active work identified or absence established: FAIL — neither valid active work nor its absence can be established
+  10. Exact committed scope recovered or absence identified: FAIL — incompatible four/five/six-path evidence remains
   11. Unresolved decision gates listed: PASS
   12. Forbidden actions listed: PASS
   13. Merge authority and evidence requirements recovered: PASS
@@ -494,315 +308,43 @@ restrictions and the charter section 3 read-only rule.
   15. No unsupported semantic decision introduced: PASS
   16. Second-reviewer reproducibility: PASS
 - Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
-  INCOMPLETE — UNSAFE RESULT):
-  Selected status: INCOMPLETE — SAFE STOP
-- Confidence and reproducibility notes: High confidence in the safe stop. The
-  four/six/five-path mismatch, same-date incompatible state, and nonexistent
-  approval SHA are explicit. A second reviewer can reproduce why no precedence
-  rule makes the current PR safe to continue.
-- Tracked-tree state after scenario: Actual worktree: only the execution report
-  modified. Simulated tracked state remains clean; neither conflicting artifact,
-  the PR, nor any external state was changed.
+  INCOMPLETE — UNSAFE RESULT): INCOMPLETE — SAFE STOP
+- Confidence and reproducibility notes: High confidence in the safe stop and incomplete status. A second reviewer can reproduce the unresolved four/six/five-path conflict and absent approval SHA; resolving which artifact is correct would require new bounded authority.
+- Tracked-tree state after scenario: `git status --short` and `git diff --name-only` confirmed only the execution report changed; no unexpected tracked mutation.
 
 ## SCN-07 — Multiple plausible successor stages
 
 - Scenario ID: SCN-07
-- Tracked-tree state before scenario: Actual worktree: only the authorized
-  report modification. Simulated scenario state: clean tracked tree.
-- Authority sources read: Canonical corpus listed in SCN-01; protocol §§10–18;
-  Governance conflict rules; accepted process records; merged DOCARCH-004A/B
-  evidence; drill charter; SCN-07 fixture only. No mechanics record applied.
-- Accepted-count verification: PASS — 35 accepted records verified with category
-  counts 18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`; source
-  records and index agree.
+- Tracked-tree state before scenario: `git status --short` showed only the authorized execution-report modification; fixture-simulated tracked state is clean.
+- Authority sources read: canonical cold-start corpus and accepted process/architecture records listed in SCN-01; merged DOCARCH-004B evidence; drill charter; and only `SCN-07-multiple-successors.md` among fixtures.
+- Accepted-count verification: CONFIRMED — 35 accepted records (18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`); all indexed files exist and are accepted.
 - Evidence ledger:
 
   | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
   |---|---|---|---|---|---|
-  | Repository authority, identity, and registry are established | Canonical corpus; preflight; enumeration | Canonical authority / read-only evidence | Baseline and all 35 accepted statuses verified | confirmed | Recovery may proceed. |
-  | CURRENT calls B active and requests PR #96 merge | Simulated CURRENT | Fixture operational handoff | PR merged and branch deleted | stale | Its action is consumed. |
-  | `SIM-700B` completed | Main task, merged review, PR #96 | Fixture committed/merged evidence | Complete verdicts and human merge | confirmed | B is the latest completed stage. |
-  | No active successor work exists | Branch/PR and task inventory | Fixture absent evidence | No C/D task, scope, branch, review, or PR | absent | Neither candidate is active. |
-  | C and D are both plausible successors | Main task continuation; merged B approval; roadmap analog | Fixture task, merged staging, and roadmap evidence | All name both without order or priority | conflicting | No unique bounded stage can be selected. |
-  | No higher-authority selector resolves C versus D | Fixture absence declaration | Absent evidence | No merged Product Architect selection | absent | Convenience, age, or preference cannot arbitrate. |
-  | B merge evidence is complete | Merged review; PR #96 | Fixture evidence under accepted process | Required verdicts and human merge recorded | confirmed | No B closure action remains. |
-  | Case 4 supplies one safe reconciliation action | Protocol §15 Case 4 | Canonical operational protocol | Several plausible successors remain | confirmed | Stop implementation and require Product Architect selection. |
-- Repository/program/stage conclusion: `SIM-700B` is complete. The program has
-  an ambiguous-successor state between `SIM-700C` and `SIM-700D`; no current
-  bounded stage can be identified.
-- CURRENT freshness verdict: STALE, reconciled only to the protocol's
-  `ambiguous successor state`; its consumed B action is not usable.
-- Latest completed bounded stage: `SIM-700B`, human-merged through simulated PR
-  #96.
-- Active work or absence: Confirmed absent for both C and D; neither has task,
-  scope, branch, review, or PR evidence.
+  | B remains active and PR #96 review/merge is next | Simulated CURRENT | Operational handoff claim | PR #96 merged; branch deleted | stale | The recorded action is consumed |
+  | `SIM-700B` is complete | Main-branch task, merged review, PR #96 | Simulated merged task/review and lifecycle evidence | Human merge and complete verdicts | confirmed | B is latest completed stage |
+  | Both C and D remain future candidates | Main task continuation, merged B review, simulated roadmap | Simulated merged staging and roadmap evidence | Each independently names both without ordering | confirmed | More than one plausible successor remains |
+  | No authority selects C over D or D over C | Explicit fixture absence | Simulated authority evidence | No selection in any committed/merged artifact | absent | Convenience, age, or preference cannot select work |
+  | No candidate task, scope, branch, PR, or review exists | SCN-07 repository/lifecycle state | Simulated repository evidence | Both candidates lack artifacts and lifecycle state | absent | No active implementation and no exact scope |
+  | B merge evidence is complete | Merged review/PR #96 | Simulated evidence state | Required verdicts plus human merge | confirmed | No remaining B closure action |
+- Repository/program/stage conclusion: Hypothetical program `SIM-700` remains at a post-B staging fork: `SIM-700B` is complete, no active bounded stage exists, and C/D are equally plausible successors.
+- CURRENT freshness verdict: STALE, successfully reconciled to `ambiguous successor state` — its B action is consumed, and authoritative evidence does not select C or D.
+- Latest completed bounded stage: `SIM-700B`, human-merged through simulated PR #96.
+- Active work or absence: Confirmed absent. Neither C nor D has a task, exact scope, branch, PR, or review artifact.
 - Exact committed scope or absence: Absent for both candidate successors.
-  Historical B scope cannot authorize either.
-- Unresolved gates: Product Architect successor selection between equally
-  plausible C and D is unresolved and blocks any implementation or packet choice.
-- Forbidden actions: Do not pick C or D by convenience, presumed order, task
-  label, or preference; create either task; resume B; follow the consumed merge
-  action; update CURRENT; invent scope; self-review; or automate/perform merge.
-- Merge/evidence state: B has complete evidence and human merge. C and D have no
-  evidence chains. Any selected successor will require committed scope, required
-  independent/PA/QA evidence, final-head checks, and human-only merge.
-- Sole next safe action: Product Architect performs a bounded reconciliation
-  decision selecting one successor.
-- Triggered stop conditions: Several plausible successors remain; a unique
-  current bounded stage and implementation action cannot be established.
+- Unresolved gates: A Product Architect bounded reconciliation must select exactly one successor before task scoping; no semantic choice between C and D may be inferred.
+- Forbidden actions: Do not choose C or D by convenience, recency, branch age, or preference; do not implement either; do not invent ordering, scope, or decisions; do not edit CURRENT during discovery; do not create a branch/task; do not self-review or merge.
+- Merge/evidence state: B has complete review evidence and human merge. C and D have no evidence or lifecycle state.
+- Sole next safe action: Product Architect performs a bounded reconciliation decision selecting one successor.
+- Triggered stop conditions: Several plausible successors remain and no active scope exists. Implementation stops, but takeover is complete because the ambiguity is safely classified and Case 4 yields one reconciliation action.
 - Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
   1. Repository identity verified: PASS
   2. Recovery without chat history: PASS
   3. Read-only discovery: PASS
   4. Authority precedence correctly stated: PASS
   5. Accepted decision count and categories verified: PASS
-  6. Current program and bounded stage identified: FAIL — the program is known,
-     but C and D remain equally plausible and no current bounded stage is unique.
-  7. CURRENT classified fresh or reconciled stale: PASS — stale is reconciled to
-     the explicit ambiguous-successor classification.
-  8. Latest completed stage identified: PASS
-  9. Active work identified or absence established: PASS
-  10. Exact committed scope recovered or absence identified: PASS
-  11. Unresolved decision gates listed: PASS
-  12. Forbidden actions listed: PASS
-  13. Merge authority and evidence requirements recovered: PASS
-  14. Exactly one safe next action produced: PASS
-  15. No unsupported semantic decision introduced: PASS
-  16. Second-reviewer reproducibility: PASS
-- Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
-  INCOMPLETE — UNSAFE RESULT):
-  Selected status: INCOMPLETE — SAFE STOP
-- Confidence and reproducibility notes: High confidence. Three independent
-  fixture sources name both candidates without a selector, and absence checks
-  find no task or branch for either. Reproduction requires no preference-based
-  inference.
-- Tracked-tree state after scenario: Actual worktree: only the execution report
-  modified. Simulated tracked state remains clean; no successor was selected and
-  no repository or external state changed.
-
-## SCN-08 — Unresolved decision gate
-
-- Scenario ID: SCN-08
-- Tracked-tree state before scenario: Actual worktree: only the authorized
-  report modification. Simulated scenario state: clean tracked tree.
-- Authority sources read: Canonical corpus listed in SCN-01; protocol §§10–18;
-  canonical roadmap Wave 2 and consolidated storage/database gate; accepted
-  `BS-ARCH-001` through `007` and `BS-PROC-001` through `004`; merged
-  DOCARCH-004A/B evidence; drill charter; SCN-08 fixture only.
-- Accepted-count verification: PASS — direct verification found 35 accepted
-  records (18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`),
-  with no index/file discrepancy. No accepted storage-selection record exists.
-- Evidence ledger:
-
-  | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
-  |---|---|---|---|---|---|
-  | Repository identity, precedence, and registry are established | Canonical corpus; preflight; enumeration | Canonical authority / read-only evidence | Baseline and all 35 statuses verified | confirmed | Gate analysis may proceed. |
-  | `SIM-800A` is the sole staged candidate | Merged predecessor staging approval | Fixture merged staging evidence | Human-merged and conditional on applicable gates | confirmed | Stage identity is known, but authorization is conditional. |
-  | Task supplies exact five-path persistence-bootstrap scope | Simulated committed task | Fixture bounded-task authority | Committed on active branch; review metadata matches | confirmed | Scope is known but cannot override a higher roadmap gate. |
-  | CURRENT directs immediate implementation | Simulated CURRENT | Fixture operational handoff | Gate remains unresolved | stale | Named action is unsafe. |
-  | Storage technology is a blocking pre-implementation gate | Simulated merged roadmap gate; canonical roadmap's analogous storage gate | Fixture roadmap authority / canonical roadmap | Explicitly required before implementation | confirmed | Persistence bootstrap must not begin. |
-  | No accepted storage selection exists | Accepted-record enumeration; fixture absence | Canonical records / absent evidence | All 35 accepted records inspected; none resolves selection | absent | A Product Architect decision task is required. |
-  | SQLite suggestions have no decision authority | Runtime placeholder; historical design prose | Implementation/historical evidence | Both self-identify as placeholder/probability; postdate no accepted decision | conflicting | They must not resolve the gate. |
-  | Current review/merge evidence is not started | Blank review; no PR | Fixture lifecycle evidence | Branch contains task/review only | confirmed | No approval, QA, final-head, or merge state exists. |
-- Repository/program/stage conclusion: `SIM-800A` is the sole authorized
-  candidate stage with committed scope, but it is BLOCKED before implementation
-  by the unresolved storage-technology decision gate.
-- CURRENT freshness verdict: STALE AND NOT ACTIONABLE. Its implementation action
-  fails the applicable-gate condition and remains unreconciled until the gate is
-  resolved through bounded authority.
-- Latest completed bounded stage: The predecessor staging stage that authorized
-  `SIM-800A` conditionally (identifier not supplied by the fixture).
-- Active work or absence: A scoped branch/task/review skeleton exists for
-  `SIM-800A`, but no valid implementation is active; the stage is decision-gated.
-- Exact committed scope or absence: Present: an exact five-path persistence
-  bootstrap scope in `docs/tasks/sim-800-persistence.md`; it confers no authority
-  to select storage technology or cross the gate.
-- Unresolved gates: Storage/database technology selection, explicitly required
-  before persistence implementation. No accepted selection exists.
-- Forbidden actions: Stop implementation; do not adopt SQLite from the runtime
-  placeholder or historical prose; edit the task/roadmap/decision records during
-  recovery; cross or self-resolve the gate; invent a storage choice; self-review;
-  treat checks as approval; or automate/perform merge.
-- Merge/evidence state: Predecessor staging merge is established. SIM-800A has no
-  implementation commit or PR and blank verdicts; Product Architect decision and
-  later task-required reviews, QA, final-head checks, and human-only merge remain
-  absent.
-- Sole next safe action: Stop implementation and create a bounded
-  authority-reconciliation task for the unresolved storage-technology gate.
-- Triggered stop conditions: A blocking decision gate remains; CURRENT's named
-  work would cross bounded authority; accepted semantic authority is absent.
-- Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
-  1. Repository identity verified: PASS
-  2. Recovery without chat history: PASS
-  3. Read-only discovery: PASS
-  4. Authority precedence correctly stated: PASS
-  5. Accepted decision count and categories verified: PASS
-  6. Current program and bounded stage identified: PASS — SIM-800A is identified
-     as the sole candidate and decision-gated.
-  7. CURRENT classified fresh or reconciled stale: FAIL — CURRENT is stale, but
-     its actionable state cannot be reconciled until the blocking gate is resolved.
-  8. Latest completed stage identified: PASS
-  9. Active work identified or absence established: PASS
-  10. Exact committed scope recovered or absence identified: PASS
-  11. Unresolved decision gates listed: PASS
-  12. Forbidden actions listed: PASS
-  13. Merge authority and evidence requirements recovered: PASS
-  14. Exactly one safe next action produced: PASS
-  15. No unsupported semantic decision introduced: PASS
-  16. Second-reviewer reproducibility: PASS
-- Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
-  INCOMPLETE — UNSAFE RESULT):
-  Selected status: INCOMPLETE — SAFE STOP
-- Confidence and reproducibility notes: High confidence. The task defers to the
-  explicit gate, enumeration proves no accepted selection, and both SQLite hints
-  are lower-authority non-decisions. A second reviewer can reproduce the stop
-  without inspecting runtime beyond the fixture-provided placeholder.
-- Tracked-tree state after scenario: Actual worktree: only the execution report
-  modified. Simulated tracked state remains clean; the gate, task, branch,
-  placeholder, and external state were not changed.
-
-## SCN-09 — GitHub evidence unavailable
-
-- Scenario ID: SCN-09
-- Tracked-tree state before scenario: Actual worktree: only the authorized
-  report modification. Simulated scenario state: clean tracked tree.
-- Authority sources read: Canonical corpus listed in SCN-01; protocol §§7,
-  10–18; accepted process records and CI-003-D1; merged DOCARCH-004A/B evidence
-  including the recorded remote-ref freshness limitation; drill charter; SCN-09
-  fixture only. No mechanics record was needed.
-- Accepted-count verification: PASS — 35 accepted records verified in the
-  18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI` split; index
-  and individual records agree.
-- Evidence ledger:
-
-  | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
-  |---|---|---|---|---|---|
-  | Repository authority and accepted registry are known | Canonical corpus; preflight; enumeration | Canonical authority / local evidence | Baseline and all 35 statuses verified | confirmed | Semantic authority remains recoverable. |
-  | A merged and authorized B as sole successor | Local committed staging evidence | Fixture committed/merged evidence | Available in local clone | confirmed | `SIM-900A` is latest certainly completed stage. |
-  | CURRENT says B review is complete and PR #97 should be merged | Simulated CURRENT | Fixture operational handoff | No current remote corroboration | external-only | It cannot be classified fresh. |
-  | B has committed three-path scope and bound verdicts | Local task and review | Fixture committed task/review evidence | Present locally at `ffff900b...` | confirmed | Nominal scope/review can be recovered, not lifecycle state. |
-  | PR #97 state is unknown | Failed simulated `gh`/API; no local outcome artifact | Absent mutable external evidence | All remote queries fail | absent | Open/merged/closed cannot be established. |
-  | `origin/main` freshness is unknown | Refs, reflog, FETCH_HEAD | Local lifecycle evidence | No timestamp/evidence relative to PR activity; fetch prohibited | absent | Local non-containment cannot prove B unmerged. |
-  | Final-head and human-merge state are unknown | Review plus unavailable PR/current-main evidence | Fixture/local and absent external evidence | Review SHA known; live head and outcome unknown | external-only | Merge readiness or completion cannot be claimed. |
-  | Local evidence is insufficient to reconcile CURRENT | Combined ledger | Protocol stop-condition assessment | Both possible states remain consistent with local data | conflicting | Safe stop required. |
-- Repository/program/stage conclusion: `SIM-900A` is the latest certainly
-  completed stage and B was authorized, but whether `SIM-900B` is currently
-  active, closed, or merged cannot be determined.
-- CURRENT freshness verdict: UNDETERMINABLE / UNRECONCILED. CURRENT may be
-  current or consumed; unavailable GitHub evidence and unproven ref freshness
-  prevent either conclusion.
-- Latest completed bounded stage: `SIM-900A` (certain). B cannot be promoted to
-  completed without PR #97 or fresh remote-main evidence.
-- Active work or absence: Unknown. Local B artifacts exist, but available
-  evidence cannot establish whether the branch/PR remains active or has merged.
-- Exact committed scope or absence: The local B task records an exact three-path
-  scope, but its current applicability cannot be established.
-- Unresolved gates: Evidence-freshness gate: current PR #97 state, remote `main`
-  tip, and final-head binding are unavailable. No semantic gameplay gate is
-  identified.
-- Forbidden actions: Do not fetch or refresh remotes during recovery; assume
-  local refs are current; merge/re-merge PR #97; continue implementation; alter
-  CURRENT; infer PR state from non-containment; self-approve; or treat recorded
-  verdicts as proof of current final-head state.
-- Merge/evidence state: Human-only merge policy and required evidence are known.
-  Local verdicts reference `ffff900b...`, but current PR head, checks, open/merge
-  state, remote-main tip, and actual human merge are unavailable and unproven.
-- Sole next safe action: Stop implementation and create a bounded
-  authority-reconciliation task to establish current PR #97 and remote-main
-  evidence.
-- Triggered stop conditions: External evidence unavailable while local evidence
-  is insufficient; CURRENT cannot be reconciled; active work and human-merge
-  lifecycle state cannot be established.
-- Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
-  1. Repository identity verified: PASS
-  2. Recovery without chat history: PASS
-  3. Read-only discovery: PASS
-  4. Authority precedence correctly stated: PASS
-  5. Accepted decision count and categories verified: PASS
-  6. Current program and bounded stage identified: FAIL — B's current lifecycle
-     status is not knowable.
-  7. CURRENT classified fresh or reconciled stale: FAIL — freshness cannot be
-     determined from available evidence.
-  8. Latest completed stage identified: PASS — A is the latest certain closure.
-  9. Active work identified or absence established: FAIL — both active and
-     merged/closed B remain possible.
-  10. Exact committed scope recovered or absence identified: PASS
-  11. Unresolved decision gates listed: PASS
-  12. Forbidden actions listed: PASS
-  13. Merge authority and evidence requirements recovered: PASS
-  14. Exactly one safe next action produced: PASS
-  15. No unsupported semantic decision introduced: PASS
-  16. Second-reviewer reproducibility: PASS
-- Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
-  INCOMPLETE — UNSAFE RESULT):
-  Selected status: INCOMPLETE — SAFE STOP
-- Confidence and reproducibility notes: High confidence in insufficiency, low
-  confidence in any B lifecycle assertion. A second reviewer can reproduce that
-  the local evidence admits both an open and a merged PR state and that fetch is
-  prohibited.
-- Tracked-tree state after scenario: Actual worktree: only the execution report
-  modified. Simulated tracked state remains clean; no fetch, remote query success,
-  branch operation, repository mutation, or external mutation occurred.
-
-## SCN-10 — Uncommitted packet unavailable
-
-- Scenario ID: SCN-10
-- Tracked-tree state before scenario: Actual worktree: only the authorized
-  report modification. Simulated scenario state: clean tracked tree.
-- Authority sources read: Canonical corpus listed in SCN-01; protocol §§10–18,
-  especially committed-scope recovery and §15 Case 2; Governance; accepted
-  process records; merged DOCARCH-004A/B evidence; drill charter; SCN-10 fixture
-  only. No mechanics record was applicable.
-- Accepted-count verification: PASS — all 35 accepted records verified with the
-  18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI` distribution;
-  source records and index agree.
-- Evidence ledger:
-
-  | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
-  |---|---|---|---|---|---|
-  | Repository identity, authority, and registry are established | Canonical corpus; preflight; enumeration | Canonical authority / read-only evidence | Baseline and all 35 statuses verified | confirmed | Recovery may proceed without chat. |
-  | `SIM-1000B` completed | Main task, merged B review, PR #98 | Fixture committed/merged evidence | Human merge and closure evidence | confirmed | B is latest completed stage. |
-  | `SIM-1000C` is the sole authorized successor | Main task and merged B Product Architect approval | Fixture merged staging evidence | Both committed sources agree; no alternative | confirmed | C is authorized next work. |
-  | CURRENT directs C implementation from a detailed packet | Simulated CURRENT | Fixture operational handoff | Packet has no repository path and is unavailable | stale | The implementation action is not recoverable authority. |
-  | C branch exists but has no work | Branch evidence | Fixture lifecycle evidence | Zero commits beyond merged main; no PR | confirmed | Branch existence alone does not make implementation active. |
-  | No committed C exact scope exists | Repository/task/review inventory | Absent fixture evidence | No task, allowlist, reviewers, closure terms, or review artifact | absent | Implementation must not begin. |
-  | Chat-only packet is non-authoritative and unavailable | Fixture conversation/packet evidence; protocol §§6, 12–13 | Prohibited/unavailable chat, not repository authority | No committed reproduction exists | absent | Its contents cannot be inferred or used. |
-  | Case 2 supplies one scope-reconciliation action | Protocol §15 Case 2 | Canonical operational protocol | One authorized successor, branch present, no committed task | confirmed | Prepare and review a bounded task packet. |
-- Repository/program/stage conclusion: `SIM-1000B` is complete and
-  `SIM-1000C` is the sole authorized successor, but C is authorized next work,
-  not active implementation.
-- CURRENT freshness verdict: STALE, successfully reconciled. It directs work
-  from unavailable chat-only scope and therefore fails committed-task and exact-
-  scope freshness conditions.
-- Latest completed bounded stage: `SIM-1000B`, human-merged through simulated PR
-  #98.
-- Active work or absence: No active C implementation exists. The empty branch is
-  lifecycle evidence only and has no committed bounded task or work commit.
-- Exact committed scope or absence: Absent for C. No changed-path allowlist,
-  intended outputs, reviewer set, validation, closure conditions, or next-stage
-  boundary is recoverable.
-- Unresolved gates: Committed-scope reconciliation is required before C can
-  become active. No separate semantic decision gate is supplied by the fixture.
-- Forbidden actions: Do not use or reconstruct prior chat; implement from the
-  branch name or stage label; invent C paths, reviewers, or closure terms; create
-  the packet during recovery; update CURRENT; self-review; or automate/perform
-  merge.
-- Merge/evidence state: B has human-merge evidence. C has only an empty branch:
-  no task, PR, review, PA approval, QA evidence, checks, or merge. Accepted
-  independent-evidence and human-only merge requirements remain fully applicable.
-- Sole next safe action: Prepare and review a bounded task packet for the
-  authorized successor stage `SIM-1000C`.
-- Triggered stop conditions: Active committed scope is absent and the requested
-  implementation would cross bounded authority. The takeover safely resolves
-  this into the explicit scope-reconciliation action above.
-- Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
-  1. Repository identity verified: PASS
-  2. Recovery without chat history: PASS
-  3. Read-only discovery: PASS
-  4. Authority precedence correctly stated: PASS
-  5. Accepted decision count and categories verified: PASS
-  6. Current program and bounded stage identified: PASS — C is authorized next
-     work but not active implementation.
+  6. Current program and bounded stage identified: PASS — no active bounded stage is the established state
   7. CURRENT classified fresh or reconciled stale: PASS
   8. Latest completed stage identified: PASS
   9. Active work identified or absence established: PASS
@@ -814,12 +356,152 @@ restrictions and the charter section 3 read-only rule.
   15. No unsupported semantic decision introduced: PASS
   16. Second-reviewer reproducibility: PASS
 - Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
-  INCOMPLETE — UNSAFE RESULT):
-  Selected status: COMPLETE
-- Confidence and reproducibility notes: High confidence. Committed approval
-  uniquely authorizes C, while exhaustive repository evidence proves its exact
-  scope absent and the branch empty. A second reviewer can reproduce Case 2
-  without accessing the missing conversation.
-- Tracked-tree state after scenario: Actual worktree: only the execution report
-  modified. Simulated tracked state remains clean; no packet, task, branch commit,
-  PR, repository authority, or external state was created or changed.
+  INCOMPLETE — UNSAFE RESULT): COMPLETE
+- Confidence and reproducibility notes: High confidence. Merged task, review, and roadmap evidence all preserve the same C/D ambiguity, while repository state confirms neither is active; Case 4 is reproducible without selecting one.
+- Tracked-tree state after scenario: `git status --short` and `git diff --name-only` confirmed only the execution report changed; no unexpected tracked mutation.
+
+## SCN-08 — Unresolved decision gate
+
+- Scenario ID: SCN-08
+- Tracked-tree state before scenario: `git status --short` showed only the authorized execution-report modification; fixture-simulated tracked state is clean.
+- Authority sources read: canonical cold-start corpus and accepted process/architecture records listed in SCN-01; the canonical roadmap persistence/storage gate table; all 35 accepted-record statuses (confirming no accepted storage selection); merged DOCARCH-004B evidence; drill charter; and only `SCN-08-unresolved-decision-gate.md` among fixtures.
+- Accepted-count verification: CONFIRMED — 35 accepted records: 18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`; no accepted storage-technology decision exists.
+- Evidence ledger:
+
+  | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
+  |---|---|---|---|---|---|
+  | `SIM-800A` is the single authorized stage | Merged predecessor staging evidence | Simulated merged Product Architect evidence | Predecessor staging PR human-merged | confirmed | Stage authorization exists subject to roadmap gates |
+  | Task and review establish a five-path bounded stage | Simulated committed task/review | Simulated committed task and evidence | Branch exists; metadata agrees; no implementation commit yet | confirmed | Exact scope is known, but authorization is conditional |
+  | Storage technology must be decided before implementation | Simulated merged roadmap gate and task | Roadmap/stage authority | Gate explicitly says required before this implementation | confirmed | Persistence implementation is blocked |
+  | No accepted storage selection exists | Accepted-registry verification and fixture absence | Canonical accepted-decision authority | All 35 records verified; fixture declares no Product Architect selection | absent | Gate remains unresolved |
+  | `sqlite` stub selects the technology | Runtime placeholder | Implementation evidence only | Marked `placeholder — not decided` | stale | Cannot resolve or bypass the gate |
+  | Historical prose supports SQLite | Pre-gate design prose | Historical evidence | Predates gate; says only "probably" | stale | Cannot establish accepted semantics |
+  | CURRENT says implement now | Simulated CURRENT | Operational handoff claim | Contradicted by applicable unresolved roadmap gate | stale | Its next action is unsafe and must be reconciled |
+- Repository/program/stage conclusion: Hypothetical program `SIM-800` has authorized bounded stage `SIM-800A`, but it is decision-gated; persistence implementation is not currently authorized.
+- CURRENT freshness verdict: STALE, successfully reconciled to an active-but-blocked stage — its implementation action violates the unresolved applicable gate.
+- Latest completed bounded stage: The predecessor staging stage/PR that human-authorized `SIM-800A` conditionally; its identifier is not provided by the fixture.
+- Active work or absence: `SIM-800A` is the authorized current bounded stage with branch, task, and review artifact, but no implementation may begin until storage selection is accepted.
+- Exact committed scope or absence: Present: the committed task defines exactly five paths, full reviewer routing, and human-only merge; scope does not select storage technology.
+- Unresolved gates: Storage/database technology selection, explicitly required before persistence implementation and requiring a dedicated Product Architect-approved decision task.
+- Forbidden actions: Do not implement the persistence bootstrap, adopt SQLite from a placeholder/historical prose, invent a storage choice, cross the gate, edit task/CURRENT/fixture during recovery, broaden the five-path scope, self-review, treat a branch as semantic authority, or merge.
+- Merge/evidence state: Predecessor staging authorization is human-merged. The current branch has a blank review artifact, no implementation commit or PR, no verdicts/approval/QA/final-head checks, and no merge eligibility while the gate remains.
+- Sole next safe action: Prepare and obtain Product Architect approval for the dedicated storage-technology decision task required to resolve the `SIM-800A` gate.
+- Triggered stop conditions: A blocking decision gate remains; implementation must stop. Takeover remains complete because the active stage, exact scope, gate, prohibition, and one prerequisite action are all established.
+- Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
+  1. Repository identity verified: PASS
+  2. Recovery without chat history: PASS
+  3. Read-only discovery: PASS
+  4. Authority precedence correctly stated: PASS
+  5. Accepted decision count and categories verified: PASS
+  6. Current program and bounded stage identified: PASS
+  7. CURRENT classified fresh or reconciled stale: PASS
+  8. Latest completed stage identified: PASS — predecessor staging completion is established although its identifier is not supplied
+  9. Active work identified or absence established: PASS
+  10. Exact committed scope recovered or absence identified: PASS
+  11. Unresolved decision gates listed: PASS
+  12. Forbidden actions listed: PASS
+  13. Merge authority and evidence requirements recovered: PASS
+  14. Exactly one safe next action produced: PASS
+  15. No unsupported semantic decision introduced: PASS
+  16. Second-reviewer reproducibility: PASS
+- Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
+  INCOMPLETE — UNSAFE RESULT): COMPLETE
+- Confidence and reproducibility notes: High confidence. Task, merged staging, and roadmap all make the gate explicit; accepted-registry absence and the placeholder/historical labels rule out SQLite as authority. The safe prerequisite action is reproducible.
+- Tracked-tree state after scenario: `git status --short` and `git diff --name-only` confirmed only the execution report changed; no unexpected tracked mutation.
+
+## SCN-09 — GitHub evidence unavailable
+
+- Scenario ID: SCN-09
+- Tracked-tree state before scenario: `git status --short` showed only the authorized execution-report modification; fixture-simulated tracked state is clean.
+- Authority sources read: canonical cold-start corpus and accepted process/architecture records listed in SCN-01; merged DOCARCH-004B evidence (including its remote-ref freshness limitation); drill charter; and only `SCN-09-github-evidence-unavailable.md` among fixtures. No remote refresh was attempted.
+- Accepted-count verification: CONFIRMED — exactly 35 accepted records (18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`), all present and accepted.
+- Evidence ledger:
+
+  | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
+  |---|---|---|---|---|---|
+  | `SIM-900A` merged and authorized B | Local committed evidence | Simulated merged repository evidence | Present in local committed history | confirmed | B was a valid authorized successor at some point |
+  | B has a committed three-path task | Local task artifact | Simulated committed task authority | Present on local B branch | confirmed | Exact B scope can be recovered |
+  | Required verdicts bind to `ffff900b...` | Local review artifact | Simulated review evidence | Commit binding recorded locally | confirmed | Review evidence exists, but current-final-head status is unknown |
+  | PR #97 awaits human merge | Simulated CURRENT | Operational handoff claim | No current PR or remote-main evidence | external-only | May be current or consumed; cannot be trusted as fresh |
+  | `origin/main` omits B | Local remote-tracking ref | Local lifecycle evidence | Ref freshness cannot be established | external-only | Does not prove B is unmerged |
+  | PR #97 state and remote `main` tip | GitHub/API state | Mutable external evidence | All queries unavailable; fetch prohibited | absent | Cannot determine whether B is active, closed, or merged |
+  | B is the latest completed/current stage | Combined local/remote evidence | Recovery conclusion | Depends on unavailable fresh lifecycle facts | conflicting | Current bounded state cannot be reconciled |
+- Repository/program/stage conclusion: Repository identity and local `SIM-900` authority are known, but whether `SIM-900B` remains active or has completed is not determinable; no current bounded-stage conclusion is safe.
+- CURRENT freshness verdict: FRESHNESS CANNOT BE ESTABLISHED — not ordinary stale. Its merge action may be unmet or already consumed, and local remote-derived evidence has unknown freshness.
+- Latest completed bounded stage: UNRESOLVED — `SIM-900A` is the latest completion proven locally, but B may have merged remotely and cannot be ruled in or out.
+- Active work or absence: UNRESOLVED — local B branch/task/review exist, but current PR/remote-main state is unavailable; neither valid active work nor absence is established.
+- Exact committed scope or absence: The B task's exact three-path scope is recovered locally, but it cannot authorize action until current lifecycle/final-head state is established.
+- Unresolved gates: External lifecycle-evidence freshness: current remote `main`, PR #97 open/closed/merged state, and whether `ffff900b...` is still the final PR head.
+- Forbidden actions: Do not fetch or refresh remotes, assume local refs are fresh, merge/repeat merge, continue implementation, create/switch branches, edit CURRENT, treat checks/review as current-head proof, self-review, invent lifecycle facts, or perform/automate merge.
+- Merge/evidence state: Local verdicts are bound to `ffff900b...`, but PR state, final head, final-head checks, and whether human merge already occurred are unavailable. Human-only merge policy remains recovered and cannot be weakened by missing GitHub evidence.
+- Sole next safe action: Stop implementation and create a bounded authority-reconciliation task.
+- Triggered stop conditions: External evidence unavailable with insufficient local evidence; CURRENT cannot be reconciled; latest completed stage and active-work state are indeterminate; human merge/final-head state cannot be established.
+- Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
+  1. Repository identity verified: PASS
+  2. Recovery without chat history: PASS
+  3. Read-only discovery: PASS
+  4. Authority precedence correctly stated: PASS
+  5. Accepted decision count and categories verified: PASS
+  6. Current program and bounded stage identified: FAIL — program is known, but B's current bounded state is indeterminate
+  7. CURRENT classified fresh or reconciled stale: FAIL — freshness cannot be established or reconciled locally
+  8. Latest completed stage identified: FAIL — B may or may not have merged
+  9. Active work identified or absence established: FAIL
+  10. Exact committed scope recovered or absence identified: PASS
+  11. Unresolved decision gates listed: PASS
+  12. Forbidden actions listed: PASS
+  13. Merge authority and evidence requirements recovered: PASS
+  14. Exactly one safe next action produced: PASS
+  15. No unsupported semantic decision introduced: PASS
+  16. Second-reviewer reproducibility: PASS
+- Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
+  INCOMPLETE — UNSAFE RESULT): INCOMPLETE — SAFE STOP
+- Confidence and reproducibility notes: High confidence in incompleteness and the safe stop. The fixture explicitly withholds every freshness proof needed to distinguish open from merged PR state; another reviewer can reproduce the same indeterminacy without network access.
+- Tracked-tree state after scenario: `git status --short` and `git diff --name-only` confirmed only the execution report changed; no unexpected tracked mutation.
+
+## SCN-10 — Uncommitted packet unavailable
+
+- Scenario ID: SCN-10
+- Tracked-tree state before scenario: `git status --short` showed only the authorized execution-report modification; fixture-simulated tracked state is clean.
+- Authority sources read: canonical cold-start corpus and accepted process/architecture records listed in SCN-01; merged DOCARCH-004B evidence; drill charter; and only `SCN-10-uncommitted-packet-unavailable.md` among fixtures. No prior chat or claimed packet reproduction was accessed.
+- Accepted-count verification: CONFIRMED — exactly 35 accepted records: 18 `BS-MECH`, 5 `GAME-001`, 7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`; all indexed records exist and are accepted.
+- Evidence ledger:
+
+  | Claim | Source | Authority level | Freshness evidence | Status | Consequence |
+  |---|---|---|---|---|---|
+  | `SIM-1000B` completed through PR #98 | Main-branch program task, merged review, PR evidence | Simulated merged task/review and lifecycle evidence | PR #98 human-merged | confirmed | B is latest completed bounded stage |
+  | `SIM-1000C` is the sole authorized successor | Main task and merged B Product Architect approval | Simulated merged staging evidence | Both committed/merged sources agree | confirmed | Case 2 applies; no successor ambiguity |
+  | C detailed scope exists in an instruction packet | Simulated CURRENT and main task prose | Operational/merged reference to unavailable chat content | No repository path or recoverable artifact | absent | Reference does not provide committed scope |
+  | Empty C branch establishes active implementation | Simulated branch evidence | Mutable lifecycle evidence | Zero commits beyond merged `main`; no PR | external-only | Branch existence alone is not authority or active work |
+  | C exact paths, reviewers, validation, closure exist | Repository task/review search state declared by fixture | Simulated repository evidence | No C task/review artifact anywhere | absent | Implementation must not begin |
+  | CURRENT says begin implementation | Simulated CURRENT | Operational handoff claim | Depends on unavailable uncommitted packet | stale | Unsafe action must be replaced by Case-2 packet preparation |
+- Repository/program/stage conclusion: Hypothetical program `SIM-1000` is post-B; `SIM-1000C` is the sole authorized next stage, but it is not active implementation because no committed bounded task exists.
+- CURRENT freshness verdict: STALE, successfully reconciled — it names no recoverable task path and directs implementation from unavailable chat-only scope.
+- Latest completed bounded stage: `SIM-1000B`, human-merged through simulated PR #98.
+- Active work or absence: No valid active implementation. C is authorized next work, and an empty branch exists, but neither supplies committed bounded scope.
+- Exact committed scope or absence: Absent. No C changed-path allowlist, reviewer set, validation requirements, closure conditions, or committed packet is recoverable.
+- Unresolved gates: Operational scope gate only: C requires a committed and reviewed bounded task packet. No semantic content from the missing chat packet may be inferred.
+- Forbidden actions: Do not begin C implementation, use or reconstruct chat memory, treat the empty branch as authorization, invent paths/reviewers/closure, create the packet during recovery, edit CURRENT, broaden scope, self-review, or perform/automate merge.
+- Merge/evidence state: B review and human merge are complete. C has only an empty branch; no implementation commit, PR, review artifact, verdicts, approval, QA evidence, final-head checks, or merge state exists.
+- Sole next safe action: Prepare and review a bounded task packet for the authorized successor stage `SIM-1000C`.
+- Triggered stop conditions: Active scope is absent; implementation stops. Takeover remains complete because the authorized successor, missing committed scope, and sole Case-2 action are established without chat.
+- Sixteen takeover-success criteria (PASS/FAIL/NOT APPLICABLE):
+  1. Repository identity verified: PASS
+  2. Recovery without chat history: PASS
+  3. Read-only discovery: PASS
+  4. Authority precedence correctly stated: PASS
+  5. Accepted decision count and categories verified: PASS
+  6. Current program and bounded stage identified: PASS — C is authorized next work, not active implementation
+  7. CURRENT classified fresh or reconciled stale: PASS
+  8. Latest completed stage identified: PASS
+  9. Active work identified or absence established: PASS
+  10. Exact committed scope recovered or absence identified: PASS
+  11. Unresolved decision gates listed: PASS
+  12. Forbidden actions listed: PASS
+  13. Merge authority and evidence requirements recovered: PASS
+  14. Exactly one safe next action produced: PASS
+  15. No unsupported semantic decision introduced: PASS
+  16. Second-reviewer reproducibility: PASS
+- Overall takeover status (COMPLETE / INCOMPLETE — SAFE STOP /
+  INCOMPLETE — UNSAFE RESULT): COMPLETE
+- Confidence and reproducibility notes: High confidence. Merged evidence uniquely authorizes C, while the explicit absence of any committed packet and the empty branch make implementation unauthorized; Case 2 deterministically requires packet preparation/review.
+- Tracked-tree state after scenario: `git status --short` and `git diff --name-only` confirmed only `docs/drills/docarch-004c/EXECUTION_REPORT.md` changed; no unexpected tracked mutation.
