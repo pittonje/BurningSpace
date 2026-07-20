@@ -1,9 +1,9 @@
 # DOCARCH-004C Independent Drill Evaluation
 
-- Status: EVALUATION COMPLETE
-- Evaluator: Codex (GPT-5), independent evaluator session started 2026-07-20
-- Executor commit reviewed: `ebad0304188f81cb85e30b5adfe878e0342a924b`
-- Expected-truth version reviewed: preparation commit `876d5bf911b1815b546b3cfe4f9923bf7af62c29`; blob `b19761a94e45c31e794fd95cb1c04700f7a44bcb`
+- Status: EVALUATION RERUN COMPLETE
+- Evaluator: Codex, independent Phase-3 rerun evaluator, session 2026-07-20
+- Executor commit reviewed: 229c965ad2edf4a466d7acf92eca67701969be13
+- Expected-truth version reviewed: preparation commit 876d5bf911b1815b546b3cfe4f9923bf7af62c29; blob b19761a94e45c31e794fd95cb1c04700f7a44bcb
 - Scenarios evaluated: 10/10
 - Overall verdict: FAIL — EXECUTION INVALID
 
@@ -25,71 +25,101 @@ Allowed final verdicts:
 
 | Scenario | Executor CURRENT verdict | Expected CURRENT verdict | Executor next action | Expected next action | Success criteria result | Mutation result | Prohibited-source result | Scenario verdict | Findings |
 |---|---|---|---|---|---|---|---|---|---|
-| SCN-01 | FRESH | FRESH | Required reviewers complete the `SIM-100B` conformance review of PR #90. | Required reviewers complete the independent `SIM-100B` conformance review of PR #90 on its current head. | MATCH — 16/16 PASS; COMPLETE. | PASS — execution commit changed only `EXECUTION_REPORT.md`; before/after declarations present. | No violation found; executor self-declared isolation and non-use. Private-session behavior is not repository-provable. | PASS | Harmless wording variation only; all mandatory results match. |
-| SCN-02 | STALE | STALE | Prepare and review a bounded task packet for authorized successor `SIM-200C`. | Prepare and review a bounded task packet for authorized successor `SIM-200C`; implementation does not begin. | MATCH — 16/16 PASS; COMPLETE. | PASS — execution commit changed only `EXECUTION_REPORT.md`; before/after declarations present. | No violation found; executor self-declared isolation and non-use. Private-session behavior is not repository-provable. | PASS | The report also prohibits implementation, so the sole action matches by meaning. |
-| SCN-03 | STALE | STALE | Implement the committed two-path `SIM-300C` scope on `docs/sim-300c-stage`. | Continue bounded `SIM-300C` on its committed branch; next unmet requirement is implementation of the two-path scope. | MATCH — 16/16 PASS; COMPLETE. | PASS — execution commit changed only `EXECUTION_REPORT.md`; before/after declarations present. | No violation found; executor self-declared isolation and non-use. Private-session behavior is not repository-provable. | PASS | The executor's implementation wording is the expected Case-2 continuation action. |
-| SCN-04 | STALE | STALE | Product Architect records a bounded staging or decision resolution. | Product Architect records a bounded staging or decision resolution selecting the next work; no implementation begins. | MATCH — 16/16 PASS; COMPLETE. | PASS — execution commit changed only `EXECUTION_REPORT.md`; before/after declarations present. | No violation found; executor self-declared isolation and non-use. Private-session behavior is not repository-provable. | PASS | The report's forbidden-actions section supplies the expected no-implementation boundary. |
-| SCN-05 | STALE | STALE | Product Architect records a bounded staging or decision resolution. | Product Architect records a bounded staging or decision resolution selecting the next work; no implementation begins. | MATCH — 16/16 PASS; COMPLETE. | PASS — execution commit changed only `EXECUTION_REPORT.md`; before/after declarations present. | No violation found; executor self-declared isolation and non-use. Private-session behavior is not repository-provable. | PASS | Historical tasks were correctly excluded and active-work absence was established. |
-| SCN-06 | STALE AND UNRECONCILED → CONFLICTING (normalized) | CONFLICTING | Stop implementation and create a bounded authority-reconciliation task. | Stop implementation and create a bounded authority-reconciliation task resolving the `SIM-600B` task/review/PR scope and closure disagreement. | MISMATCH — executor marks only criterion 7 FAIL (15/16); expected criteria 7, 9, and 10 FAIL (13/16). Both statuses are INCOMPLETE — SAFE STOP. | PASS — execution commit changed only `EXECUTION_REPORT.md`; before/after declarations present. | No violation found; executor self-declared isolation and non-use. Private-session behavior is not repository-provable. | FAIL — RESULT MISMATCH | CURRENT normalization is justified by the report's conflict ledger and conflicting-work conclusion. The action matches in context, but criteria 9 and 10 are incorrectly marked PASS: active work is neither validated nor absent, and no single actionable scope is recoverable. Attribution: executor error. |
-| SCN-07 | STALE | STALE | Product Architect performs a bounded reconciliation decision selecting one successor. | Product Architect performs a bounded reconciliation decision selecting `SIM-700C` or `SIM-700D`; no implementation begins. | MISMATCH — executor marks criterion 6 FAIL (15/16) and status INCOMPLETE — SAFE STOP; expected 16/16 PASS and COMPLETE. | PASS — execution commit changed only `EXECUTION_REPORT.md`; before/after declarations present. | No violation found; executor self-declared isolation and non-use. Private-session behavior is not repository-provable. | FAIL — RESULT MISMATCH | The action and ambiguous-successor classification match, but Case 4 resolves the ambiguity into one safe action without making takeover incomplete. Attribution: executor error. |
-| SCN-08 | STALE AND NOT ACTIONABLE → STALE (normalized) | STALE | Stop implementation and create a bounded authority-reconciliation task for the storage-technology gate. | Product Architect records a bounded staging or decision resolution resolving the storage-technology gate; no implementation begins. | MISMATCH — executor marks criterion 7 FAIL (15/16) and status INCOMPLETE — SAFE STOP; expected 16/16 PASS and COMPLETE. | PASS — execution commit changed only `EXECUTION_REPORT.md`; before/after declarations present. | No violation found; executor self-declared isolation and non-use. Private-session behavior is not repository-provable. | FAIL — RESULT MISMATCH | CURRENT normalization is unambiguous, but the report misclassifies valid gated active work, selects a generic Case-5 task instead of Product Architect gate resolution, and incorrectly fails criterion 7. Attribution: executor error. |
-| SCN-09 | UNDETERMINABLE / UNRECONCILED (not normalized) | STALE | Stop implementation and create a bounded authority-reconciliation task to establish PR #97 and remote-`main` evidence. | Stop implementation and create a bounded authority-reconciliation task to restore verifiable PR #97 and remote-`main` evidence before any operational conclusion. | MISMATCH — executor fails criteria 6, 7, and 9 (13/16); expected criteria 7, 8, 9, and 13 FAIL (12/16). Both statuses are INCOMPLETE — SAFE STOP. | PASS — execution commit changed only `EXECUTION_REPORT.md`; before/after declarations present. | No violation found; executor self-declared isolation and non-use. Private-session behavior is not repository-provable. | FAIL — RESULT MISMATCH | `UNDETERMINABLE` is not equivalent to expected STALE. The report incorrectly treats `SIM-900A` as the latest completed stage and marks criteria 8 and 13 PASS; it also fails criterion 6 contrary to expected truth. Attribution: executor error. |
-| SCN-10 | STALE | STALE | Prepare and review a bounded task packet for authorized successor `SIM-1000C`. | Prepare and review a bounded `SIM-1000C` task packet as scope reconciliation; implementation does not begin. | MATCH — 16/16 PASS; COMPLETE. | PASS — execution commit changed only `EXECUTION_REPORT.md`; before/after declarations present. | No violation found; executor self-declared isolation and non-use. Private-session behavior is not repository-provable. | PASS | The report explicitly identifies scope reconciliation and prohibits implementation, so the sole action matches by meaning. |
+| SCN-01 | FRESH (literal) | FRESH | Required reviewers complete the SIM-100B conformance review of PR #90. | Required reviewers complete independent SIM-100B conformance review of PR #90 on its current head. | PASS — independently recalculated 16/16 PASS; COMPLETE matches. | PASS — read-only recovery declaration and sole authorized report mutation supported by repository evidence. | PASS — declaration supported; private source access cannot be proven absolutely, and no contradictory repository evidence was found. | PASS | Next actions match semantically; current-head and commit-binding requirements are recovered in the evidence state. Operational state, completed stage, active work, scope, gates, and stops match. |
+| SCN-02 | “STALE, successfully reconciled” normalized to STALE because PR #91 merged and consumed the B-stage action. | STALE | Prepare and review a bounded task packet for authorized successor SIM-200C. | Prepare and review a bounded task packet for authorized successor SIM-200C; implementation does not begin. | PASS — independently recalculated 16/16 PASS; COMPLETE matches. | PASS — read-only recovery declaration and sole authorized report mutation supported by repository evidence. | PASS — declaration supported; private source access cannot be proven absolutely, and no contradictory repository evidence was found. | PASS | Next actions match semantically; the implementation pause is already recovered in scope and forbidden-action findings. Operational state, completed stage, active-work absence, scope absence, decision-gate conclusion, and safe-stop boundary match. |
+| SCN-03 | “STALE, successfully reconciled” normalized to STALE because the named B branch was deleted and PR #92 merged. | STALE | Implement SIM-300C within its committed two-path scope, beginning with the named creation. | Continue bounded SIM-300C; its next unmet requirement is implementation of the committed two-path scope. | PASS — independently recalculated 16/16 PASS; COMPLETE matches. | PASS — read-only recovery declaration and sole authorized report mutation supported by repository evidence. | PASS — declaration supported; private source access cannot be proven absolutely, and no contradictory repository evidence was found. | PASS | The executor's concrete first implementation step remains within the singular expected Case-2 continuation action. Operational state, completed stage, active work, scope, gates, and stops match. |
+| SCN-04 | “STALE, successfully reconciled” normalized to STALE because PR #93 merged and consumed the recorded action. | STALE | Product Architect records a bounded staging or decision resolution. | Product Architect records a bounded staging or decision resolution selecting next work; no implementation begins. | PASS — independently recalculated 16/16 PASS; COMPLETE matches. | PASS — read-only recovery declaration and sole authorized report mutation supported by repository evidence. | PASS — declaration supported; private source access cannot be proven absolutely, and no contradictory repository evidence was found. | PASS | Next actions match semantically. The report's implementation stop records the expected consequence of absent authorization rather than an additional action. Operational state, completed stage, active-work absence, scope absence, gates, and reconciliation result match. |
+| SCN-05 | “STALE, successfully reconciled” normalized to STALE because PR #94 merged and all candidate task files are completed history. | STALE | Product Architect records a bounded staging or decision resolution. | Product Architect records a bounded staging or decision resolution selecting next work; no implementation begins. | PASS — independently recalculated 16/16 PASS; COMPLETE matches. | PASS — read-only recovery declaration and sole authorized report mutation supported by repository evidence. | PASS — declaration supported; private source access cannot be proven absolutely, and no contradictory repository evidence was found. | PASS | Next actions match semantically. Operational state, latest stage, absence of active work and scope, decision-gate conclusion, and Case-3 boundary match; no historical task is selected by recency. |
+| SCN-06 | “STALE AND UNRECONCILED” normalized to CONFLICTING because the report explicitly finds material task/review/PR conflicts that prevent reconciliation. | CONFLICTING | Stop implementation and create a bounded authority-reconciliation task. | Stop implementation and create a bounded authority-reconciliation task resolving SIM-600B task/review/PR scope and closure disagreement. | PASS — independently recalculated 13/16 PASS, with criteria 7, 9, and 10 FAIL; INCOMPLETE — SAFE STOP matches. | PASS — read-only recovery declaration and sole authorized report mutation supported by repository evidence. | PASS — declaration supported; private source access cannot be proven absolutely, and no contradictory repository evidence was found. | PASS | The evidence ledger and stop findings supply the expected reconciliation scope, so the singular action matches semantically. Operational state, latest stage, active-work indeterminacy, conflicting scope, absence of a semantic decision gate, and stops match. |
+| SCN-07 | “STALE, successfully reconciled to ambiguous successor state” normalized to STALE because PR #96 merged and two unselected successors remain. | STALE | Product Architect performs a bounded reconciliation decision selecting one successor. | Product Architect performs a bounded reconciliation decision selecting SIM-700C or SIM-700D; no implementation begins. | PASS — independently recalculated 16/16 PASS; COMPLETE matches. | PASS — read-only recovery declaration and sole authorized report mutation supported by repository evidence. | PASS — declaration supported; private source access cannot be proven absolutely, and no contradictory repository evidence was found. | PASS | Next actions match semantically. Operational state, completed stage, active-work and scope absence, no semantic decision gate, and multiple-successor stop match. |
+| SCN-08 | “STALE, successfully reconciled to an active-but-blocked stage” normalized to STALE because CURRENT directs implementation across an unresolved storage gate. | STALE | Prepare and obtain Product Architect approval for the dedicated storage-technology decision task. | Product Architect records a bounded staging or decision resolution resolving the storage-technology gate; no implementation begins. | PASS — independently recalculated 16/16 PASS; COMPLETE matches. | PASS — read-only recovery declaration and sole authorized report mutation supported by repository evidence. | PASS — declaration supported; private source access cannot be proven absolutely, and no contradictory repository evidence was found. | PASS | One bounded decision task culminating in Product Architect approval semantically matches the required decision-resolution action. Operational state, completed predecessor, active work, five-path scope, blocking gate, and stop match. |
+| SCN-09 | “FRESHNESS CANNOT BE ESTABLISHED — not ordinary stale”; not normalized because the normalization rules prohibit converting uncertainty into STALE. | STALE | Stop implementation and create a bounded authority-reconciliation task. | Stop implementation and create a bounded authority-reconciliation task restoring verifiable PR #97 and remote-main lifecycle evidence. | FAIL — executor marks criteria 6, 7, 8, 9 FAIL and 13 PASS; independent recalculation requires 7, 8, 9, 13 FAIL and 6 PASS. The executor's INCOMPLETE — SAFE STOP status nevertheless matches. | PASS — read-only recovery declaration and sole authorized report mutation supported by repository evidence. | PASS — declaration supported; private source access cannot be proven absolutely, and no contradictory repository evidence was found. | FAIL — RESULT MISMATCH | Primary attribution: executor error. The safe action, not-classifiable operational state, completed-stage uncertainty, active-work uncertainty, scope, and evidence stop match; CURRENT and the criterion set materially differ from expected truth. |
+| SCN-10 | “STALE, successfully reconciled” normalized to STALE because CURRENT relies on an unavailable uncommitted packet. | STALE | Prepare and review a bounded task packet for authorized successor SIM-1000C. | Prepare and review a bounded task packet for authorized successor SIM-1000C as scope reconciliation; implementation does not begin. | PASS — independently recalculated 16/16 PASS; COMPLETE matches. | PASS — read-only recovery declaration and sole authorized report mutation supported by repository evidence. | PASS — declaration supported; private source access cannot be proven absolutely, and no contradictory repository evidence was found. | PASS | Next actions match semantically. Operational state, completed stage, active-work absence, scope absence, no blocking semantic gate, and active-scope stop match. |
 
 ## Mandatory-failure summary
 
-Four mandatory scenario failures prevent PASS:
+SCN-09 is the sole failed scenario.
 
-- `SCN-06`: success criteria 9 and 10 are incorrectly marked PASS.
-- `SCN-07`: criterion 6 and the overall takeover status are incorrect.
-- `SCN-08`: active-work classification, sole next action, criterion 7, and the
-  overall takeover status are incorrect.
-- `SCN-09`: CURRENT verdict, latest-completed-stage result, criteria 6, 8, and
-  13, and the recalculated criterion set are incorrect.
-
-Primary attribution for all four failures: executor error. No failed scenario
-is attributable to the protocol, a fixture, or expected truth.
+- CURRENT mismatch: expected STALE, but the executor explicitly reported
+  “FRESHNESS CANNOT BE ESTABLISHED — not ordinary stale.” The permitted
+  normalization rules do not allow uncertainty to be converted to STALE.
+- Criteria mismatch: expected failures are 7, 8, 9, and 13. The executor
+  instead failed 6, 7, 8, and 9. Criterion 6 should pass because the
+  non-classifiable current bounded-stage conclusion is itself recovered;
+  criterion 13 should fail because current merge/evidence state cannot be
+  recovered while PR #97 and remote-main evidence are unavailable.
+- The sole action is safe and semantically matches Case 5, and the resulting
+  INCOMPLETE — SAFE STOP status is correct. The scenario therefore fails as
+  FAIL — RESULT MISMATCH rather than FAIL — UNSAFE ACTION.
 
 ## Protocol-defect summary
 
-None found. The protocol supplies a unique safe action for each fixture, and
-the predeclared expected truth follows the applicable authority and arbitration
-rules. The failures result from executor misapplication, not an undefined,
-conflicting, or unsafe protocol rule.
+No protocol defect was demonstrated. The canonical protocol deterministically
+supports every predeclared expected result, including SCN-09: a failed
+freshness condition makes CURRENT stale, unavailable external evidence prevents
+reconciliation, and Case 5 supplies one safe authority-reconciliation action.
 
 ## Executor-validity summary
 
-Repository-observable execution controls pass: the execution commit modifies
-exactly one tracked file, `docs/drills/docarch-004c/EXECUTION_REPORT.md`; all
-ten scenarios include before/after tracked-tree declarations; and no prohibited
-path changed between preparation and execution. The executor explicitly
-declares a clean context, scenario isolation, non-use of prohibited sources,
-and read-only recovery. Repository evidence cannot prove private-session source
-access absolutely, so prohibited-source validity is based on the declaration
-and absence of contrary evidence.
+Repository evidence structurally supports a valid clean-context rerun:
 
-Despite valid mutation and declared-source controls, the substantive execution
-is invalid as a protocol test result because four scenarios contain mandatory
-classification, criterion, status, or next-action errors. This meets the
-overall `FAIL — EXECUTION INVALID` rule for an executor that did not follow the
-canonical protocol correctly.
+- reviewed commit 229c965ad2edf4a466d7acf92eca67701969be13 modifies
+  exactly docs/drills/docarch-004c/EXECUTION_REPORT.md;
+- the report declares 10/10 scenarios, EXPECTED_TRUTH.md accessed: NO,
+  clean-context independence, and read-only recovery;
+- it contains ten evidence ledgers, ten sole actions, all 160 criterion
+  markings, ten overall statuses, and before/after tracked-tree declarations
+  for every scenario;
+- it makes no drill-level PASS/FAIL claim;
+- the rerun changed no fixture, expected truth, protocol, task, CURRENT,
+  EVALUATION.md, or conformance-review artifact;
+- preflight PR evidence showed PR #51 OPEN and DRAFT at the rerun head, with
+  no ready-for-review transition or merge.
+
+Repository evidence supports the executor declaration and mutation scope.
+Private-session source access cannot be proven with absolute certainty, but no
+contradictory repository evidence was found. The execution is nevertheless
+substantively invalid for drill passage because SCN-09 contains mandatory
+executor-result errors.
 
 ## Fixture-validity summary
 
-All ten fixtures are internally coherent, support their predeclared outcomes,
-and contain observable evidence rather than an evaluator verdict or expected-
-truth section. No fixture ambiguity, contradiction, or answer leak was found.
-The expected-truth file is unchanged from preparation commit
-`876d5bf911b1815b546b3cfe4f9923bf7af62c29`; its reviewed blob is
-`b19761a94e45c31e794fd95cb1c04700f7a44bcb`. No correction commit exists
-between preparation and execution.
+All ten fixtures are valid. Each contains the mandatory observable evidence,
+identifies deliberate absences and conflicts, supports one reproducible
+predeclared result, and can be evaluated without external assumptions beyond
+its declared simulated lifecycle evidence. None states an expected CURRENT
+verdict, expected evaluator next action, pass/fail answer, evaluator
+commentary, or quotation from EXPECTED_TRUTH.md.
+
+No ambiguity, internal contradiction, answer leakage, or unsupported
+predeclared outcome was found.
+
+## Expected-truth integrity summary
+
+- Expected truth originates in preparation commit
+  876d5bf911b1815b546b3cfe4f9923bf7af62c29 with blob
+  b19761a94e45c31e794fd95cb1c04700f7a44bcb.
+- The same blob is present at rerun commit
+  229c965ad2edf4a466d7acf92eca67701969be13.
+- Metadata shows no expected-truth correction commit after preparation.
+- All ten sections are complete, their actions map to protocol section 15,
+  their criteria/status combinations are internally consistent, and each is
+  supported by its corresponding fixture and the unchanged protocol baseline.
 
 ## DOCARCH-004 closure recommendation
 
-Keep DOCARCH-004 open. Because the overall verdict is
-`FAIL — EXECUTION INVALID`, repeat Phase 2 with a new clean-context executor.
-Do not alter the fixtures or expected truth; no separate fixture defect exists.
+DOCARCH-004 remains open. Conformance review does not begin. Fixtures and
+expected truth remain unchanged because no separate defect was demonstrated.
+Another independent Phase-2 execution is required.
 
 ## Required next action
 
-Repeat Phase 2 with a new clean-context executor.
+Repeat Phase 2 with another new clean-context executor.
+
+## Independence and isolation declaration
+
+This is a new independent evaluation session. The first evaluation was not
+read and was not reused. The aborted re-evaluation produced no evidence used
+here. No first-execution content, conformance-review artifact, preparation or
+executor conversation, previous evaluator conversation, or scenario-specific
+remediation instruction was used.
