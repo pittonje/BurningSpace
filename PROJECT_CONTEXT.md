@@ -15,8 +15,8 @@ operational state lives in [CURRENT](docs/handoffs/CURRENT.md).
 
 For a cold Product Architect takeover, begin here and then follow the
 [Architect Takeover Protocol](docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md). The
-protocol is a candidate until DOCARCH-004B human merge and is subordinate to
-governance and accepted decisions.
+protocol is canonical and active after the DOCARCH-004B human merge (PR #50)
+and remains subordinate to governance and accepted decisions.
 
 ## Product snapshot
 
@@ -36,7 +36,7 @@ incremental future work rather than implemented assumptions.
 - [Decision Index](docs/decisions/DECISION_INDEX.md) navigates accepted decisions; the linked individual records are canonical in their domains.
 - [Canonical Development Roadmap](docs/roadmap/CANONICAL_DEVELOPMENT_ROADMAP.md) defines delivery sequence, dependencies, the MVP boundary, and unresolved decision gates after human merge. It does not replace accepted decisions or `CURRENT.md`.
 - [Decision Registry README](docs/decisions/README.md) explains registry roles and status.
-- [Architect Takeover Protocol](docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md) becomes the canonical operational cold-takeover procedure after DOCARCH-004B human merge; it remains subordinate to governance and accepted decisions.
+- [Architect Takeover Protocol](docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md) is the canonical active operational cold-takeover procedure since the DOCARCH-004B human merge; it remains subordinate to governance and accepted decisions.
 - [CURRENT](docs/handoffs/CURRENT.md) reports the active branch, task, review, and next safe action. During takeover it must be validated through the protocol rather than assumed fresh.
 - [`docs/tasks/`](docs/tasks/) contains Product Architect-approved bounded task scope.
 - [`docs/reviews/`](docs/reviews/) contains review and conformance evidence.
@@ -84,13 +84,15 @@ implementation constraints.
 ## Current program state
 
 DOCARCH-000 through DOCARCH-003 are complete. DOCARCH-004A merged through PR
-#49 and established the takeover-readiness baseline and separate authoring and
-independent-validation stages. The registry contains 35 accepted decisions.
+#49. DOCARCH-004B merged through PR #50 at merge commit
+`4ead74342ecc7ad9f2b647d4a21d63736a694502`, making the Architect Takeover
+Protocol canonical and active. The registry contains 35 accepted decisions.
 
-DOCARCH-004 remains open. DOCARCH-004B is active as the protocol-authoring
-candidate; it creates no accepted decision. DOCARCH-004C is reserved after B
-for independent validation and is not active. DOCARCH-005 — Role and Model
-Portability remains reserved after DOCARCH-004.
+DOCARCH-004 remains open. DOCARCH-004C is active as the independent validation
+stage; its controls and scenarios are defined by the
+[drill charter](docs/drills/docarch-004c/DRILL_CHARTER.md). Drill preparation
+does not constitute drill execution or drill success. DOCARCH-005 — Role and
+Model Portability remains reserved after DOCARCH-004.
 
 Use [CURRENT](docs/handoffs/CURRENT.md) for live operational status rather than
 maintaining pull-request or commit chronology here.

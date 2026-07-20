@@ -19,13 +19,15 @@ repository truth alone, without chat history.
   `858d14568f4dd6f040255df1b925046028237377`.
 - The Product Architect accepted separate B and C stages through the merged
   DOCARCH-004A review evidence.
+- DOCARCH-004B completed and merged through PR #50 at merge commit
+  `4ead74342ecc7ad9f2b647d4a21d63736a694502`. The Architect Takeover Protocol
+  at `docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md` is canonical and active.
 - DOCARCH-004 remains open.
-- DOCARCH-004B is active and authors the protocol candidate.
-- DOCARCH-004C is reserved after B and independently validates the merged
-  protocol; it is not active in B.
+- DOCARCH-004C is the active bounded stage and independently validates the
+  merged protocol. Its current phase is drill preparation.
 - The accepted decision count remains 35 (18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`).
-- DOCARCH-004B introduces no accepted decision record and no runtime change.
+- DOCARCH-004C introduces no accepted decision record and no runtime change.
 - DOCARCH-005 - Role and Model Portability remains reserved after
   DOCARCH-004.
 
@@ -38,7 +40,10 @@ and review evidence remain unchanged.
 
 ## DOCARCH-004B - Architect Takeover Protocol Authoring
 
-Active bounded documentation stage.
+Completed and merged through PR #50 at merge commit
+`4ead74342ecc7ad9f2b647d4a21d63736a694502`. The protocol is canonical and
+active. The B-stage scope, objectives, and closure conditions below remain
+recorded as historical stage state.
 
 ### Exact B-stage file scope
 
@@ -118,15 +123,96 @@ DOCARCH-004B closes only after:
 
 The protocol remains a candidate until human merge.
 
-## Program continuation after B
+## DOCARCH-004C - Independent Cold Takeover Drill
 
-After B human merge:
+Active bounded validation stage. It uses three separate evidence-bearing
+phases, each with its own commit and actor:
 
-- the protocol becomes the active canonical operational takeover procedure;
-- DOCARCH-004 remains open;
-- DOCARCH-004C becomes the next bounded stage;
-- an independent cold takeover validation must occur before DOCARCH-004
-  closes.
+1. Preparation (current phase) - a Drill Controller authors the drill
+   charter, ten scenario fixtures, predeclared expected truth, blank
+   execution and evaluation reports, the review skeleton, and program-state
+   updates. The preparation session becomes ineligible to execute the drill.
+2. Independent execution - a later new clean-context Drill Executor, without
+   access to the preparation conversation or
+   `docs/drills/docarch-004c/EXPECTED_TRUTH.md`, executes all ten scenarios
+   read-only.
+3. Independent evaluation - a later evaluator that did not author the
+   executor report compares the report against the predeclared expected
+   truth.
 
-B authors the protocol and does not perform the drill. C independently
-validates the merged protocol. DOCARCH-005 remains reserved after DOCARCH-004.
+DOCARCH-004C creates no accepted decision and no runtime, workflow, or
+protocol change. A protocol defect discovered by the drill is recorded as a
+failure and corrected later through separate bounded work.
+
+### Exact C-stage Phase-1 file scope
+
+Create exactly fifteen files:
+
+- `docs/drills/docarch-004c/DRILL_CHARTER.md`;
+- `docs/drills/docarch-004c/EXPECTED_TRUTH.md`;
+- `docs/drills/docarch-004c/EXECUTION_REPORT.md`;
+- `docs/drills/docarch-004c/EVALUATION.md`;
+- `docs/drills/docarch-004c/scenarios/SCN-01-fresh-current.md`;
+- `docs/drills/docarch-004c/scenarios/SCN-02-stale-current-after-merge.md`;
+- `docs/drills/docarch-004c/scenarios/SCN-03-merged-or-deleted-branch.md`;
+- `docs/drills/docarch-004c/scenarios/SCN-04-consumed-next-action.md`;
+- `docs/drills/docarch-004c/scenarios/SCN-05-no-active-task.md`;
+- `docs/drills/docarch-004c/scenarios/SCN-06-task-review-conflict.md`;
+- `docs/drills/docarch-004c/scenarios/SCN-07-multiple-successors.md`;
+- `docs/drills/docarch-004c/scenarios/SCN-08-unresolved-decision-gate.md`;
+- `docs/drills/docarch-004c/scenarios/SCN-09-github-evidence-unavailable.md`;
+- `docs/drills/docarch-004c/scenarios/SCN-10-uncommitted-packet-unavailable.md`;
+- `docs/reviews/docarch-004c-independent-cold-takeover-drill-review.md`.
+
+Modify exactly three files:
+
+- `PROJECT_CONTEXT.md`;
+- `docs/tasks/docarch-004-architect-takeover-protocol.md`;
+- `docs/handoffs/CURRENT.md`.
+
+The exact Phase-1 changed-path count is eighteen. No other path may change.
+
+### C-stage Phase-2 scope
+
+The independent clean-context Drill Executor modifies only:
+
+- `docs/drills/docarch-004c/EXECUTION_REPORT.md`.
+
+### C-stage Phase-3 scope
+
+The independent Drill Evaluator modifies only:
+
+- `docs/drills/docarch-004c/EVALUATION.md`.
+
+### C-stage reviewer routing
+
+Required after execution and evaluation:
+
+- Product Architect;
+- Architecture Reviewer;
+- Documentation consistency review;
+- Claude QA;
+- human-only merge per `BS-PROC-001`.
+
+### DOCARCH-004C closure condition
+
+DOCARCH-004C closes only after:
+
+- the preparation work is merged into the C branch;
+- the independent executor report is complete;
+- the independent evaluation is complete;
+- all ten scenarios are evaluated;
+- the drill verdict is PASS under the charter's mandatory all-scenarios rule;
+- the conformance review is completed;
+- Product Architect approval evidence is recorded;
+- Claude QA evidence is recorded;
+- all required checks pass on the final pull-request head;
+- a human merges the C-stage pull request.
+
+DOCARCH-004C is not complete, and no drill has been executed or passed, at
+the preparation phase.
+
+## Program continuation after C
+
+DOCARCH-004 closes only after the successful human merge of DOCARCH-004C.
+DOCARCH-005 remains reserved after DOCARCH-004.
