@@ -4,6 +4,12 @@
 
 This protocol reduces repeated repository exploration and permits safe Codex ↔ Claude Code switching. Product Architect decisions and future coding sessions use the same separation between durable context, task authority, and current operational state.
 
+This document governs normal handoffs. A fresh and internally consistent
+`CURRENT.md` may support normal continuation. A cold Product Architect
+takeover, or any stale, conflicting, missing, merged-branch, or
+consumed-next-action case, follows
+`docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md` instead.
+
 ## Document responsibilities
 
 ### PROJECT_CONTEXT.md
@@ -80,6 +86,18 @@ gh pr view <number>
 ```
 
 The receiving agent compares branch, `HEAD`, working tree, PR state, and task status with `CURRENT.md`. A documented single handoff-only child commit is verified against its subject and parent. Any other mismatch must be reported before editing; do not guess, reset, stash, or overwrite another session's work.
+
+When all named state exists and agrees, the receiver may treat `CURRENT.md` as
+a fresh normal handoff and continue only within the committed task scope. If
+`CURRENT.md` is stale, conflicting, missing, names a merged or deleted branch,
+or records a next action already consumed, do not improvise a replacement
+action.
+
+Non-Product-Architect roles stop and report the discrepancy to the Product
+Architect. An incoming Product Architect does not report circularly to an
+unavailable predecessor; that role uses the Architect Takeover Protocol's
+read-only recovery and arbitration procedure. This redirect does not weaken
+receiver verification or authorize implementation during recovery.
 
 ## Compactness rules
 
