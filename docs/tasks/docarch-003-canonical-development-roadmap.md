@@ -16,119 +16,163 @@ remain explicit future decision gates or dedicated tasks.
 - DOCARCH-003 creates no new accepted decision records; the count remains 35.
 - Observed implementation is evidence, not immutable architecture or mechanics
   authority.
-- DOCARCH-003 does not modify runtime, packages, dependencies, architecture,
-  design, workflows, scripts, tests, or GitHub settings.
 - The Product Architect decisions recorded in
   `docs/roadmap/DOCARCH-003_READINESS_BASELINE.md` are roadmap-scope authority,
   not accepted decision records.
+- DOCARCH-003 changes no runtime, package, dependency, architecture, design,
+  workflow, script, test, balance value, or GitHub setting.
 
 ## DOCARCH-003A — Readiness Baseline and Roadmap Scope Lock
 
-Active in this PR.
+Completed and merged via PR #47.
 
-Scope:
+A established:
 
-- readiness baseline;
-- Product Architect roadmap decisions;
-- exact DOCARCH-003B file scope;
-- DOCARCH-004 and DOCARCH-005 reserved scope;
-- corrected `CURRENT.md`;
-- A-stage review artifact.
+- the point-in-time readiness baseline;
+- the Product Architect MVP and vertical-slice scope lock;
+- the exact DOCARCH-003B file scope;
+- DOCARCH-004 and DOCARCH-005 reserved scopes;
+- the corrected post-DOCARCH-002 handoff;
+- the A-stage review evidence.
 
-No canonical roadmap implementation. No decision records. No runtime changes.
-
-Exact A-stage file scope:
-
-- create `docs/roadmap/DOCARCH-003_READINESS_BASELINE.md`;
-- create `docs/tasks/docarch-003-canonical-development-roadmap.md`;
-- create `docs/reviews/docarch-003a-readiness-baseline-and-scope-review.md`;
-- modify `docs/handoffs/CURRENT.md`.
+DOCARCH-003A created no decision record and changed no runtime behavior.
 
 ## DOCARCH-003B — Canonical Development Roadmap
 
-Pending after DOCARCH-003A merges.
+Active as the final DOCARCH-003 roadmap candidate.
 
-Expected create:
+Exact B-stage file scope:
+
+Create:
 
 - `docs/roadmap/CANONICAL_DEVELOPMENT_ROADMAP.md`;
 - `docs/reviews/docarch-003b-canonical-development-roadmap-review.md`.
 
-Expected modify:
+Modify:
 
 - `docs/tasks/docarch-003-canonical-development-roadmap.md`;
 - `docs/handoffs/CURRENT.md`;
 - `PROJECT_CONTEXT.md`.
 
-The provisional changed-path count is 5. DOCARCH-003B makes no decision,
-runtime, architecture, design, workflow, package, or dependency change.
+The exact changed-path count is 5. DOCARCH-003B creates no decision record and
+changes no runtime, architecture, design, workflow, package, dependency,
+script, test, balance value, or GitHub setting.
 
-The canonical roadmap must contain:
+## Canonical roadmap contents
 
-- an evidence-based current baseline;
-- delivery waves and dependency order;
+The B-stage roadmap defines:
+
+- the evidence-based current baseline by reference to the A-stage baseline;
+- seven ordered delivery waves and their dependencies;
 - the approved MVP boundary;
-- the smallest credible campaign vertical slice;
-- explicit decision gates;
-- dedicated deferred tasks;
-- validation requirements;
-- completion criteria;
-- DOCARCH-004 and DOCARCH-005 reserved scopes.
+- the minimum credible campaign vertical slice;
+- consolidated unresolved decision gates;
+- per-wave validation requirements and completion criteria;
+- cross-cutting testing, security, CI/merge-governance, persistence,
+  documentation/authority, and balance tracks;
+- roadmap delivery-status semantics;
+- dedicated deferred work and post-MVP domains;
+- the DOCARCH-004 next-program boundary and DOCARCH-005 reservation.
 
-The smallest credible campaign vertical slice must include one outpost with
-exactly six governed sectors, accepted shield thresholds, the 4/6 post-capture
-state, relevant accepted sector/outpost mechanics, integrated outpost respawn,
-required ship control/switching, and minimum server-side creep participation
-needed by `BS-MECH-019`. It must not silently expand into full economy,
-logistics, mining/resource production, portals, or advanced creep AI.
+The minimum credible campaign vertical slice contains one outpost with exactly
+six governed sectors, accepted shield thresholds, the 4/6 post-capture state,
+relevant accepted sector/outpost mechanics, minimum server-side creep
+participation required by `BS-MECH-019`, turret destruction/restoration,
+production outpost-respawn integration, accepted ship control/switching,
+persistence, reconnect, room-level tests, and minimum client visibility.
 
-## Reserved follow-on scope
+The roadmap does not select storage/database technology, deployment topology,
+capture rates, player/creep weights, creep participation algorithms, the four
+retained sectors, turret repair cost/speed, resource sufficiency, post-capture
+HP/resource formulas, or post-MVP mechanics. Those remain explicit gates.
 
-DOCARCH-004 is reserved for cold-start sequence, authority recovery, stale
-`CURRENT` recovery, active-task discovery, sole-next-action recovery, forbidden
-actions, merge authority, takeover success criteria, and a cold takeover drill.
+## Validation criteria
 
-DOCARCH-005 is reserved for vendor/model-independent roles, minimum role
-capabilities, implementer/reviewer separation, standardized evidence, fallback
-routing, model replacement, prompt/adapter portability, and AGENT-004 recovery
-or creation.
+Before B is ready for human merge, evidence must confirm:
 
-Neither follow-on task is implemented by DOCARCH-003.
+- exactly seven waves in the approved order;
+- Wave 1 is `READY`, not `ACTIVE` or `COMPLETE`;
+- Waves 2–6 are `NOT STARTED` or `DECISION GATED` as appropriate;
+- Wave 7 is `DEFERRED`;
+- every wave includes purpose, entry prerequisites, included systems, explicit
+  exclusions, governing accepted decisions, required decision gates, expected
+  outputs, validation requirements, completion criteria, major risks, and
+  unlocks;
+- the MVP includes persistence, minimum identity/session, reconnect,
+  territorial core, one outpost with exactly six governed sectors, minimum
+  creep participation, outpost/infrastructure, required client/operations
+  surface, and stabilization;
+- full economy, full logistics, mining/resource production, portals, advanced
+  creep AI, and broad post-MVP systems remain outside MVP;
+- unresolved values and technology choices remain gates;
+- accepted decision meanings, server authority, shared/protocol direction, and
+  prototype boundaries are preserved;
+- `PROJECT_CONTEXT.md` links rather than duplicates the roadmap;
+- `CURRENT.md` contains exactly one next safe action;
+- the registry remains at 35 accepted decisions with category counts
+  18/5/7/4/1;
+- exactly the five authorized paths changed and no forbidden path changed.
+
+No dependency installation, build, typecheck, test, runtime server, deployment,
+or migration is run for this documentation-only task.
 
 ## Reviewer routing
 
-Required for both substages:
+Required for DOCARCH-003B:
 
-- **Product Architect** — confirms roadmap authority, MVP boundary, deferred
-  gates, and substage scope.
-- **Architecture Reviewer** — confirms authority separation, dependency order,
-  package-boundary wording, and architecture-sensitive roadmap sequencing.
+- **Product Architect** — confirms roadmap authority, MVP boundary, decision
+  gates, completion criteria, and follow-on program ordering.
+- **Architecture Reviewer** — confirms server authority, dependency order,
+  persistence sequencing, package-boundary wording, and unresolved architecture
+  gates.
 - **Gameplay/Product Reviewer** — confirms accepted mechanics fidelity, the
-  one-outpost/six-governed-sector vertical slice, and minimum creep inclusion.
-- **Documentation consistency review** — confirms alignment among baseline,
-  task, roadmap or pending boundary, review artifact, context, and handoff.
-- **Claude QA** — verifies evidence, exact changed-path scope, counts, and
-  completion gates.
-- **Human-only merge** — required by `BS-PROC-001` and is not delegated.
+  one-outpost/six-sector slice, minimum creep participation, and exclusions.
+- **Documentation consistency review** — confirms roadmap, context, task,
+  handoff, review artifact, and decision references agree.
+- **Claude QA** — verifies evidence, exact changed-path scope, counts, wave
+  structure, gate preservation, and closure conditions.
+- **Human-only merge** — required by `BS-PROC-001`; review and checks do not
+  delegate merge authority.
 
 Security/CI Reviewer is not required unless scope expands into security or CI
-semantics. Network Reviewer is not required because these substages change no
-protocol, room, message, or connection behavior. Visual Design Lead is not
-required because no UI, asset, VFX, loader, or presentation behavior changes.
-Separate generic QA review is not added because the mandated Claude QA and
-documentation consistency reviews cover this documentation-only evidence and
-scope-lock change; executable behavior is unchanged.
+semantics. The roadmap sequences future security and CI work but changes no
+security behavior, workflow, script, setting, or enforcement. Network Reviewer
+is not required because no protocol, room, message, connection, or runtime
+behavior changes. Visual Design Lead is not required because no UI, asset, VFX,
+loader, or presentation behavior changes. Separate generic QA review is not
+added because mandated Claude QA and documentation consistency review cover
+this documentation-only scope; executable behavior is unchanged.
 
 ## Non-goals
 
 - No runtime or test implementation.
 - No accepted decision creation or modification.
-- No architecture or design-document change in A.
-- No security, CI, workflow, script, package, dependency, or GitHub-setting
-  change.
-- No DOCARCH-004, DOCARCH-005, SEC-006, CI-004, or runtime-task
+- No architecture or design-document change.
+- No security, CI, workflow, script, package, dependency, balance, or
+  GitHub-setting change.
+- No storage, identity, deployment, mechanics, algorithm, or numeric balance
+  selection.
+- No DOCARCH-004, DOCARCH-005, SEC-006, possible CI-004, or runtime-task
   implementation.
+- No new canonical identifier for unnamed future work.
 
-## Completion condition
+## DOCARCH-003 closure condition
 
-DOCARCH-003 closes only after DOCARCH-003B completes required review, evidence,
-final-head checks, and human merge.
+DOCARCH-003 closes only after:
+
+- DOCARCH-003B implementation is complete;
+- required conformance review is complete;
+- Product Architect approval evidence is recorded;
+- Claude QA evidence is recorded;
+- all required checks pass on the final head;
+- a human merges the B-stage pull request.
+
+Until human merge, the roadmap remains a candidate and DOCARCH-003 remains
+open.
+
+## Post-merge program order
+
+After DOCARCH-003B human merge, DOCARCH-003 closes and DOCARCH-004 — Architect
+Takeover Protocol becomes the next repository program for readiness assessment.
+DOCARCH-005 — Role and Model Portability remains reserved after DOCARCH-004.
+Neither follow-on program is implemented here.

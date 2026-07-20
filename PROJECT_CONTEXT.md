@@ -29,6 +29,7 @@ incremental future work rather than implemented assumptions.
 
 - [Documentation governance](docs/GOVERNANCE.md) defines authority and conflict rules.
 - [Decision Index](docs/decisions/DECISION_INDEX.md) navigates accepted decisions; the linked individual records are canonical in their domains.
+- [Canonical Development Roadmap](docs/roadmap/CANONICAL_DEVELOPMENT_ROADMAP.md) defines delivery sequence, dependencies, the MVP boundary, and unresolved decision gates after human merge. It does not replace accepted decisions or `CURRENT.md`.
 - [Decision Registry README](docs/decisions/README.md) explains registry roles and status.
 - [CURRENT](docs/handoffs/CURRENT.md) reports the active branch, task, review, and next safe action.
 - [`docs/tasks/`](docs/tasks/) contains Product Architect-approved bounded task scope.
@@ -76,10 +77,15 @@ implementation constraints.
 
 ## Current program state
 
-DOCARCH-002D3 is the final DOCARCH-002 reconciliation and closure candidate.
-The registry contains 35 accepted decisions. DOCARCH-002 remains open until D3
-completes required review, evidence, final-head checks, and human merge. After
-that merge, DOCARCH-003 will create the Canonical Development Roadmap.
+DOCARCH-002 is closed. DOCARCH-003A merged via PR #47 and established the
+readiness baseline and roadmap scope lock. DOCARCH-003B is active as the final
+canonical-roadmap candidate. The registry contains 35 accepted decisions, and
+DOCARCH-003 creates no new decision records.
+
+DOCARCH-003 remains open until DOCARCH-003B completes required review, evidence,
+final-head checks, and human merge. After that merge, DOCARCH-003 closes and
+DOCARCH-004 — Architect Takeover Protocol becomes the next repository program.
+DOCARCH-005 — Role and Model Portability remains reserved after DOCARCH-004.
 
 Use [CURRENT](docs/handoffs/CURRENT.md) for live operational status rather than
 maintaining pull-request or commit chronology here.
@@ -99,12 +105,13 @@ Read in this order:
 1. `PROJECT_CONTEXT.md`
 2. `docs/GOVERNANCE.md`
 3. `docs/decisions/DECISION_INDEX.md`
-4. `docs/handoffs/CURRENT.md`
-5. the active task named by `CURRENT.md`
-6. the active review artifact named by `CURRENT.md`
-7. relevant accepted decision records
-8. relevant architecture and design documents
-9. implementation sources only after authority and task scope are understood
+4. `docs/roadmap/CANONICAL_DEVELOPMENT_ROADMAP.md`
+5. `docs/handoffs/CURRENT.md`
+6. the active task named by `CURRENT.md`
+7. the active review artifact named by `CURRENT.md`
+8. relevant accepted decision records
+9. relevant architecture and design documents
+10. implementation sources only after authority and task scope are understood
 
 When sources conflict or omit required intent, stop and return the ambiguity to
 the Product Architect instead of inferring a new decision from implementation,
