@@ -1,19 +1,25 @@
 # BurningSpace Claude Entry Point
 
-## Required read order
+## Cold Product Architect takeover
 
-1. `PROJECT_CONTEXT.md`
-2. `AGENTS.md`
-3. `docs/handoffs/CURRENT.md`
-4. The task file named in `CURRENT.md`
-5. Only architecture, design, and source files relevant to that task
+Read `PROJECT_CONTEXT.md` first and then follow
+`docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md`. That protocol owns the complete
+cold-recovery order. Prior Claude sessions, memory, and chat history are not
+required and are not authority.
+
+## Normal bounded-task execution
+
+With a fresh and verified handoff, read `PROJECT_CONTEXT.md`, `AGENTS.md`,
+`docs/handoffs/CURRENT.md`, the task file named in `CURRENT.md`, and only the
+architecture, design, and source files relevant to that task.
 
 If `CURRENT.md` says that no task file exists, do not implement. Ask the Product
 Architect for the scoped task brief.
 
 ## Working rules
 
-- Treat `PROJECT_CONTEXT.md` as durable project truth.
+- Treat `PROJECT_CONTEXT.md` as durable navigation and project summary,
+  subordinate to governance and accepted decisions.
 - Treat `CURRENT.md` as current working state.
 - Treat the current task file as implementation authority.
 - Do not assume the whole repository must be reread.

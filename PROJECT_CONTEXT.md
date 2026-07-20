@@ -13,6 +13,11 @@ Exact accepted decisions live under [`docs/decisions/`](docs/decisions/), with
 navigation in the [Decision Index](docs/decisions/DECISION_INDEX.md). Current
 operational state lives in [CURRENT](docs/handoffs/CURRENT.md).
 
+For a cold Product Architect takeover, begin here and then follow the
+[Architect Takeover Protocol](docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md). The
+protocol is a candidate until DOCARCH-004B human merge and is subordinate to
+governance and accepted decisions.
+
 ## Product snapshot
 
 BurningSpace is a persistent multiplayer top-down space campaign about faction
@@ -31,7 +36,8 @@ incremental future work rather than implemented assumptions.
 - [Decision Index](docs/decisions/DECISION_INDEX.md) navigates accepted decisions; the linked individual records are canonical in their domains.
 - [Canonical Development Roadmap](docs/roadmap/CANONICAL_DEVELOPMENT_ROADMAP.md) defines delivery sequence, dependencies, the MVP boundary, and unresolved decision gates after human merge. It does not replace accepted decisions or `CURRENT.md`.
 - [Decision Registry README](docs/decisions/README.md) explains registry roles and status.
-- [CURRENT](docs/handoffs/CURRENT.md) reports the active branch, task, review, and next safe action.
+- [Architect Takeover Protocol](docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md) becomes the canonical operational cold-takeover procedure after DOCARCH-004B human merge; it remains subordinate to governance and accepted decisions.
+- [CURRENT](docs/handoffs/CURRENT.md) reports the active branch, task, review, and next safe action. During takeover it must be validated through the protocol rather than assumed fresh.
 - [`docs/tasks/`](docs/tasks/) contains Product Architect-approved bounded task scope.
 - [`docs/reviews/`](docs/reviews/) contains review and conformance evidence.
 - [`docs/architecture/`](docs/architecture/) summarizes architecture subject to accepted decisions.
@@ -77,15 +83,14 @@ implementation constraints.
 
 ## Current program state
 
-DOCARCH-002 is closed. DOCARCH-003A merged via PR #47 and established the
-readiness baseline and roadmap scope lock. DOCARCH-003B is active as the final
-canonical-roadmap candidate. The registry contains 35 accepted decisions, and
-DOCARCH-003 creates no new decision records.
+DOCARCH-000 through DOCARCH-003 are complete. DOCARCH-004A merged through PR
+#49 and established the takeover-readiness baseline and separate authoring and
+independent-validation stages. The registry contains 35 accepted decisions.
 
-DOCARCH-003 remains open until DOCARCH-003B completes required review, evidence,
-final-head checks, and human merge. After that merge, DOCARCH-003 closes and
-DOCARCH-004 — Architect Takeover Protocol becomes the next repository program.
-DOCARCH-005 — Role and Model Portability remains reserved after DOCARCH-004.
+DOCARCH-004 remains open. DOCARCH-004B is active as the protocol-authoring
+candidate; it creates no accepted decision. DOCARCH-004C is reserved after B
+for independent validation and is not active. DOCARCH-005 — Role and Model
+Portability remains reserved after DOCARCH-004.
 
 Use [CURRENT](docs/handoffs/CURRENT.md) for live operational status rather than
 maintaining pull-request or commit chronology here.
@@ -98,21 +103,13 @@ maintaining pull-request or commit chronology here.
 - Persistence, accounts, and database work remain future implementation work.
 - Exact unresolved balance parameters remain outside the accepted mechanics until separately approved.
 
-## Safe resumption sequence
+## Safe resumption
 
-Read in this order:
+For a cold Product Architect takeover, read this file first and then follow
+`docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md`; it owns the complete recovery
+sequence, freshness checks, conflict handling, and success criteria.
 
-1. `PROJECT_CONTEXT.md`
-2. `docs/GOVERNANCE.md`
-3. `docs/decisions/DECISION_INDEX.md`
-4. `docs/roadmap/CANONICAL_DEVELOPMENT_ROADMAP.md`
-5. `docs/handoffs/CURRENT.md`
-6. the active task named by `CURRENT.md`
-7. the active review artifact named by `CURRENT.md`
-8. relevant accepted decision records
-9. relevant architecture and design documents
-10. implementation sources only after authority and task scope are understood
-
-When sources conflict or omit required intent, stop and return the ambiguity to
-the Product Architect instead of inferring a new decision from implementation,
+For normal bounded-task execution with a fresh handoff, use `AGENTS.md`,
+`docs/handoffs/CURRENT.md`, and the task named there. When sources conflict or
+omit required intent, stop instead of inferring a decision from implementation,
 historical prose, or chat memory.

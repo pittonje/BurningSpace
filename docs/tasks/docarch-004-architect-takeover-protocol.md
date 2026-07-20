@@ -1,4 +1,4 @@
-# DOCARCH-004 — Architect Takeover Protocol
+# DOCARCH-004 - Architect Takeover Protocol
 
 Owner: `Product Architect`
 
@@ -14,109 +14,119 @@ repository truth alone, without chat history.
 
 ## Program state
 
-- DOCARCH-003 completed through merged PR #48
-  (`d8df95aba50c654df0819f7eacc95e848748cdfc`).
-- DOCARCH-004 is active.
-- DOCARCH-004A is the active readiness-assessment stage.
+- DOCARCH-000 through DOCARCH-003 are complete.
+- DOCARCH-004A completed and merged through PR #49 at merge commit
+  `858d14568f4dd6f040255df1b925046028237377`.
+- The Product Architect accepted separate B and C stages through the merged
+  DOCARCH-004A review evidence.
+- DOCARCH-004 remains open.
+- DOCARCH-004B is active and authors the protocol candidate.
+- DOCARCH-004C is reserved after B and independently validates the merged
+  protocol; it is not active in B.
 - The accepted decision count remains 35 (18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, 1 `CI`).
-- DOCARCH-004 creates no new accepted decisions in stage A.
-- No runtime, package, workflow, architecture, design, agent-adapter, or
-  script change occurs in stage A.
-- Protocol implementation is not included in stage A.
-- The cold takeover drill is not included in stage A.
-- DOCARCH-005 — Role and Model Portability remains reserved after DOCARCH-004
-  and is not implemented here.
+- DOCARCH-004B introduces no accepted decision record and no runtime change.
+- DOCARCH-005 - Role and Model Portability remains reserved after
+  DOCARCH-004.
 
-## DOCARCH-004A — Readiness Assessment
+## DOCARCH-004A - Readiness Assessment
 
-Active stage. Bounded assessment only.
+Completed and merged through PR #49. A established the readiness baseline,
+identified four blocking gaps, and recorded Product Architect approval for
+separate protocol-authoring and independent-validation stages. Its assessment
+and review evidence remain unchanged.
 
-Exact A-stage file scope:
+## DOCARCH-004B - Architect Takeover Protocol Authoring
 
-Create:
+Active bounded documentation stage.
 
-- `docs/roadmap/DOCARCH-004_READINESS_ASSESSMENT.md`
-- `docs/tasks/docarch-004-architect-takeover-protocol.md` (this file)
-- `docs/reviews/docarch-004a-readiness-assessment-review.md`
+### Exact B-stage file scope
 
-Modify:
+Create exactly two files:
 
-- `docs/handoffs/CURRENT.md`
+- `docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md`;
+- `docs/reviews/docarch-004b-architect-takeover-protocol-review.md`.
 
-The exact changed-path count is 4. No other path may change.
+Modify exactly seven files:
 
-### A-stage objectives
+- `PROJECT_CONTEXT.md`;
+- `AGENTS.md`;
+- `CLAUDE.md`;
+- `docs/agents/context-usage.md`;
+- `docs/agents/handoff-protocol.md`;
+- `docs/tasks/docarch-004-architect-takeover-protocol.md`;
+- `docs/handoffs/CURRENT.md`.
 
-- Inventory existing takeover-relevant authority and operational evidence.
-- Classify readiness across 28 required domains using the six assessment
-  classifications defined in the assessment artifact.
-- Identify blocking gaps that prevent a safe cold takeover.
-- Assess stale-`CURRENT.md` detection and recovery separately.
-- Assess active-work discovery, including merged-branch, closed-task,
-  multiple-candidate, and no-active-task cases.
-- Assess sole-next-action recovery, validation, and arbitration.
-- Assess merge-authority verification and its separation from external
-  point-in-time GitHub state.
-- Assess takeover success-criteria coverage.
-- Assess cold-takeover-drill requirements without performing a drill.
-- Recommend later bounded staging without canonically selecting it.
+The exact changed-path count is nine. No other path may change.
 
-### A-stage non-goals
+### B-stage objectives
 
-- No final Architect Takeover Protocol.
-- No canonical cold-start checklist, takeover runbook, or stale-CURRENT
-  recovery algorithm.
-- No cold takeover drill execution or drill instructions.
-- No new or modified decision records; the count remains 35.
-- No merge-authority enforcement tooling, workflow, or branch-protection
-  change.
-- No DOCARCH-004B, DOCARCH-004C, DOCARCH-005, or AGENT-004 artifacts.
-- No canonical IDs for unnamed future work.
+- Establish the canonical cold-start entrypoint.
+- Reconcile reading-order adapters.
+- Define authority and conflict recovery.
+- Define read-only repository preflight.
+- Define `CURRENT.md` freshness rules.
+- Define deterministic stale-`CURRENT.md` reconciliation.
+- Define active-work and exact-scope recovery.
+- Define sole-next-action arbitration.
+- Define stop conditions and forbidden actions.
+- Define merge-authority and evidence recovery.
+- Define the mandatory takeover report.
+- Define testable takeover success criteria.
+- Define the DOCARCH-004C validation contract.
 
-### Required reviewers for A
+### B-stage non-goals
 
-- Product Architect — confirms assessment authority boundaries, gap
-  classifications, staging evaluation, and follow-up decision list.
-- Architecture Reviewer — confirms authority separation, repository-evidence
-  fidelity, and the runtime-versus-authority boundary.
-- Documentation consistency review — confirms assessment, task, handoff, and
-  review artifacts agree with each other and with unchanged authority sources.
-- Claude QA — verifies evidence, exact changed-path scope, counts, domain
-  completeness, classification discipline, and closure conditions.
-- Human-only merge — required by `BS-PROC-001`.
+- No independent cold takeover drill.
+- No DOCARCH-004C task, review, instructions, result, or simulated evidence.
+- No new or modified accepted decision.
+- No gameplay, runtime, architecture, design, package, workflow, script, test,
+  dependency, repository-protection, or CI change.
+- No model or vendor selection and no DOCARCH-005 implementation.
 
-Gameplay/Product Reviewer: not required unless the assessment changes gameplay
-or roadmap scope; it changes neither.
+### Reviewer routing
 
-Security/CI Reviewer: not required unless the PR modifies security, workflows,
-branch protection, or CI; it modifies none of these. Point-in-time GitHub
-observations in the assessment are read-only evidence.
+Required:
 
-### DOCARCH-004A closure condition
+- Product Architect - confirms protocol authority, recovery rules, success
+  criteria, and stage boundaries.
+- Architecture Reviewer - confirms authority separation and the
+  implementation-evidence boundary.
+- Documentation consistency review - confirms protocol, adapters, task,
+  handoff, and unchanged authority sources agree.
+- Claude QA - verifies exact scope, counts, deterministic recovery coverage,
+  evidence requirements, and closure conditions.
+- Human-only merge - required by `BS-PROC-001`.
 
-DOCARCH-004A closes only after:
+Gameplay/Product Reviewer is not required unless protocol work changes
+gameplay or roadmap scope; B changes neither.
 
-- the readiness assessment is implemented;
-- the independent conformance review is completed;
+Security/CI Reviewer is not required unless workflow, security, repository
+protection, or CI scope expands; B changes none of those areas.
+
+### DOCARCH-004B closure condition
+
+DOCARCH-004B closes only after:
+
+- the protocol candidate is authored;
+- adapter reading orders are reconciled;
+- independent conformance review is completed;
 - Product Architect approval evidence is recorded;
 - Claude QA evidence is recorded;
 - all required checks pass on the final pull-request head;
-- a human merges the A-stage pull request.
+- a human merges the B-stage pull request.
 
-## Program continuation after A
+The protocol remains a candidate until human merge.
 
-DOCARCH-004 itself remains open after the A-stage merge.
+## Program continuation after B
 
-After A merges:
+After B human merge:
 
-- the Product Architect resolves the follow-up staging (single stage versus
-  separate authoring and validation stages) and the other section 17
-  follow-up decisions recorded in the assessment;
-- protocol implementation begins through a new bounded stage under a
-  Product Architect-approved scope;
-- cold takeover validation remains required before DOCARCH-004 closes.
+- the protocol becomes the active canonical operational takeover procedure;
+- DOCARCH-004 remains open;
+- DOCARCH-004C becomes the next bounded stage;
+- an independent cold takeover validation must occur before DOCARCH-004
+  closes.
 
-No canonical DOCARCH-004B/DOCARCH-004C structure exists until the Product
-Architect approves the readiness recommendation. DOCARCH-005 remains reserved
-after DOCARCH-004.
+B authors the protocol and does not perform the drill. C independently
+validates the merged protocol. DOCARCH-005 remains reserved after DOCARCH-004.

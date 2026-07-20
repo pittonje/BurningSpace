@@ -4,7 +4,15 @@
 
 BurningSpace is a server-authoritative multiplayer space game bootstrap. The current repository is an npm-workspaces monorepo with a Phaser/Vite client, a Colyseus server, a shared package, a preserved local prototype, and an existing multiplayer foundation.
 
-Read `PROJECT_CONTEXT.md` first, then this file, `docs/handoffs/CURRENT.md`, the current task named there, and relevant architecture/design documents. The latest project context overrides older assumptions unless the Product Architect explicitly says otherwise.
+For a cold Product Architect takeover, read `PROJECT_CONTEXT.md` first and then
+follow `docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md`. Do not substitute this
+adapter or a remembered session for that recovery procedure.
+
+For normal bounded-task execution with a fresh handoff, read
+`PROJECT_CONTEXT.md`, this file, `docs/handoffs/CURRENT.md`, the current task
+named there, and relevant architecture/design documents. Governance and
+accepted decisions retain authority over project summaries and operational
+state.
 
 ## Non-negotiable rules
 
