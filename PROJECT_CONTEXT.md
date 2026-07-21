@@ -15,8 +15,8 @@ operational state lives in [CURRENT](docs/handoffs/CURRENT.md).
 
 For a cold Product Architect takeover, begin here and then follow the
 [Architect Takeover Protocol](docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md). The
-protocol is a candidate until DOCARCH-004B human merge and is subordinate to
-governance and accepted decisions.
+protocol is canonical after DOCARCH-004B human merge and remains subordinate
+to governance and accepted decisions.
 
 ## Product snapshot
 
@@ -36,7 +36,7 @@ incremental future work rather than implemented assumptions.
 - [Decision Index](docs/decisions/DECISION_INDEX.md) navigates accepted decisions; the linked individual records are canonical in their domains.
 - [Canonical Development Roadmap](docs/roadmap/CANONICAL_DEVELOPMENT_ROADMAP.md) defines delivery sequence, dependencies, the MVP boundary, and unresolved decision gates after human merge. It does not replace accepted decisions or `CURRENT.md`.
 - [Decision Registry README](docs/decisions/README.md) explains registry roles and status.
-- [Architect Takeover Protocol](docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md) becomes the canonical operational cold-takeover procedure after DOCARCH-004B human merge; it remains subordinate to governance and accepted decisions.
+- [Architect Takeover Protocol](docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md) is the canonical operational cold-takeover procedure and remains subordinate to governance and accepted decisions.
 - [CURRENT](docs/handoffs/CURRENT.md) reports the active branch, task, review, and next safe action. During takeover it must be validated through the protocol rather than assumed fresh.
 - [`docs/tasks/`](docs/tasks/) contains Product Architect-approved bounded task scope.
 - [`docs/reviews/`](docs/reviews/) contains review and conformance evidence.
@@ -83,14 +83,17 @@ implementation constraints.
 
 ## Current program state
 
-DOCARCH-000 through DOCARCH-003 are complete. DOCARCH-004A merged through PR
-#49 and established the takeover-readiness baseline and separate authoring and
-independent-validation stages. The registry contains 35 accepted decisions.
+DOCARCH-000 through DOCARCH-003 are complete. DOCARCH-004 remains open.
+DOCARCH-004C v1 failed its methodology repeatability audit, although the
+protocol remained materially safe. The v1 corpus is frozen as historical
+evidence and Attempt 5 is not authorized. The historical audit commit is
+`d0fd34d46d6bb20c58b4b9b049901aadbab452a6`.
 
-DOCARCH-004 remains open. DOCARCH-004B is active as the protocol-authoring
-candidate; it creates no accepted decision. DOCARCH-004C is reserved after B
-for independent validation and is not active. DOCARCH-005 — Role and Model
-Portability remains reserved after DOCARCH-004.
+`BS-PROC-005` establishes separate safety and exact-conformance verdicts.
+DOCARCH-004D is the active redesign program, with DOCARCH-004D-A as its active
+bounded stage. A versioned DOCARCH-004C v2 is required after the protocol and
+normative-rubric stages. The registry contains 36 accepted decisions.
+DOCARCH-005 — Role and Model Portability remains reserved after DOCARCH-004.
 
 Use [CURRENT](docs/handoffs/CURRENT.md) for live operational status rather than
 maintaining pull-request or commit chronology here.
