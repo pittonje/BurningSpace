@@ -653,17 +653,108 @@ above are deferred follow-ups; none weakens the production boundary.
 
 ## Product Architect
 
-- Verdict:
-- Reviewed commit:
-- Evidence source:
-- Date:
+- Verdict: `APPROVED FOR HUMAN MERGE`
+- Reviewed commit: `958989b61e6d636501c20688e70993938fae678f`
+- Evidence source: Owner-authored Product Architect approval on PR #55:
+  https://github.com/pittonje/BurningSpace/pull/55#issuecomment-5251089806
+- Date: 2026-08-11
+
+Findings: The Product Architect accepted the integrated Security/Runtime verdict
+`APPROVED WITH NON-BLOCKING NOTES` and confirmed that blocking findings are none.
+The approval explicitly confirms fail-closed production startup and exact
+canonical Origin matching with every malformed, wildcard, and broadening form
+rejected; bounded local-development loopback defaults; matchmaking authorization
+before seat reservation with independent WebSocket handshake enforcement; denied
+CORS responses that never reflect a hostile Origin or expose wildcard access;
+the profile limiter defaults of burst 8 / refill 1 per second and the input
+limiter defaults of burst 80 / refill 40 per second, with invalid overrides
+failing startup, bounded rejection amplification, no state mutation from excess
+messages, unaffected 20 Hz play, and limiter cleanup on leave; unchanged
+BattleRoom gameplay, schema, snapshot, message-name, and max-client behavior;
+`npm test` as a required Core check with 97 tests in 8 files passing, the
+targeted 62-test security suite passing three consecutive runs, and all
+diagnostics green; the clean eleven-path bounded scope with no dependency,
+manifest, lockfile, client, shared/protocol, schema, roadmap, governance, or
+`PROJECT_CONTEXT` change; and accepted decisions remaining exactly 35 with the
+split 18 / 5 / 7 / 4 / 1. The two-commit implementation deviation is explicitly
+accepted as a bounded test-infrastructure repair for deterministic Linux
+PM2/Vitest IPC interference, with the wrapper filtering only `axm:*` telemetry
+and forwarding ordinary worker IPC unchanged.
+
+Accepted non-blocking follow-ups: reconnect handling must not rely solely on
+`BattleRoom.onAuth` because the Colyseus reconnect path bypasses that hook, with
+the WebSocket Origin verifier remaining the current independent gate, and a
+future reconnect task must explicitly preserve Origin and ownership validation
+across reconnection; a future hardening task may add a full split-Origin
+seat/upgrade integration scenario beyond the direct verifier and live handshake
+evidence; optional rate-limit bounds may be tightened below
+`Number.MAX_SAFE_INTEGER`; the security-mode log description may be made more
+precise; dead test-only clock advancement may be removed; and server test files
+may later receive explicit TypeScript project coverage.
+
+Human merge remains conditional on this Product Architect evidence and the
+successful Claude QA evidence being recorded, on Core Pull Request Checks and
+Claude QA passing on the final evidence-commit head, and on no new substantive
+blocker appearing. This is owner-authored pull-request-comment evidence, not a
+formal GitHub review.
 
 ## Claude QA
 
-- Verdict:
-- Reviewed commit:
-- Evidence source:
-- Date:
+- Verdict: `Approved with suggestions`
+- Reviewed commit: `958989b61e6d636501c20688e70993938fae678f`
+- Evidence source: Claude QA Review Pilot workflow run ID `31471800343`:
+  https://github.com/pittonje/BurningSpace/actions/runs/31471800343
+  (`qa-review` job `93716531964`:
+  https://github.com/pittonje/BurningSpace/actions/runs/31471800343/job/93716531964;
+  published verdict comment:
+  https://github.com/pittonje/BurningSpace/pull/55#issuecomment-5250640565)
+- Check conclusion: SUCCESS
+- Date: 2026-08-11
+
+Evidence state: the run's `headSha` is exactly
+`958989b61e6d636501c20688e70993938fae678f`, its `status` is `completed` and its
+`conclusion` is `success`, and the published comment records the same reviewed
+commit and workflow run. Blockers are none and no substantive
+`CHANGES REQUIRED` verdict exists.
+
+Findings — important suggestions, all non-blocking:
+
+1. The Colyseus `matchMaker.reconnect` path is not covered by `onAuth`/Origin
+   enforcement — only `joinOrCreate`, `create`, `join`, and `joinById` are. It is
+   currently inert because `BattleRoom` never calls `allowReconnection()`, but the
+   upcoming reconnect-lifecycle task must add an explicit Origin check there
+   rather than inherit the gap.
+2. Task closure conditions require exactly one implementation commit plus one
+   later evidence commit, but the pull request contains two implementation
+   commits (`ecafdb66` network-boundary hardening and `0a43352` PM2/Vitest IPC
+   fix) before the evidence commit. The deviation is disclosed and scoped to an
+   already-authorized test-support file; QA asked that the Product Architect
+   accept it explicitly, which the approval above does.
+3. The WebSocket handshake Origin rejection is exercised only by a direct
+   unit-level verifier test and manual live-probe evidence rather than by an
+   automated integration test driving a real hostile raw upgrade, because
+   matchmaking rejects hostile Origins first.
+4. Rate-limit burst/refill overrides are accepted up to
+   `Number.MAX_SAFE_INTEGER` with no documented practical ceiling, so an operator
+   typo could make the limiter effectively unlimited without startup failing; a
+   documented sane upper bound is suggested.
+
+Findings — minor suggestions, all non-blocking:
+
+5. `describeNetworkBoundaryMode()` branches only on `production`, so a
+   non-production process running an explicit exact allowlist still logs
+   `local-development mode`, understating the active policy.
+6. `securityNow += 4_000;` is the final statement of the profile-flood
+   integration test with no subsequent assertion and should be removed or
+   completed.
+7. The new security test files are outside `apps/server/tsconfig.json`'s
+   `include: ["src"]`, so `npm run typecheck` does not statically check them —
+   a pre-existing repository-wide gap that now covers two more security-critical
+   test files.
+8. The precision-safe minimum refill rate (`1000/Number.MAX_VALUE`) is a
+   theoretical floor offering negligible practical protection against a
+   near-zero refill misconfiguration; a more realistic minimum would be a more
+   meaningful guard.
 
 ## Human merge gate
 
