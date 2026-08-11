@@ -100,6 +100,114 @@ jobs:
 
           curl --fail --silent http://127.0.0.1:2567/ready >/dev/null
           curl --fail --silent http://127.0.0.1:8080/ >/dev/null
+
+          client_origin="http://127.0.0.1:8080"
+          fail_cache_check() {
+            echo "Cache policy check failed: $*" >&2
+            exit 1
+          }
+          read_client_response() {
+            local path="$1"
+            response_headers="$(
+              curl --silent --show-error --dump-header - --output /dev/null \
+                "${client_origin}${path}" | tr -d '\r'
+            )"
+            response_status="$(
+              printf '%s\n' "$response_headers" |
+                awk '/^HTTP\// { status = $2 } END { print status }'
+            )"
+            response_cache_control="$(
+              printf '%s\n' "$response_headers" |
+                awk '
+                  tolower($0) ~ /^cache-control:[[:space:]]*/ {
+                    sub(/^[^:]*:[[:space:]]*/, "")
+                    printf "%s%s", separator, $0
+                    separator = ", "
+                  }
+                  END { print "" }
+                '
+            )"
+            response_cache_control_lower="$(
+              printf '%s' "$response_cache_control" | tr '[:upper:]' '[:lower:]'
+            )"
+          }
+          require_status() {
+            local expected="$1"
+            local path="$2"
+            if [ "$response_status" != "$expected" ]; then
+              fail_cache_check "$path returned $response_status; expected $expected"
+            fi
+          }
+          reject_contradictory_cache_policy() {
+            local path="$1"
+            if [[ "$response_cache_control_lower" == *"max-age=31536000"* ]] &&
+              [[ "$response_cache_control_lower" == *"max-age=0"* ||
+                "$response_cache_control_lower" == *"no-cache"* ||
+                "$response_cache_control_lower" == *"no-store"* ||
+                "$response_cache_control_lower" == *"must-revalidate"* ]]; then
+              fail_cache_check "$path has contradictory Cache-Control values: $response_cache_control"
+            fi
+            if [[ "$response_cache_control_lower" == *"immutable"* ]] &&
+              [[ "$response_cache_control_lower" == *"max-age=0"* ||
+                "$response_cache_control_lower" == *"no-cache"* ||
+                "$response_cache_control_lower" == *"no-store"* ||
+                "$response_cache_control_lower" == *"must-revalidate"* ]]; then
+              fail_cache_check "$path has contradictory Cache-Control values: $response_cache_control"
+            fi
+          }
+
+          index_html="$(curl --fail --silent "${client_origin}/index.html")"
+          entry_asset="$(
+            printf '%s' "$index_html" |
+              grep -oE '/assets/index-[A-Za-z0-9_-]+\.(js|css)' |
+              head -n 1 || true
+          )"
+          if [ -z "$entry_asset" ]; then
+            fail_cache_check "index.html did not reference a fingerprinted Vite entry asset"
+          fi
+
+          read_client_response "$entry_asset"
+          require_status 200 "$entry_asset"
+          reject_contradictory_cache_policy "$entry_asset"
+          if [[ "$response_cache_control_lower" != *"public"* ||
+            "$response_cache_control_lower" != *"max-age=31536000"* ||
+            "$response_cache_control_lower" != *"immutable"* ]]; then
+            fail_cache_check "$entry_asset has unexpected Cache-Control values: $response_cache_control"
+          fi
+          echo "fingerprinted_entry=$entry_asset cache-control=$response_cache_control"
+
+          stable_asset="/assets/space-background.jpg"
+          read_client_response "$stable_asset"
+          require_status 200 "$stable_asset"
+          reject_contradictory_cache_policy "$stable_asset"
+          if [[ "$response_cache_control_lower" == *"immutable"* ||
+            "$response_cache_control_lower" == *"max-age=31536000"* ]]; then
+            fail_cache_check "$stable_asset retained long-lived immutable caching: $response_cache_control"
+          fi
+          if [[ "$response_cache_control_lower" != *"public"* ]] ||
+            { [[ "$response_cache_control_lower" != *"no-cache"* ]] &&
+              { [[ "$response_cache_control_lower" != *"max-age=0"* ]] ||
+                [[ "$response_cache_control_lower" != *"must-revalidate"* ]]; }; }; then
+            fail_cache_check "$stable_asset lacks a revalidation-safe Cache-Control policy: $response_cache_control"
+          fi
+          echo "stable_asset=$stable_asset cache-control=$response_cache_control"
+
+          read_client_response "/index.html"
+          require_status 200 "/index.html"
+          reject_contradictory_cache_policy "/index.html"
+          if [[ "$response_cache_control_lower" != *"no-store"* ]]; then
+            fail_cache_check "/index.html lacks no-store: $response_cache_control"
+          fi
+          echo "index_html=/index.html cache-control=$response_cache_control"
+
+          missing_asset="/assets/ops-001-cache-policy-missing.txt"
+          read_client_response "$missing_asset"
+          require_status 404 "$missing_asset"
+          if [ -n "$response_cache_control" ]; then
+            fail_cache_check "$missing_asset unexpectedly received Cache-Control: $response_cache_control"
+          fi
+          echo "missing_asset=$missing_asset status=$response_status cache-control=<absent>"
+
           npx tsx apps/server/scripts/public-arena-smoke.ts
 
           server_id="$(compose ps -q server)"
