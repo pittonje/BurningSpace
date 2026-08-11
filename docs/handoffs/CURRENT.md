@@ -1,20 +1,20 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-11
-Updated by: Codex — TEST-003 production BattleRoom authority harness
+Updated by: Codex — SEC-007 network boundary hardening
 
 ## Repository state
 
-- PR #53 / SEC-006 is merged at
-  `b4dfce94384ef2162a155360f9d5f1f6fec74290`.
-- Production diagnostic-room isolation is established.
+- PR #54 / TEST-003 is human-merged at
+  `e337c4d55d80af41ef27aa4c87baa42a73926bd3`.
+- Production diagnostic isolation and real production `BattleRoom` authority
+  coverage are established.
 - Wave 1 — Authority and Security Hardening remains active.
-- TEST-003 is the sole active bounded task.
-- Active branch: `game/wave1-test-003-battleroom-authority-harness`.
-- Active task:
-  `docs/tasks/test-003-production-battleroom-authority-harness.md`.
-- Active review:
-  `docs/reviews/test-003-production-battleroom-authority-harness-review.md`.
+- SEC-007 is the sole active bounded task.
+- Risk: `HIGH — production network/security boundary`.
+- Active branch: `game/wave1-sec-007-network-boundary-hardening`.
+- Active task: `docs/tasks/sec-007-network-boundary-hardening.md`.
+- Active review: `docs/reviews/sec-007-network-boundary-hardening-review.md`.
 - DOCARCH-004 remains open but paused.
 - DOCARCH-004C v1 / PR #51 remains open and draft as frozen historical
   methodology evidence.
@@ -24,27 +24,26 @@ Updated by: Codex — TEST-003 production BattleRoom authority harness
 
 ## Authorization and boundaries
 
-- TEST-003 is a NORMAL-risk, test-focused runtime-foundation task.
-- Production `BattleRoom`, production registry, client networking, gameplay,
-  protocol, schema, package, dependency, manifest, lockfile, workflow, and
-  accepted-decision behavior are not being changed.
-- The task adds deterministic multi-client authority coverage through the real
-  production registration path and deliberately does not force production
-  death/respawn through mutation authority.
-- Required review is one independent integrated runtime review covering
-  multiplayer authority, bounded security implications, test quality, and
-  documentation consistency.
-- Claude QA is advisory and non-blocking for TEST-003.
-- Human-only merge remains required.
+- SEC-007 implements the explicit production Origin policy, fail-closed
+  production configuration, bounded profile and player-input abuse controls,
+  and remote execution of `npm test` in Core Pull Request Checks.
+- This task creates no gameplay or accepted decision change and preserves
+  existing protocol, schema, movement, combat, projectile, damage, death,
+  respawn, faction, spectator, health, and room-registration behavior.
+- Identity, accounts, persistence, sectors, outposts, deployment,
+  reverse-proxy trust, and reconnect behavior remain outside the task.
+- Reconnect ownership, disconnect lifecycle, and minimum reconnection behavior
+  is the next runtime boundary after merge; it is not active.
 
-## Merge gate
+## Review and merge gate
 
-TEST-003 closes only after required local validation, an approving independent
-integrated reviewer verdict, passing Core Pull Request Checks on the final head,
-and human merge. Core CI currently does not execute `npm test`, so the reviewer
-must rerun and record the local test result.
+SEC-007 requires full local validation, Core CI including `npm test`, one
+independent integrated Security/Runtime review, mandatory substantive Claude QA,
+Product Architect approval, one combined evidence commit, passing final-head
+checks, and human-only merge. Infrastructure-only Claude override requires
+explicit Product Architect evidence. No agent may merge the pull request.
 
 ## Next safe action
 
-Independent reviewer validates the TEST-003 production-BattleRoom authority
-harness on the current pull-request head.
+Independent Security/Runtime reviewer validates SEC-007 on the current
+pull-request head.

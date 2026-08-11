@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks';
-import { Client, Room } from 'colyseus';
+import { Client, Room, type AuthContext } from 'colyseus';
 import {
   ProfileClientMessages,
   ProfileServerMessages,
@@ -35,6 +35,11 @@ import { BattleState } from '../schema/BattleState.js';
 import { ParticipantState } from '../schema/ParticipantState.js';
 import { ProjectileState } from '../schema/ProjectileState.js';
 import { ShipState } from '../schema/ShipState.js';
+import {
+  assertRequestOrigin,
+  getActiveNetworkBoundaryConfig
+} from '../security/networkBoundary.js';
+import { TokenBucketRateLimiter } from '../security/tokenBucketRateLimiter.js';
 import { applyDamage, canDamageShip, respawnShip, segmentCircleIntersectionT } from '../systems/combat.js';
 import { getFactionSpawnPosition } from '../systems/spawn.js';
 import { simulateShipMovement } from '../systems/shipMovement.js';
@@ -48,6 +53,8 @@ type ProfileValidationResult =
 interface WeaponRuntimeState {
   lastShotAt: number;
 }
+
+const PROFILE_RATE_LIMIT_NOTICE_INTERVAL_MS = 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -92,7 +99,32 @@ function validateProfile(message: unknown): ProfileValidationResult {
 }
 
 export class BattleRoom extends Room<BattleState> {
+  static override async onAuth(
+    _token: string,
+    _options: unknown,
+    context: AuthContext
+  ): Promise<boolean> {
+    try {
+      assertRequestOrigin(context);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   maxClients = MAX_ROOM_CLIENTS;
+  private readonly networkBoundaryConfig = getActiveNetworkBoundaryConfig();
+  private readonly profileMessageLimiter = new TokenBucketRateLimiter({
+    capacity: this.networkBoundaryConfig.profileRateLimit.burst,
+    refillRatePerSecond: this.networkBoundaryConfig.profileRateLimit.refillRatePerSecond,
+    now: this.networkBoundaryConfig.monotonicNow
+  });
+  private readonly playerInputLimiter = new TokenBucketRateLimiter({
+    capacity: this.networkBoundaryConfig.inputRateLimit.burst,
+    refillRatePerSecond: this.networkBoundaryConfig.inputRateLimit.refillRatePerSecond,
+    now: this.networkBoundaryConfig.monotonicNow
+  });
+  private readonly lastProfileRateLimitNoticeAt = new Map<string, number>();
   private readonly inputs = new Map<string, PlayerInputMessage>();
   private readonly weapons = new Map<string, WeaponRuntimeState>();
   private readonly lastInputReceivedAt = new Map<string, number>();
@@ -135,12 +167,20 @@ export class BattleRoom extends Room<BattleState> {
     this.inputs.delete(client.sessionId);
     this.weapons.delete(client.sessionId);
     this.lastInputReceivedAt.delete(client.sessionId);
+    this.profileMessageLimiter.delete(client.sessionId);
+    this.playerInputLimiter.delete(client.sessionId);
+    this.lastProfileRateLimitNoticeAt.delete(client.sessionId);
     this.sendRoomInfo();
 
     console.log(`[BattleRoom] left sessionId=${client.sessionId} consented=${Boolean(consented)}`);
   }
 
   private handleSetProfile(client: Client, message: unknown): void {
+    if (!this.profileMessageLimiter.consume(client.sessionId).allowed) {
+      this.sendBoundedProfileRateLimitNotice(client);
+      return;
+    }
+
     const participant = this.state.participants.get(client.sessionId);
 
     if (!participant) {
@@ -196,6 +236,23 @@ export class BattleRoom extends Room<BattleState> {
     console.log(
       `[BattleRoom] profile sessionId=${client.sessionId} nickname=${participant.nickname} mode=${participant.mode}`
     );
+  }
+
+  private sendBoundedProfileRateLimitNotice(client: Client): void {
+    const now = this.networkBoundaryConfig.monotonicNow();
+    const lastNoticeAt = this.lastProfileRateLimitNoticeAt.get(client.sessionId);
+
+    if (
+      lastNoticeAt !== undefined &&
+      now - lastNoticeAt < PROFILE_RATE_LIMIT_NOTICE_INTERVAL_MS
+    ) {
+      return;
+    }
+
+    this.lastProfileRateLimitNoticeAt.set(client.sessionId, now);
+    client.send(ProfileServerMessages.PROFILE_REJECTED, {
+      reason: 'Profile update rate limit exceeded.'
+    } satisfies ProfileRejectedMessage);
   }
 
   private sendRoomInfo(): void {
@@ -261,6 +318,10 @@ export class BattleRoom extends Room<BattleState> {
   }
 
   private handlePlayerInput(client: Client, message: unknown): void {
+    if (!this.playerInputLimiter.consume(client.sessionId).allowed) {
+      return;
+    }
+
     const ship = this.state.ships.get(client.sessionId);
 
     if (!ship) {

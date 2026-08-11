@@ -3,6 +3,16 @@ import type { AddressInfo } from 'node:net';
 import { Server } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { registerProductionRooms } from '../../src/rooms/productionRoomRegistry.js';
+import {
+  createWebSocketVerifyClient,
+  installNetworkBoundary,
+  parseNetworkBoundaryConfig,
+  type NetworkBoundaryConfig
+} from '../../src/security/networkBoundary.js';
+
+export interface StartProductionBattleServerOptions {
+  readonly networkBoundaryConfig?: NetworkBoundaryConfig;
+}
 
 export interface ProductionBattleServerHandle {
   readonly url: string;
@@ -58,18 +68,42 @@ function closeHttpServer(httpServer: HttpServer): Promise<void> {
   });
 }
 
-export async function startProductionBattleServer(): Promise<ProductionBattleServerHandle> {
+export async function startProductionBattleServer(
+  options: StartProductionBattleServerOptions = {}
+): Promise<ProductionBattleServerHandle> {
+  const networkBoundaryConfig = options.networkBoundaryConfig ??
+    parseNetworkBoundaryConfig({ NODE_ENV: 'test' });
+  const httpServer = createServer((request, response) => {
+    if (request.url === '/health') {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ ok: true, service: 'burningspace-server' }));
+      return;
+    }
+
+    response.writeHead(404, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ ok: false, error: 'not_found' }));
+  });
   const restoreWorkerIpc = filterPm2TelemetryFromWorkerIpc();
-  const httpServer = createServer();
+  let networkBoundary: ReturnType<typeof installNetworkBoundary>;
+
+  try {
+    networkBoundary = installNetworkBoundary(networkBoundaryConfig);
+  } catch (error) {
+    restoreWorkerIpc();
+    throw error;
+  }
+
   let gameServer: Server;
 
   try {
     gameServer = new Server({
       transport: new WebSocketTransport({
-        server: httpServer
+        server: httpServer,
+        verifyClient: createWebSocketVerifyClient(networkBoundaryConfig)
       })
     });
   } catch (error) {
+    networkBoundary.restore();
     restoreWorkerIpc();
     throw error;
   }
@@ -98,6 +132,7 @@ export async function startProductionBattleServer(): Promise<ProductionBattleSer
       await closeHttpServer(httpServer).catch(() => undefined);
     }
 
+    networkBoundary.restore();
     restoreWorkerIpc();
     throw error;
   }
@@ -106,6 +141,10 @@ export async function startProductionBattleServer(): Promise<ProductionBattleSer
 
   if (!address || typeof address === 'string') {
     await gameServer.gracefullyShutdown(false).catch(() => undefined);
+    if (httpServer.listening) {
+      await closeHttpServer(httpServer).catch(() => undefined);
+    }
+    networkBoundary.restore();
     restoreWorkerIpc();
     throw new Error('Unable to resolve production BattleRoom test server address.');
   }
@@ -127,6 +166,7 @@ export async function startProductionBattleServer(): Promise<ProductionBattleSer
           await closeHttpServer(httpServer).catch(() => undefined);
         }
       } finally {
+        networkBoundary.restore();
         restoreWorkerIpc();
       }
     }
