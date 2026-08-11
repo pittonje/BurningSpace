@@ -5,7 +5,7 @@ import {
   WORLD_HEIGHT,
   WORLD_WIDTH
 } from '@burningspace/shared';
-import { BattleRoom } from './BattleRoom.js';
+import { BattleRoom } from '../../src/rooms/BattleRoom.js';
 
 export const TestRoomMessages = {
   SET_SHIP_STATE: 'test:setShipState'

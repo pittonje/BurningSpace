@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { Server } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
-import { BattleRoom } from './rooms/BattleRoom.js';
+import { registerProductionRooms } from './rooms/productionRoomRegistry.js';
 
 const port = Number(process.env.PORT ?? 2567);
 
@@ -22,7 +22,7 @@ const gameServer = new Server({
   })
 });
 
-gameServer.define('battle', BattleRoom);
+registerProductionRooms(gameServer);
 
 httpServer.listen(port, () => {
   console.log(`BurningSpace server listening on http://localhost:${port}`);
