@@ -645,21 +645,92 @@ token, Origin, or rate-limit boundaries.
 
 ## Product Architect
 
-- Verdict:
-- Reviewed commit:
-- Evidence source:
-- Date:
+- Verdict: `APPROVED FOR HUMAN MERGE WITH QA INFRASTRUCTURE OVERRIDE`
+- Reviewed commit: `bcbb0f34fdc8b6a5062a9832fc8d578b8194cb9c`
+- Evidence source: Owner-authored PR comment (recorded as owner-authored
+  PR-comment evidence, not a formal GitHub review) —
+  https://github.com/pittonje/BurningSpace/pull/56#issuecomment-5252665138
+  (author `pittonje`, association `OWNER`, PR #56, posted
+  `2026-08-11T11:39:57Z`, bound to reviewed commit
+  `bcbb0f34fdc8b6a5062a9832fc8d578b8194cb9c` and implementation commit
+  `e7f2f629b53d2e1901b3837a4c424557ac5acd3a`)
+- Date: 2026-08-11
+
+Findings: the Independent Integrated Runtime/Security Reviewer verdict
+(`APPROVED WITH NON-BLOCKING NOTES`, blocking findings none) is accepted, and
+the reconnect ownership, token, Origin, rate-limit, and cleanup conclusions
+above are accepted as verified: session-ID reuse preserves ownership with no
+duplicate participant/ship/spawn; the reconnection token remains a private,
+unlogged, in-memory bearer credential with no session-ID-only or
+roomId+sessionId fallback; Origin enforcement was proven end-to-end on the
+real reconnect path (hostile Origin rejected with zero side effects, the same
+token then succeeding from an allowed Origin); rate-limit buckets persist
+across a successful reconnect and are deleted only on consented leave or
+grace expiry; and `finalizeSession` provides exactly-once cleanup across
+consented leave, grace expiry, and shutdown-triggered rejection. The
+epoch/cancellation retry mechanism (five bounded delays, race-safe against
+manual disconnect, disposal, and a stale in-flight reconnect completing after
+cancellation) and the full local/CI validation record are accepted. The five
+non-blocking notes above are accepted as deferred follow-ups that weaken no
+ownership, token, Origin, or rate-limit boundary. The repeated Claude QA
+failures (implementation head: two attempts on run `31480313432`; review
+head: one attempt on run `31483375321`) are explicitly classified as
+non-substantive infrastructure/schema output-validation failures, not
+implementation defects; the manual-rerun allowance is exhausted and no
+further manual Claude QA rerun is authorized for NET-001. Merge remains
+conditional on this recorded evidence and on final Core Pull Request Checks
+passing on the evidence-commit HEAD.
 
 ## Claude QA
 
-- Verdict:
-- Reviewed commit:
-- Evidence source:
-- Check conclusion:
-- Date:
+- Verdict: `UNAVAILABLE — PRODUCT ARCHITECT INFRASTRUCTURE OVERRIDE`
+- Reviewed commit: `bcbb0f34fdc8b6a5062a9832fc8d578b8194cb9c`
+- Evidence source: `gh api` run/attempt and PR-comment metadata for three
+  failed "Claude QA Review Pilot" attempts, all `conclusion: failure`:
+  (1) implementation head `e7f2f629b53d2e1901b3837a4c424557ac5acd3a`, run
+  [31480313432](https://github.com/pittonje/BurningSpace/actions/runs/31480313432)
+  attempt 1 (`created_at 2026-08-11T10:01:04Z`), failure category
+  `important_suggestions[0] exceeds max length 500`, comment
+  https://github.com/pittonje/BurningSpace/pull/56#issuecomment-5251731498
+  (`2026-08-11T10:05:01Z`);
+  (2) same implementation head and run `31480313432`, attempt 2 (the single
+  permitted manual rerun on that head), failure category `summary exceeds max
+  length 2000`, comment
+  https://github.com/pittonje/BurningSpace/pull/56#issuecomment-5251775536
+  (`2026-08-11T10:09:29Z`);
+  (3) review head `bcbb0f34fdc8b6a5062a9832fc8d578b8194cb9c`, run
+  [31483375321](https://github.com/pittonje/BurningSpace/actions/runs/31483375321)
+  attempt 1 (`created_at 2026-08-11T10:42:10Z`; confirmed no attempt 2 exists
+  for this run — no manual review-head rerun occurred), failure category
+  `summary exceeds max length 2000`, comment
+  https://github.com/pittonje/BurningSpace/pull/56#issuecomment-5252121056
+  (`2026-08-11T10:45:11Z`). The sibling `Core Pull Request Checks` run
+  [31483375343](https://github.com/pittonje/BurningSpace/actions/runs/31483375343)
+  on the same review head concluded `success`.
+- Check conclusion: `FAILURE — INFRASTRUCTURE/SCHEMA OUTPUT VALIDATION`
+- Date: 2026-08-11
+
+Findings:
+
+- three non-substantive output-validation failures occurred across the
+  implementation head (2 attempts) and the review head (1 attempt); none
+  produced a usable substantive verdict;
+- no attempt produced a concrete implementation-level `CHANGES REQUIRED`
+  finding;
+- the manual-rerun allowance is exhausted (one manual rerun already consumed
+  on the implementation head; no further rerun is authorized);
+- the Product Architect explicitly accepted the unavailable QA result — see
+  Product Architect section above
+  (https://github.com/pittonje/BurningSpace/pull/56#issuecomment-5252665138);
+- the automatically triggered final-head Claude run remains subject to this
+  recorded override unless it reports a real substantive `CHANGES REQUIRED`
+  blocker, in which case that finding remains blocking.
 
 ## Human merge gate
 
 Human merge requires an approving independent integrated Runtime/Security
-verdict, substantive Claude QA, Product Architect approval, one later evidence
-commit, and passing final-head Core Pull Request Checks. No agent may merge.
+verdict, Product Architect approval, and passing final-head Core Pull Request
+Checks. Product Architect approval is recorded above
+(`APPROVED FOR HUMAN MERGE WITH QA INFRASTRUCTURE OVERRIDE`); Claude QA is
+`UNAVAILABLE` and is covered by that recorded Product Architect infrastructure
+override rather than a substantive Claude QA verdict. No agent may merge.
