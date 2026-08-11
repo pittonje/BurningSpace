@@ -1,43 +1,49 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-07-20
-Updated by: Codex - DOCARCH-004B protocol authoring
+Last updated: 2026-08-11
+Updated by: Codex — SEC-006 production-room isolation
 
 ## Repository state
 
-- DOCARCH-004A completed through merged PR #49.
-- Merge commit: `858d14568f4dd6f040255df1b925046028237377`.
-- The accepted decision count remains 35.
-- DOCARCH-004 - Architect Takeover Protocol is active and remains open.
-- DOCARCH-004B - Architect Takeover Protocol Authoring is the active bounded
-  stage and is incomplete.
-- Active branch: `docs/docarch-004b-architect-takeover-protocol`.
-- Active task: `docs/tasks/docarch-004-architect-takeover-protocol.md`.
-- Protocol candidate: `docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md`.
-- Active review artifact:
-  `docs/reviews/docarch-004b-architect-takeover-protocol-review.md`.
+- PR #50 / DOCARCH-004B is merged at
+  `4ead74342ecc7ad9f2b647d4a21d63736a694502`.
+- The Architect Takeover Protocol is canonical and remains subordinate to
+  governance and accepted decisions.
+- DOCARCH-004 remains open but is paused.
+- DOCARCH-004C v1 / PR #51 remains open and draft as frozen historical
+  methodology evidence.
+- DOCARCH-004C Attempt 5 is not authorized.
+- DOCARCH-004D methodology-redesign implementation is not active.
+- The canonical roadmap's Wave 1 — Authority and Security Hardening is active.
+- BurningSpace runtime implementation is active again.
+- SEC-006 is the sole active bounded task and the first runtime task in Wave 1.
+- Active branch: `game/wave1-sec-006-production-room-isolation`.
+- Active task: `docs/tasks/sec-006-production-room-isolation.md`.
+- Active review: `docs/reviews/sec-006-production-room-isolation-review.md`.
+- The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
+  7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 
-## Authorization and status
+## Authorization and boundaries
 
-- DOCARCH-004B authors the protocol candidate; the protocol becomes canonical
-  only after required evidence, final-head checks, and human merge.
-- DOCARCH-004C is reserved after B for independent cold takeover validation
-  and is not active.
-- No cold takeover drill has been performed.
-- No new accepted decision is introduced; the count remains 35.
-- Runtime, packages, workflows, architecture, design, scripts, and tests are
+- SEC-006 introduces no accepted decision.
+- Current server-authoritative arena mechanics and client behavior remain
   unchanged.
-- DOCARCH-005 - Role and Model Portability remains reserved after DOCARCH-004.
-- Required review: Product Architect, Architecture Reviewer, Documentation
-  consistency review, Claude QA, human-only merge.
+- No protocol, schema, wire-message, package-boundary, dependency, manifest,
+  lockfile, or workflow change is authorized.
+- Territorial gameplay, persistence, reconnect, origin policy, rate-limit
+  values, and DOCARCH methodology redesign remain outside this task.
+- DOCARCH-005 — Role and Model Portability remains deferred.
+- Required review: Product Architect, Architecture Reviewer, Security/CI
+  Reviewer, Test/Quality Reviewer, Documentation consistency review, Claude QA,
+  and human-only merge.
 
 ## Merge gate
 
-DOCARCH-004B closes only after the protocol candidate and adapter
-reconciliation complete independent conformance review, Product Architect
-approval evidence, Claude QA evidence, final-head checks, and human merge.
-DOCARCH-004 remains open after B merge.
+SEC-006 closes only after its required reviewers record verdicts and evidence
+bound to the final pull-request head, all required checks pass on that head,
+and the human project owner merges the pull request. No agent may merge it.
 
 ## Next safe action
 
-Required reviewers complete the DOCARCH-004B protocol conformance review and human merge; after merge begin DOCARCH-004C independent cold takeover validation.
+Independent reviewers complete the SEC-006 production-room-isolation
+conformance review on the final PR head.

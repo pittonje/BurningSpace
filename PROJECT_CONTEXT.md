@@ -1,6 +1,6 @@
 # BurningSpace Project Context
 
-Last updated: 2026-07-20
+Last updated: 2026-08-11
 
 ## Purpose of this document
 
@@ -15,8 +15,8 @@ operational state lives in [CURRENT](docs/handoffs/CURRENT.md).
 
 For a cold Product Architect takeover, begin here and then follow the
 [Architect Takeover Protocol](docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md). The
-protocol is a candidate until DOCARCH-004B human merge and is subordinate to
-governance and accepted decisions.
+protocol is canonical after the human merge of PR #50 and remains subordinate
+to governance and accepted decisions.
 
 ## Product snapshot
 
@@ -36,7 +36,7 @@ incremental future work rather than implemented assumptions.
 - [Decision Index](docs/decisions/DECISION_INDEX.md) navigates accepted decisions; the linked individual records are canonical in their domains.
 - [Canonical Development Roadmap](docs/roadmap/CANONICAL_DEVELOPMENT_ROADMAP.md) defines delivery sequence, dependencies, the MVP boundary, and unresolved decision gates after human merge. It does not replace accepted decisions or `CURRENT.md`.
 - [Decision Registry README](docs/decisions/README.md) explains registry roles and status.
-- [Architect Takeover Protocol](docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md) becomes the canonical operational cold-takeover procedure after DOCARCH-004B human merge; it remains subordinate to governance and accepted decisions.
+- [Architect Takeover Protocol](docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md) is the canonical operational cold-takeover procedure after merged PR #50; it remains subordinate to governance and accepted decisions.
 - [CURRENT](docs/handoffs/CURRENT.md) reports the active branch, task, review, and next safe action. During takeover it must be validated through the protocol rather than assumed fresh.
 - [`docs/tasks/`](docs/tasks/) contains Product Architect-approved bounded task scope.
 - [`docs/reviews/`](docs/reviews/) contains review and conformance evidence.
@@ -83,21 +83,24 @@ implementation constraints.
 
 ## Current program state
 
-DOCARCH-000 through DOCARCH-003 are complete. DOCARCH-004A merged through PR
-#49 and established the takeover-readiness baseline and separate authoring and
-independent-validation stages. The registry contains 35 accepted decisions.
+DOCARCH-000 through DOCARCH-003 are complete. The Architect Takeover Protocol
+is canonical after merged PR #50. DOCARCH-004 remains open but is paused;
+DOCARCH-004C v1 / PR #51 remains frozen draft historical evidence,
+DOCARCH-004C Attempt 5 is not authorized, and DOCARCH-004D is not active.
 
-DOCARCH-004 remains open. DOCARCH-004B is active as the protocol-authoring
-candidate; it creates no accepted decision. DOCARCH-004C is reserved after B
-for independent validation and is not active. DOCARCH-005 — Role and Model
-Portability remains reserved after DOCARCH-004.
+BurningSpace runtime development has resumed. Wave 1 — Authority and Security
+Hardening is active, with SEC-006 as the current bounded runtime task. The
+accepted decision count remains 35. The current server-authoritative
+multiplayer arena remains the implementation foundation, while the local
+`GameScene` remains preserved non-authoritative prototype material.
 
-Use [CURRENT](docs/handoffs/CURRENT.md) for live operational status rather than
-maintaining pull-request or commit chronology here.
+DOCARCH-005 — Role and Model Portability remains deferred. Use
+[CURRENT](docs/handoffs/CURRENT.md) as the live operational source.
 
 ## Known deferred work
 
-- TestBattleRoom and its authority-bypass risk remain deferred to SEC-006.
+- Production-room multi-client authority coverage on the real `BattleRoom`
+  path remains the post-SEC-006 task boundary.
 - Branch protection and possible CI-004 remain dedicated CI work.
 - AGENT-004 and detailed role/model portability remain deferred to DOCARCH-005.
 - Persistence, accounts, and database work remain future implementation work.

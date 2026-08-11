@@ -13,7 +13,7 @@ import {
   type ProjectileSnapshot,
   type ShipSnapshot
 } from '@burningspace/shared';
-import { TestBattleRoom, TestRoomMessages } from '../../server/src/rooms/TestBattleRoom.js';
+import { TestBattleRoom, TestRoomMessages } from '../../server/test/support/TestBattleRoom.js';
 import { NetworkClient, type ConnectionState, type PlayerInputPayload } from '../src/network/NetworkClient';
 
 const TEST_ROOM_NAME = 'battle-test';
