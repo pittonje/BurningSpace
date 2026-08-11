@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-11
-Updated by: Codex — OPS-001 final review evidence gate
+Updated by: Codex — OPS-001 post-merge reconciliation
 
 ## Repository state
 
@@ -10,23 +10,21 @@ Updated by: Codex — OPS-001 final review evidence gate
 - The Wave 1 authority/security foundation required for Public Arena Alpha is
   complete at this baseline.
 - The Public Arena Alpha launch track is active.
-- OPS-001 is the sole active bounded task.
-- Risk: `HIGH — production runtime, container, endpoint, and shutdown behavior`.
-- Active branch: `game/ops-001-public-arena-readiness`.
-- Active task: `docs/tasks/ops-001-public-arena-readiness.md`.
-- Active review: `docs/reviews/ops-001-public-arena-readiness-review.md`.
-- PR #57 remains open and unmerged at document-authoring time.
-- Corrected implementation head:
+- OPS-001 is MERGED / CLOSED through PR #57. It entered `main` through the
+  normal merge commit `dd558a7648dca8c8a735f285257f4a317ce9a846`.
+- OPS-001 implementation head:
   `ab74ea9fde13061ba68667e28c4f78b271b45bd8`.
-- OPS-001-F1 is closed. The integrated/focused Operations/Security review and
-  Product Architect disposition are approved.
-- Claude substantive QA is blocker-free (`Approved with suggestions`). Its
-  formal `execution_file_invalid` wrapper failure is covered by an explicit
-  Product Architect Category-C infrastructure override; no manual rerun is
-  required.
-- This commit records final OPS-001 review evidence. Final-head Core remains
-  the post-evidence regression gate.
-- The deployment remains local/not externally launched.
+- OPS-001 evidence head:
+  `2f1ca4e389031a1bc23d9c6b68aaaa31f3add4af`.
+- Final evidence-head Core run `31515348143` completed with `SUCCESS`.
+- Final evidence-head Claude QA run `31515348155` completed with `SUCCESS`;
+  its substantive verdict was `Approved with suggestions`, with no blockers.
+- OPS-001-F1 is CLOSED. Generated fingerprinted `index-*.js` and
+  `index-*.css` are immutable and long-lived; stable-name assets require
+  revalidation; `index.html` is not long-lived; missing assets remain uncached
+  404 responses.
+- No Public Arena external deployment was performed. OPS-001 configured no
+  public hostname, TLS edge, reverse proxy, or production credentials.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 - Campaign systems remain deferred and the canonical campaign roadmap is
@@ -36,31 +34,38 @@ Updated by: Codex — OPS-001 final review evidence gate
 
 ## Authorization and boundaries
 
-- OPS-001 prepares one in-memory server container and one static-client
-  container, loopback-only staging Compose, explicit production client origin,
-  health/readiness, structured lifecycle logs, bounded graceful shutdown,
-  real arena smoke coverage, Core container validation, and an operations
-  runbook.
-- The arena remains single-process, non-persistent, server-authoritative, and
-  unsuitable for horizontal replicas. Restart resets active rooms/world state.
+- OPS-001 completed the deployment/readiness foundation for one in-memory
+  server container and one static-client container, loopback-only staging
+  Compose, explicit production client origin, health/readiness, structured
+  lifecycle logs, bounded graceful shutdown, real arena smoke coverage, Core
+  container validation, and an operations runbook.
+- The arena remains one in-memory server process with no persistence or
+  accounts; it is server-authoritative and unsuitable for horizontal scaling.
+  Restart resets active rooms/world state.
 - TLS and the public reverse proxy remain outside the application containers.
-- No external deployment, campaign, account, persistence, gameplay, authority,
-  reconnect, accepted-decision, package-contract, or dependency change is
-  authorized.
-- UX-001 is the next bounded task after human merge; it remains inactive.
+- The merge closes deployment/readiness foundation only. External launch is a
+  separate operation requiring explicit authorization.
+- SEC-007 and NET-001 remain complete. This reconciliation makes no runtime,
+  gameplay, protocol, campaign, account, persistence, authority, reconnect,
+  accepted-decision, package-contract, or dependency change.
+- UX-001 implementation is NOT STARTED and NOT YET AUTHORIZED.
 
 ## Review and merge gate
 
 OPS-001 local and corrected-head Linux Core validation passed. Independent
 integrated/focused Operations/Security review, mandatory substantive Claude QA,
-the explicit Product Architect QA-infrastructure disposition, and Product
-Architect approval are complete. This evidence commit records those verdicts;
-passing final-head Core and human-only merge remain required. No agent may
-deploy externally or merge.
+Product Architect approval, and final evidence-head Core and Claude QA success
+are complete. Human merge of PR #57 is complete. The earlier
+implementation-head Category-C infrastructure override remains historical
+evidence and is not a failing gate on the merged state.
+
+This LOW-RISK documentation-only reconciliation requires Core checks, human
+review, and human-only merge. Claude QA is advisory unless it identifies a
+concrete factual error. No external deployment is authorized.
 
 ## Next safe action
 
-1. Validate final-head Core checks triggered by the evidence commit.
-2. If Core passes and no new substantive blocker appears, human-only merge of
-   PR #57.
-3. Do not deploy externally as part of this gate.
+Prepare UX-001 task authority/bootstrap for UX-001 — Public Arena Connection,
+Error, and Reconnect UX. This is planning/authority work only and may create or
+refine task authority only after Product Architect direction. Do not implement
+UI, client networking, reconnect behavior, gameplay, assets, or visual design.
