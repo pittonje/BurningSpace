@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-11
-Updated by: Codex — OPS-001 Public Arena readiness foundation
+Updated by: Codex — OPS-001 final review evidence gate
 
 ## Repository state
 
@@ -15,6 +15,17 @@ Updated by: Codex — OPS-001 Public Arena readiness foundation
 - Active branch: `game/ops-001-public-arena-readiness`.
 - Active task: `docs/tasks/ops-001-public-arena-readiness.md`.
 - Active review: `docs/reviews/ops-001-public-arena-readiness-review.md`.
+- PR #57 remains open and unmerged at document-authoring time.
+- Corrected implementation head:
+  `ab74ea9fde13061ba68667e28c4f78b271b45bd8`.
+- OPS-001-F1 is closed. The integrated/focused Operations/Security review and
+  Product Architect disposition are approved.
+- Claude substantive QA is blocker-free (`Approved with suggestions`). Its
+  formal `execution_file_invalid` wrapper failure is covered by an explicit
+  Product Architect Category-C infrastructure override; no manual rerun is
+  required.
+- This commit records final OPS-001 review evidence. Final-head Core remains
+  the post-evidence regression gate.
 - The deployment remains local/not externally launched.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
@@ -36,16 +47,20 @@ Updated by: Codex — OPS-001 Public Arena readiness foundation
 - No external deployment, campaign, account, persistence, gameplay, authority,
   reconnect, accepted-decision, package-contract, or dependency change is
   authorized.
-- UX-001 is the next bounded task after merge; it is not active.
+- UX-001 is the next bounded task after human merge; it remains inactive.
 
 ## Review and merge gate
 
-OPS-001 requires full local validation, Linux Core container validation, one
-independent integrated Operations/Security review, mandatory substantive Claude
-QA, Product Architect approval, one later evidence commit, passing final-head
-checks, and human-only merge. No agent may deploy externally or merge.
+OPS-001 local and corrected-head Linux Core validation passed. Independent
+integrated/focused Operations/Security review, mandatory substantive Claude QA,
+the explicit Product Architect QA-infrastructure disposition, and Product
+Architect approval are complete. This evidence commit records those verdicts;
+passing final-head Core and human-only merge remain required. No agent may
+deploy externally or merge.
 
 ## Next safe action
 
-Independent Operations/Security reviewer validates OPS-001 on the current
-pull-request head.
+1. Validate final-head Core checks triggered by the evidence commit.
+2. If Core passes and no new substantive blocker appears, human-only merge of
+   PR #57.
+3. Do not deploy externally as part of this gate.
