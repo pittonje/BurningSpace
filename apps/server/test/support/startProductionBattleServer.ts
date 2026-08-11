@@ -14,6 +14,10 @@ export interface StartProductionBattleServerOptions {
   readonly networkBoundaryConfig?: NetworkBoundaryConfig;
 }
 
+const PM2_TELEMETRY_FILTER_MARKER = Symbol.for(
+  'burningspace.test.pm2-telemetry-worker-filter'
+);
+
 export interface ProductionBattleServerHandle {
   readonly url: string;
   stop(): Promise<void>;
@@ -29,15 +33,20 @@ function isPm2TelemetryMessage(message: unknown): boolean {
   );
 }
 
-function filterPm2TelemetryFromWorkerIpc(): () => void {
+function installPm2TelemetryFilterForWorkerIpc(): void {
   const workerSend = process.send;
 
-  if (!workerSend) {
-    return () => undefined;
+  if (
+    !workerSend ||
+    Reflect.get(workerSend, PM2_TELEMETRY_FILTER_MARKER) === true
+  ) {
+    return;
   }
 
-  // Colyseus loads @pm2/io for optional metrics. Filter only its axm messages
-  // so they cannot collide with Vitest's fork-worker IPC protocol.
+  // Colyseus loads process-global @pm2/io metrics with an unref'd timer that
+  // outlives Server.gracefullyShutdown(). Keep this axm-only wrapper for the
+  // worker lifetime so a later metrics tick cannot enter Vitest's fork IPC.
+  // Every non-PM2 message and argument is forwarded unchanged.
   const filteredSend = ((message: unknown, ...args: unknown[]): boolean => {
     if (isPm2TelemetryMessage(message)) {
       return true;
@@ -46,13 +55,10 @@ function filterPm2TelemetryFromWorkerIpc(): () => void {
     return Reflect.apply(workerSend, process, [message, ...args]) as boolean;
   }) as typeof process.send;
 
+  Reflect.defineProperty(filteredSend, PM2_TELEMETRY_FILTER_MARKER, {
+    value: true
+  });
   process.send = filteredSend;
-
-  return () => {
-    if (process.send === filteredSend) {
-      process.send = workerSend;
-    }
-  };
 }
 
 function closeHttpServer(httpServer: HttpServer): Promise<void> {
@@ -83,15 +89,8 @@ export async function startProductionBattleServer(
     response.writeHead(404, { 'content-type': 'application/json' });
     response.end(JSON.stringify({ ok: false, error: 'not_found' }));
   });
-  const restoreWorkerIpc = filterPm2TelemetryFromWorkerIpc();
-  let networkBoundary: ReturnType<typeof installNetworkBoundary>;
-
-  try {
-    networkBoundary = installNetworkBoundary(networkBoundaryConfig);
-  } catch (error) {
-    restoreWorkerIpc();
-    throw error;
-  }
+  installPm2TelemetryFilterForWorkerIpc();
+  const networkBoundary = installNetworkBoundary(networkBoundaryConfig);
 
   let gameServer: Server;
 
@@ -104,7 +103,6 @@ export async function startProductionBattleServer(
     });
   } catch (error) {
     networkBoundary.restore();
-    restoreWorkerIpc();
     throw error;
   }
 
@@ -133,7 +131,6 @@ export async function startProductionBattleServer(
     }
 
     networkBoundary.restore();
-    restoreWorkerIpc();
     throw error;
   }
 
@@ -145,7 +142,6 @@ export async function startProductionBattleServer(
       await closeHttpServer(httpServer).catch(() => undefined);
     }
     networkBoundary.restore();
-    restoreWorkerIpc();
     throw new Error('Unable to resolve production BattleRoom test server address.');
   }
 
@@ -167,7 +163,6 @@ export async function startProductionBattleServer(
         }
       } finally {
         networkBoundary.restore();
-        restoreWorkerIpc();
       }
     }
   };
