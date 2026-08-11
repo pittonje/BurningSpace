@@ -3,6 +3,20 @@ import type { AddressInfo } from 'node:net';
 import { Server } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { registerProductionRooms } from '../../src/rooms/productionRoomRegistry.js';
+import {
+  createWebSocketVerifyClient,
+  installNetworkBoundary,
+  parseNetworkBoundaryConfig,
+  type NetworkBoundaryConfig
+} from '../../src/security/networkBoundary.js';
+
+export interface StartProductionBattleServerOptions {
+  readonly networkBoundaryConfig?: NetworkBoundaryConfig;
+}
+
+const PM2_TELEMETRY_FILTER_MARKER = Symbol.for(
+  'burningspace.test.pm2-telemetry-worker-filter'
+);
 
 export interface ProductionBattleServerHandle {
   readonly url: string;
@@ -19,15 +33,20 @@ function isPm2TelemetryMessage(message: unknown): boolean {
   );
 }
 
-function filterPm2TelemetryFromWorkerIpc(): () => void {
+function installPm2TelemetryFilterForWorkerIpc(): void {
   const workerSend = process.send;
 
-  if (!workerSend) {
-    return () => undefined;
+  if (
+    !workerSend ||
+    Reflect.get(workerSend, PM2_TELEMETRY_FILTER_MARKER) === true
+  ) {
+    return;
   }
 
-  // Colyseus loads @pm2/io for optional metrics. Filter only its axm messages
-  // so they cannot collide with Vitest's fork-worker IPC protocol.
+  // Colyseus loads process-global @pm2/io metrics with an unref'd timer that
+  // outlives Server.gracefullyShutdown(). Keep this axm-only wrapper for the
+  // worker lifetime so a later metrics tick cannot enter Vitest's fork IPC.
+  // Every non-PM2 message and argument is forwarded unchanged.
   const filteredSend = ((message: unknown, ...args: unknown[]): boolean => {
     if (isPm2TelemetryMessage(message)) {
       return true;
@@ -36,13 +55,10 @@ function filterPm2TelemetryFromWorkerIpc(): () => void {
     return Reflect.apply(workerSend, process, [message, ...args]) as boolean;
   }) as typeof process.send;
 
+  Reflect.defineProperty(filteredSend, PM2_TELEMETRY_FILTER_MARKER, {
+    value: true
+  });
   process.send = filteredSend;
-
-  return () => {
-    if (process.send === filteredSend) {
-      process.send = workerSend;
-    }
-  };
 }
 
 function closeHttpServer(httpServer: HttpServer): Promise<void> {
@@ -58,19 +74,35 @@ function closeHttpServer(httpServer: HttpServer): Promise<void> {
   });
 }
 
-export async function startProductionBattleServer(): Promise<ProductionBattleServerHandle> {
-  const restoreWorkerIpc = filterPm2TelemetryFromWorkerIpc();
-  const httpServer = createServer();
+export async function startProductionBattleServer(
+  options: StartProductionBattleServerOptions = {}
+): Promise<ProductionBattleServerHandle> {
+  const networkBoundaryConfig = options.networkBoundaryConfig ??
+    parseNetworkBoundaryConfig({ NODE_ENV: 'test' });
+  const httpServer = createServer((request, response) => {
+    if (request.url === '/health') {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ ok: true, service: 'burningspace-server' }));
+      return;
+    }
+
+    response.writeHead(404, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ ok: false, error: 'not_found' }));
+  });
+  installPm2TelemetryFilterForWorkerIpc();
+  const networkBoundary = installNetworkBoundary(networkBoundaryConfig);
+
   let gameServer: Server;
 
   try {
     gameServer = new Server({
       transport: new WebSocketTransport({
-        server: httpServer
+        server: httpServer,
+        verifyClient: createWebSocketVerifyClient(networkBoundaryConfig)
       })
     });
   } catch (error) {
-    restoreWorkerIpc();
+    networkBoundary.restore();
     throw error;
   }
 
@@ -98,7 +130,7 @@ export async function startProductionBattleServer(): Promise<ProductionBattleSer
       await closeHttpServer(httpServer).catch(() => undefined);
     }
 
-    restoreWorkerIpc();
+    networkBoundary.restore();
     throw error;
   }
 
@@ -106,7 +138,10 @@ export async function startProductionBattleServer(): Promise<ProductionBattleSer
 
   if (!address || typeof address === 'string') {
     await gameServer.gracefullyShutdown(false).catch(() => undefined);
-    restoreWorkerIpc();
+    if (httpServer.listening) {
+      await closeHttpServer(httpServer).catch(() => undefined);
+    }
+    networkBoundary.restore();
     throw new Error('Unable to resolve production BattleRoom test server address.');
   }
 
@@ -127,7 +162,7 @@ export async function startProductionBattleServer(): Promise<ProductionBattleSer
           await closeHttpServer(httpServer).catch(() => undefined);
         }
       } finally {
-        restoreWorkerIpc();
+        networkBoundary.restore();
       }
     }
   };
