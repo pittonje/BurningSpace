@@ -88,19 +88,19 @@ is canonical after merged PR #50. DOCARCH-004 remains open but is paused;
 DOCARCH-004C v1 / PR #51 remains frozen draft historical evidence,
 DOCARCH-004C Attempt 5 is not authorized, and DOCARCH-004D is not active.
 
-BurningSpace runtime development has resumed. Wave 1 — Authority and Security
-Hardening is active, with SEC-006 as the current bounded runtime task. The
-accepted decision count remains 35. The current server-authoritative
-multiplayer arena remains the implementation foundation, while the local
-`GameScene` remains preserved non-authoritative prototype material.
+Runtime-first Wave 1 — Authority and Security Hardening development is active.
+SEC-006 is merged, production diagnostic isolation is established, and real
+production `BattleRoom` authority coverage is being expanded. The accepted
+decision count remains 35. The current server-authoritative multiplayer arena
+remains the implementation foundation, while the local `GameScene` remains
+preserved non-authoritative prototype material. Use `CURRENT.md` for the exact
+active bounded task.
 
 DOCARCH-005 — Role and Model Portability remains deferred. Use
 [CURRENT](docs/handoffs/CURRENT.md) as the live operational source.
 
 ## Known deferred work
 
-- Production-room multi-client authority coverage on the real `BattleRoom`
-  path remains the post-SEC-006 task boundary.
 - Branch protection and possible CI-004 remain dedicated CI work.
 - AGENT-004 and detailed role/model portability remain deferred to DOCARCH-005.
 - Persistence, accounts, and database work remain future implementation work.
