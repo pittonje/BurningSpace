@@ -1,0 +1,57 @@
+name: burningspace-staging
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/server.Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "2567"
+      BURNINGSPACE_ALLOWED_ORIGINS: ${BURNINGSPACE_ALLOWED_ORIGINS:?set BURNINGSPACE_ALLOWED_ORIGINS}
+      BURNINGSPACE_RECONNECT_GRACE_SECONDS: ${BURNINGSPACE_RECONNECT_GRACE_SECONDS:-10}
+      BURNINGSPACE_SHUTDOWN_TIMEOUT_SECONDS: ${BURNINGSPACE_SHUTDOWN_TIMEOUT_SECONDS:-15}
+      BURNINGSPACE_PROFILE_RATE_BURST: ${BURNINGSPACE_PROFILE_RATE_BURST:-8}
+      BURNINGSPACE_PROFILE_RATE_PER_SECOND: ${BURNINGSPACE_PROFILE_RATE_PER_SECOND:-1}
+      BURNINGSPACE_INPUT_RATE_BURST: ${BURNINGSPACE_INPUT_RATE_BURST:-80}
+      BURNINGSPACE_INPUT_RATE_PER_SECOND: ${BURNINGSPACE_INPUT_RATE_PER_SECOND:-40}
+    ports:
+      - "127.0.0.1:${BURNINGSPACE_SERVER_BIND_PORT:-2567}:2567"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    stop_grace_period: 20s
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:2567/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  client:
+    build:
+      context: ..
+      dockerfile: deploy/client.Dockerfile
+      args:
+        VITE_BURNINGSPACE_SERVER_URL: ${VITE_BURNINGSPACE_SERVER_URL:?set VITE_BURNINGSPACE_SERVER_URL}
+    ports:
+      - "127.0.0.1:${BURNINGSPACE_CLIENT_BIND_PORT:-8080}:8080"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s

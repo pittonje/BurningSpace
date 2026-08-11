@@ -42,6 +42,8 @@ jobs:
 
       - name: Build workspaces
         run: npm run build
+        env:
+          VITE_BURNINGSPACE_SERVER_URL: https://arena-api.example.invalid
 
       - name: Typecheck workspaces
         run: npm run typecheck
@@ -57,3 +59,59 @@ jobs:
 
       - name: Combat diagnostic
         run: npx tsx apps/server/scripts/combat-check.ts
+
+      - name: Validate staging containers and runtime lifecycle
+        shell: bash
+        env:
+          VITE_BURNINGSPACE_SERVER_URL: https://arena-api.example.invalid
+          BURNINGSPACE_SMOKE_SERVER_URL: http://127.0.0.1:2567
+          BURNINGSPACE_SMOKE_ORIGIN: https://arena.example.com
+          BURNINGSPACE_SMOKE_HOSTILE_ORIGIN: https://hostile.example.invalid
+        run: |
+          set -euo pipefail
+
+          project="burningspace-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          compose() {
+            docker compose \
+              -p "$project" \
+              --env-file deploy/staging.env.example \
+              -f deploy/docker-compose.staging.yml \
+              "$@"
+          }
+          cleanup() {
+            compose down --volumes --remove-orphans >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          compose config --quiet
+          compose build server client
+          compose up -d server client
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:2567/health >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              compose logs server
+              exit 1
+            fi
+            sleep 1
+          done
+
+          curl --fail --silent http://127.0.0.1:2567/ready >/dev/null
+          curl --fail --silent http://127.0.0.1:8080/ >/dev/null
+          npx tsx apps/server/scripts/public-arena-smoke.ts
+
+          server_id="$(compose ps -q server)"
+          compose stop server
+          exit_code="$(docker inspect --format '{{.State.ExitCode}}' "$server_id")"
+          test "$exit_code" -eq 0
+
+          docker logs "$server_id" >"$RUNNER_TEMP/burningspace-server.log" 2>&1
+          grep -q '"event":"shutdown_started"' "$RUNNER_TEMP/burningspace-server.log"
+          grep -q '"event":"shutdown_completed"' "$RUNNER_TEMP/burningspace-server.log"
+          if grep -q '"event":"shutdown_failed"' "$RUNNER_TEMP/burningspace-server.log"; then
+            exit 1
+          fi
+
+          compose down --volumes --remove-orphans
