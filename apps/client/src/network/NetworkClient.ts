@@ -20,6 +20,7 @@ import {
   type ShipDestroyedMessage,
   type ShipSnapshot
 } from '@burningspace/shared';
+import { loadClientRuntimeConfig } from '../config/runtimeConfig';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type Unsubscribe = () => void;
@@ -102,16 +103,9 @@ type HitEventCallback = (message: HitEventMessage) => void;
 type ShipDestroyedCallback = (message: ShipDestroyedMessage) => void;
 type ConnectionStateCallback = (state: ConnectionState) => void;
 
-const DEFAULT_SERVER_URL = 'http://localhost:2567';
 const CONSENTED_CLOSE_CODE = 4000;
 const RECONNECT_DELAYS_MS = Object.freeze([250, 500, 1000, 2000, 3000]);
-const importMetaEnv = (import.meta as ImportMeta & { env?: { DEV?: boolean; VITE_SERVER_URL?: string } }).env;
-const isDev = Boolean(importMetaEnv?.DEV);
-
-function getServerUrl(): string {
-  const envUrl = importMetaEnv?.VITE_SERVER_URL;
-  return typeof envUrl === 'string' && envUrl.trim().length > 0 ? envUrl.trim() : DEFAULT_SERVER_URL;
-}
+const isDev = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
 function toParticipant(schema: ParticipantStateSchema): RoomParticipant {
   return {
@@ -204,7 +198,9 @@ export class NetworkClient {
   private readonly projectileDisposers = new Map<string, Unsubscribe>();
 
   constructor(options: NetworkClientOptions = {}) {
-    this.client = new Client(options.serverUrl ?? getServerUrl());
+    this.client = new Client(
+      options.serverUrl ?? loadClientRuntimeConfig().serverOrigin
+    );
     this.roomName = options.roomName ?? 'battle';
   }
 
