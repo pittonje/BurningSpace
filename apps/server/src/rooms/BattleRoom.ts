@@ -128,6 +128,7 @@ export class BattleRoom extends Room<BattleState> {
   private readonly inputs = new Map<string, PlayerInputMessage>();
   private readonly weapons = new Map<string, WeaponRuntimeState>();
   private readonly lastInputReceivedAt = new Map<string, number>();
+  private readonly finalizedSessions = new Set<string>();
   private nextProjectileId = 1;
 
   onCreate(): void {
@@ -161,18 +162,65 @@ export class BattleRoom extends Room<BattleState> {
     console.log(`[BattleRoom] joined sessionId=${client.sessionId}`);
   }
 
-  onLeave(client: Client, consented?: boolean): void {
-    this.state.participants.delete(client.sessionId);
-    this.removeShip(client.sessionId);
-    this.inputs.delete(client.sessionId);
-    this.weapons.delete(client.sessionId);
-    this.lastInputReceivedAt.delete(client.sessionId);
-    this.profileMessageLimiter.delete(client.sessionId);
-    this.playerInputLimiter.delete(client.sessionId);
-    this.lastProfileRateLimitNoticeAt.delete(client.sessionId);
+  async onLeave(client: Client, consented?: boolean): Promise<void> {
+    if (consented) {
+      this.finalizeSession(client.sessionId, true);
+      return;
+    }
+
+    this.neutralizeInput(client.sessionId);
     this.sendRoomInfo();
 
-    console.log(`[BattleRoom] left sessionId=${client.sessionId} consented=${Boolean(consented)}`);
+    try {
+      await this.allowReconnection(
+        client,
+        this.networkBoundaryConfig.reconnectGraceSeconds
+      );
+      this.sendRoomInfo();
+    } catch (error) {
+      if (!this.isExpectedReconnectionRejection(error)) {
+        throw error;
+      }
+
+      this.finalizeSession(client.sessionId, false);
+    }
+  }
+
+  private neutralizeInput(sessionId: string): void {
+    const ship = this.state.ships.get(sessionId);
+    const previousInput = this.inputs.get(sessionId);
+    const sequence = previousInput?.sequence ?? ship?.lastProcessedInput ?? 0;
+    const neutralInput = createNeutralInput(sequence);
+
+    neutralInput.aimAngle = previousInput?.aimAngle ?? ship?.rotation ?? 0;
+    this.inputs.set(sessionId, neutralInput);
+    this.lastInputReceivedAt.delete(sessionId);
+  }
+
+  private isExpectedReconnectionRejection(error: unknown): boolean {
+    return (
+      error === false ||
+      (error instanceof Error && (error.message === 'disconnecting' || error.message === 'disposing'))
+    );
+  }
+
+  private finalizeSession(sessionId: string, consented: boolean): void {
+    if (this.finalizedSessions.has(sessionId)) {
+      return;
+    }
+
+    this.finalizedSessions.add(sessionId);
+    this.state.participants.delete(sessionId);
+    this.removeShip(sessionId);
+    this.inputs.delete(sessionId);
+    this.weapons.delete(sessionId);
+    this.lastInputReceivedAt.delete(sessionId);
+    this.profileMessageLimiter.delete(sessionId);
+    this.playerInputLimiter.delete(sessionId);
+    this.lastProfileRateLimitNoticeAt.delete(sessionId);
+    this.sendRoomInfo();
+
+    console.log(`[BattleRoom] left sessionId=${sessionId} consented=${consented}`);
   }
 
   private handleSetProfile(client: Client, message: unknown): void {

@@ -103,6 +103,8 @@ type ShipDestroyedCallback = (message: ShipDestroyedMessage) => void;
 type ConnectionStateCallback = (state: ConnectionState) => void;
 
 const DEFAULT_SERVER_URL = 'http://localhost:2567';
+const CONSENTED_CLOSE_CODE = 4000;
+const RECONNECT_DELAYS_MS = Object.freeze([250, 500, 1000, 2000, 3000]);
 const importMetaEnv = (import.meta as ImportMeta & { env?: { DEV?: boolean; VITE_SERVER_URL?: string } }).env;
 const isDev = Boolean(importMetaEnv?.DEV);
 
@@ -173,6 +175,12 @@ export class NetworkClient {
   private roomInfo?: RoomInfoMessage;
   private acceptedProfile?: ProfileAcceptedMessage;
   private connectingPromise?: Promise<void>;
+  private disconnectingPromise?: Promise<void>;
+  private reconnectionToken?: string;
+  private connectionEpoch = 0;
+  private reconnectTimer?: ReturnType<typeof setTimeout>;
+  private resolveReconnectDelay?: (active: boolean) => void;
+  private disposed = false;
   private inputSequence = 0;
   private serverClockOffsetMs = 0;
   private readonly participants = new Map<string, RoomParticipant>();
@@ -230,17 +238,26 @@ export class NetworkClient {
   }
 
   async connect(): Promise<void> {
+    if (this.disposed) {
+      this.setConnectionState('error', 'This network client has been disposed.');
+      return;
+    }
+
     if (this.room || this.connectingPromise) {
       return this.connectingPromise ?? Promise.resolve();
     }
 
+    const epoch = this.beginConnectionOperation();
     this.setConnectionState('connecting');
-    this.connectingPromise = this.connectInternal();
+    const operation = this.connectInternal(epoch);
+    this.connectingPromise = operation;
 
     try {
-      await this.connectingPromise;
+      await operation;
     } finally {
-      this.connectingPromise = undefined;
+      if (this.connectingPromise === operation) {
+        this.connectingPromise = undefined;
+      }
     }
   }
 
@@ -274,24 +291,25 @@ export class NetworkClient {
   }
 
   async disconnect(): Promise<void> {
-    const room = this.room;
-
-    this.clearRoomListeners();
-    this.room = undefined;
-    this.roomInfo = undefined;
-    this.acceptedProfile = undefined;
-    this.profileError = undefined;
-    this.inputSequence = 0;
-    this.serverClockOffsetMs = 0;
-    this.clearParticipants();
-    this.clearShips();
-    this.clearProjectiles();
-
-    if (room) {
-      await room.leave(true);
+    if (this.disconnectingPromise) {
+      return this.disconnectingPromise;
     }
 
-    this.setConnectionState('disconnected');
+    const operation = this.disconnectInternal();
+    this.disconnectingPromise = operation;
+
+    try {
+      await operation;
+    } finally {
+      if (this.disconnectingPromise === operation) {
+        this.disconnectingPromise = undefined;
+      }
+    }
+  }
+
+  async dispose(): Promise<void> {
+    this.disposed = true;
+    await this.disconnect();
   }
 
   onParticipantAdded(callback: ParticipantCallback): Unsubscribe {
@@ -355,17 +373,24 @@ export class NetworkClient {
     return () => this.connectionCallbacks.delete(callback);
   }
 
-  private async connectInternal(): Promise<void> {
+  private async connectInternal(epoch: number): Promise<void> {
     try {
       const room = await this.client.joinOrCreate<BattleStateSchema>(this.roomName);
-      this.room = room;
-      this.registerRoomListeners(room);
-      this.registerParticipantListeners(room);
-      this.registerShipListeners(room);
-      this.registerProjectileListeners(room);
+
+      if (!this.isConnectionOperationActive(epoch)) {
+        await room.leave(true).catch(() => undefined);
+        return;
+      }
+
+      this.bindRoom(room, epoch);
       this.setConnectionState('connected');
     } catch (error) {
+      if (!this.isConnectionOperationActive(epoch)) {
+        return;
+      }
+
       this.room = undefined;
+      this.reconnectionToken = undefined;
       this.clearRoomListeners();
       this.profileError = undefined;
       this.clearParticipants();
@@ -375,66 +400,144 @@ export class NetworkClient {
     }
   }
 
-  private registerRoomListeners(room: Room<BattleStateSchema>): void {
+  private bindRoom(room: Room<BattleStateSchema>, epoch: number): void {
+    const previousRoom = this.room;
+
+    if (previousRoom && previousRoom !== room) {
+      this.clearRoomListeners(previousRoom);
+    }
+
+    this.room = room;
+    this.reconnectionToken = room.reconnectionToken;
+    this.registerRoomListeners(room, epoch);
+    this.registerParticipantListeners(room, epoch);
+    this.registerShipListeners(room, epoch);
+    this.registerProjectileListeners(room, epoch);
+
+    const handleStateChange = (): void => {
+      if (this.isActiveRoom(room, epoch)) {
+        this.reconcileAuthoritativeState(room);
+      }
+    };
+    room.onStateChange(handleStateChange);
+    this.roomDisposers.push(() => room.onStateChange.remove(handleStateChange));
+  }
+
+  private registerRoomListeners(room: Room<BattleStateSchema>, epoch: number): void {
     room.onMessage<ProfileAcceptedMessage>(ProfileServerMessages.PROFILE_ACCEPTED, (message) => {
+      if (!this.isActiveRoom(room, epoch)) {
+        return;
+      }
+
       this.acceptedProfile = message;
       this.profileError = undefined;
       this.setConnectionState('connected', undefined, this.roomInfo);
     });
 
     room.onMessage<ProfileRejectedMessage>(ProfileServerMessages.PROFILE_REJECTED, (message) => {
+      if (!this.isActiveRoom(room, epoch)) {
+        return;
+      }
+
       this.profileError = message.reason;
       this.emitConnectionState();
     });
 
     room.onMessage<RoomInfoMessage>(ServerMessages.ROOM_INFO, (message) => {
+      if (!this.isActiveRoom(room, epoch)) {
+        return;
+      }
+
       this.roomInfo = message;
       this.serverClockOffsetMs = message.serverTime - Date.now();
       this.emitConnectionState();
     });
 
     room.onMessage<HitEventMessage>(ServerMessages.HIT_EVENT, (message) => {
+      if (!this.isActiveRoom(room, epoch)) {
+        return;
+      }
+
       for (const callback of this.hitEventCallbacks) {
         callback(message);
       }
     });
 
     room.onMessage<ShipDestroyedMessage>(ServerMessages.SHIP_DESTROYED, (message) => {
+      if (!this.isActiveRoom(room, epoch)) {
+        return;
+      }
+
       for (const callback of this.shipDestroyedCallbacks) {
         callback(message);
       }
     });
 
     room.onError((code, message) => {
+      if (!this.isActiveRoom(room, epoch)) {
+        return;
+      }
+
       this.setConnectionState('error', message ?? `Room error ${code}.`, this.roomInfo);
     });
 
     room.onLeave((code) => {
-      this.clearRoomListeners();
+      if (!this.isActiveRoom(room, epoch)) {
+        return;
+      }
+
+      const token = this.reconnectionToken;
+      this.clearRoomListeners(room);
       this.room = undefined;
       this.roomInfo = undefined;
-      this.acceptedProfile = undefined;
       this.profileError = undefined;
-      this.inputSequence = 0;
       this.serverClockOffsetMs = 0;
-      this.clearParticipants();
-      this.clearShips();
-      this.clearProjectiles();
-      this.setConnectionState(code === 1000 ? 'disconnected' : 'error', code === 1000 ? undefined : `Disconnected (${code}).`);
+
+      if (code === CONSENTED_CLOSE_CODE || !token || this.disposed) {
+        this.reconnectionToken = undefined;
+        this.acceptedProfile = undefined;
+        this.inputSequence = 0;
+        this.clearParticipants();
+        this.clearShips();
+        this.clearProjectiles();
+        this.setConnectionState(
+          code === CONSENTED_CLOSE_CODE ? 'disconnected' : 'error',
+          code === CONSENTED_CLOSE_CODE ? undefined : `Disconnected (${code}).`
+        );
+        return;
+      }
+
+      const reconnectEpoch = this.beginConnectionOperation();
+      this.setConnectionState('connecting');
+      const operation = this.reconnectInternal(token, reconnectEpoch);
+      this.connectingPromise = operation;
+      void operation.finally(() => {
+        if (this.connectingPromise === operation) {
+          this.connectingPromise = undefined;
+        }
+      });
     });
   }
 
-  private registerParticipantListeners(room: Room<BattleStateSchema>): void {
+  private registerParticipantListeners(room: Room<BattleStateSchema>, epoch: number): void {
     const $ = getStateCallbacks(room);
     const participantsCallbacks = $(room.state).participants;
 
     this.roomDisposers.push(
       participantsCallbacks.onAdd((participant, sessionId) => {
-        this.registerParticipantChangeListener($, participant, sessionId);
+        if (!this.isActiveRoom(room, epoch)) {
+          return;
+        }
+
+        this.registerParticipantChangeListener($, participant, sessionId, room, epoch);
         this.upsertParticipant(toParticipant(participant), 'added');
         this.logParticipantEvent('added', sessionId);
       }, true),
       participantsCallbacks.onRemove((_participant, sessionId) => {
+        if (!this.isActiveRoom(room, epoch)) {
+          return;
+        }
+
         this.removeParticipantChangeListener(sessionId);
         this.participants.delete(sessionId);
         this.logParticipantEvent('removed', sessionId);
@@ -446,17 +549,25 @@ export class NetworkClient {
     );
   }
 
-  private registerShipListeners(room: Room<BattleStateSchema>): void {
+  private registerShipListeners(room: Room<BattleStateSchema>, epoch: number): void {
     const $ = getStateCallbacks(room);
     const shipsCallbacks = $(room.state).ships;
 
     this.roomDisposers.push(
       shipsCallbacks.onAdd((ship, shipId) => {
-        this.registerShipChangeListener($, ship, shipId);
+        if (!this.isActiveRoom(room, epoch)) {
+          return;
+        }
+
+        this.registerShipChangeListener($, ship, shipId, room, epoch);
         this.upsertShip(toShipSnapshot(ship), 'added');
         this.logShipEvent('added', shipId);
       }, true),
       shipsCallbacks.onRemove((_ship, shipId) => {
+        if (!this.isActiveRoom(room, epoch)) {
+          return;
+        }
+
         this.removeShipChangeListener(shipId);
         this.ships.delete(shipId);
         this.logShipEvent('removed', shipId);
@@ -468,16 +579,24 @@ export class NetworkClient {
     );
   }
 
-  private registerProjectileListeners(room: Room<BattleStateSchema>): void {
+  private registerProjectileListeners(room: Room<BattleStateSchema>, epoch: number): void {
     const $ = getStateCallbacks(room);
     const projectilesCallbacks = $(room.state).projectiles;
 
     this.roomDisposers.push(
       projectilesCallbacks.onAdd((projectile, projectileId) => {
-        this.registerProjectileChangeListener($, projectile, projectileId);
+        if (!this.isActiveRoom(room, epoch)) {
+          return;
+        }
+
+        this.registerProjectileChangeListener($, projectile, projectileId, room, epoch);
         this.upsertProjectile(toProjectileSnapshot(projectile), 'added');
       }, true),
       projectilesCallbacks.onRemove((_projectile, projectileId) => {
+        if (!this.isActiveRoom(room, epoch)) {
+          return;
+        }
+
         this.removeProjectileChangeListener(projectileId);
         this.projectiles.delete(projectileId);
 
@@ -491,11 +610,17 @@ export class NetworkClient {
   private registerShipChangeListener(
     $: StateCallbacks,
     ship: ShipStateSchema,
-    shipId: string
+    shipId: string,
+    room: Room<BattleStateSchema>,
+    epoch: number
   ): void {
     this.removeShipChangeListener(shipId);
 
     const dispose = $(ship).onChange(() => {
+      if (!this.isActiveRoom(room, epoch)) {
+        return;
+      }
+
       this.upsertShip(toShipSnapshot(ship), 'changed');
     });
 
@@ -514,11 +639,17 @@ export class NetworkClient {
   private registerProjectileChangeListener(
     $: StateCallbacks,
     projectile: ProjectileStateSchema,
-    projectileId: string
+    projectileId: string,
+    room: Room<BattleStateSchema>,
+    epoch: number
   ): void {
     this.removeProjectileChangeListener(projectileId);
 
     const dispose = $(projectile).onChange(() => {
+      if (!this.isActiveRoom(room, epoch)) {
+        return;
+      }
+
       this.upsertProjectile(toProjectileSnapshot(projectile), 'changed');
     });
 
@@ -537,11 +668,17 @@ export class NetworkClient {
   private registerParticipantChangeListener(
     $: StateCallbacks,
     participant: ParticipantStateSchema,
-    sessionId: string
+    sessionId: string,
+    room: Room<BattleStateSchema>,
+    epoch: number
   ): void {
     this.removeParticipantChangeListener(sessionId);
 
     const dispose = $(participant).onChange(() => {
+      if (!this.isActiveRoom(room, epoch)) {
+        return;
+      }
+
       this.upsertParticipant(toParticipant(participant), 'changed');
       this.logParticipantEvent('changed', sessionId);
     });
@@ -671,7 +808,7 @@ export class NetworkClient {
     this.participantDisposers.clear();
   }
 
-  private clearRoomListeners(): void {
+  private clearRoomListeners(room = this.room): void {
     for (const dispose of this.roomDisposers.splice(0)) {
       dispose();
     }
@@ -679,7 +816,152 @@ export class NetworkClient {
     this.clearParticipantChangeListeners();
     this.clearShipChangeListeners();
     this.clearProjectileChangeListeners();
-    this.room?.removeAllListeners();
+    room?.removeAllListeners();
+  }
+
+  private beginConnectionOperation(): number {
+    this.connectionEpoch += 1;
+    this.cancelReconnectDelay();
+    return this.connectionEpoch;
+  }
+
+  private isConnectionOperationActive(epoch: number): boolean {
+    return this.connectionEpoch === epoch && !this.disposed;
+  }
+
+  private isActiveRoom(room: Room<BattleStateSchema>, epoch: number): boolean {
+    return this.room === room && this.connectionEpoch === epoch && !this.disposed;
+  }
+
+  private async reconnectInternal(token: string, epoch: number): Promise<void> {
+    let finalError: unknown;
+
+    for (const delayMs of RECONNECT_DELAYS_MS) {
+      if (!await this.waitForReconnectDelay(delayMs, epoch)) {
+        return;
+      }
+
+      try {
+        const room = await this.client.reconnect<BattleStateSchema>(token);
+
+        if (!this.isConnectionOperationActive(epoch)) {
+          await room.leave(true).catch(() => undefined);
+          return;
+        }
+
+        this.bindRoom(room, epoch);
+        this.setConnectionState('connected');
+        return;
+      } catch (error) {
+        if (!this.isConnectionOperationActive(epoch)) {
+          return;
+        }
+
+        finalError = error;
+      }
+    }
+
+    if (!this.isConnectionOperationActive(epoch)) {
+      return;
+    }
+
+    this.reconnectionToken = undefined;
+    this.acceptedProfile = undefined;
+    this.inputSequence = 0;
+    this.clearParticipants();
+    this.clearShips();
+    this.clearProjectiles();
+    const message = finalError instanceof Error
+      ? finalError.message
+      : 'Reconnect attempts exhausted.';
+    this.setConnectionState('error', message);
+  }
+
+  private waitForReconnectDelay(delayMs: number, epoch: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.isConnectionOperationActive(epoch)) {
+        resolve(false);
+        return;
+      }
+
+      this.resolveReconnectDelay = resolve;
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = undefined;
+        this.resolveReconnectDelay = undefined;
+        resolve(this.isConnectionOperationActive(epoch));
+      }, delayMs);
+    });
+  }
+
+  private cancelReconnectDelay(): void {
+    if (this.reconnectTimer !== undefined) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+
+    const resolve = this.resolveReconnectDelay;
+    this.resolveReconnectDelay = undefined;
+    resolve?.(false);
+  }
+
+  private async disconnectInternal(): Promise<void> {
+    this.beginConnectionOperation();
+    const room = this.room;
+
+    this.clearRoomListeners(room);
+    this.room = undefined;
+    this.reconnectionToken = undefined;
+    this.roomInfo = undefined;
+    this.acceptedProfile = undefined;
+    this.profileError = undefined;
+    this.inputSequence = 0;
+    this.serverClockOffsetMs = 0;
+    this.clearParticipants();
+    this.clearShips();
+    this.clearProjectiles();
+
+    try {
+      if (room) {
+        await room.leave(true);
+      }
+    } finally {
+      this.setConnectionState('disconnected');
+    }
+  }
+
+  private reconcileAuthoritativeState(room: Room<BattleStateSchema>): void {
+    for (const sessionId of Array.from(this.participants.keys())) {
+      if (!room.state.participants.has(sessionId)) {
+        this.removeParticipantChangeListener(sessionId);
+        this.participants.delete(sessionId);
+
+        for (const callback of this.participantRemovedCallbacks) {
+          callback(sessionId);
+        }
+      }
+    }
+
+    for (const shipId of Array.from(this.ships.keys())) {
+      if (!room.state.ships.has(shipId)) {
+        this.removeShipChangeListener(shipId);
+        this.ships.delete(shipId);
+
+        for (const callback of this.shipRemovedCallbacks) {
+          callback(shipId);
+        }
+      }
+    }
+
+    for (const projectileId of Array.from(this.projectiles.keys())) {
+      if (!room.state.projectiles.has(projectileId)) {
+        this.removeProjectileChangeListener(projectileId);
+        this.projectiles.delete(projectileId);
+
+        for (const callback of this.projectileRemovedCallbacks) {
+          callback(projectileId);
+        }
+      }
+    }
   }
 
   private setConnectionState(status: ConnectionStatus, error?: string, roomInfo = this.roomInfo): void {

@@ -11,6 +11,7 @@ export const DEFAULT_PROFILE_RATE_BURST = 8;
 export const DEFAULT_PROFILE_RATE_PER_SECOND = 1;
 export const DEFAULT_INPUT_RATE_BURST = 80;
 export const DEFAULT_INPUT_RATE_PER_SECOND = 40;
+export const DEFAULT_RECONNECT_GRACE_SECONDS = 10;
 
 const ORIGIN_REJECTION_REASON = 'Origin is not allowed.';
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
@@ -29,6 +30,7 @@ export interface NetworkBoundaryConfig {
   readonly allowMissingOrigin: boolean;
   readonly profileRateLimit: MessageRateLimitConfig;
   readonly inputRateLimit: MessageRateLimitConfig;
+  readonly reconnectGraceSeconds: number;
   readonly monotonicNow: MonotonicClock;
 }
 
@@ -39,6 +41,7 @@ export interface NetworkBoundaryEnvironment {
   readonly BURNINGSPACE_PROFILE_RATE_PER_SECOND?: string;
   readonly BURNINGSPACE_INPUT_RATE_BURST?: string;
   readonly BURNINGSPACE_INPUT_RATE_PER_SECOND?: string;
+  readonly BURNINGSPACE_RECONNECT_GRACE_SECONDS?: string;
 }
 
 export interface NetworkBoundaryParseOptions {
@@ -107,6 +110,24 @@ function parseFinitePositive(
     (kind === 'refill' && value < MINIMUM_FINITE_RETRY_REFILL_RATE)
   ) {
     throw new Error(`${variableName} is outside the precision-safe token-bucket range.`);
+  }
+
+  return value;
+}
+
+function parseReconnectGraceSeconds(environmentValue: string | undefined): number {
+  if (environmentValue === undefined) {
+    return DEFAULT_RECONNECT_GRACE_SECONDS;
+  }
+
+  if (environmentValue.trim().length === 0) {
+    throw new Error('BURNINGSPACE_RECONNECT_GRACE_SECONDS must be an integer from 1 to 60.');
+  }
+
+  const value = Number(environmentValue);
+
+  if (!Number.isInteger(value) || value < 1 || value > 60) {
+    throw new Error('BURNINGSPACE_RECONNECT_GRACE_SECONDS must be an integer from 1 to 60.');
   }
 
   return value;
@@ -268,6 +289,9 @@ export function parseNetworkBoundaryConfig(
     allowMissingOrigin: !production,
     profileRateLimit,
     inputRateLimit,
+    reconnectGraceSeconds: parseReconnectGraceSeconds(
+      environment.BURNINGSPACE_RECONNECT_GRACE_SECONDS
+    ),
     monotonicNow: options.monotonicNow ?? performance.now.bind(performance)
   });
 }
