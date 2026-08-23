@@ -7,6 +7,7 @@ import { NetworkProjectileView } from '../entities/NetworkProjectileView';
 import { NetworkShipView } from '../entities/NetworkShipView';
 import { networkClient } from '../network/networkSession';
 import type { ConnectionState, PlayerInputPayload, Unsubscribe } from '../network/NetworkClient';
+import { getConnectionPresentationCopy } from '../network/connectionPresentation';
 import { SpaceMap } from '../world/SpaceMap';
 import {
   WORLD_HEIGHT,
@@ -30,6 +31,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyEsc?: Phaser.Input.Keyboard.Key;
   private hudText?: Phaser.GameObjects.Text;
+  private connectionBanner?: Phaser.GameObjects.Text;
   private respawnText?: Phaser.GameObjects.Text;
   private readonly shipViews = new Map<string, NetworkShipView>();
   private readonly projectileViews = new Map<string, NetworkProjectileView>();
@@ -37,7 +39,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
   private inputAccumulatorMs = 0;
   private spectatorCameraVelocityX = 0;
   private spectatorCameraVelocityY = 0;
-  private connectionState: ConnectionState = { status: 'disconnected' };
+  private connectionState: ConnectionState = networkClient.getConnectionState();
 
   constructor() {
     super('MultiplayerGameScene');
@@ -97,6 +99,20 @@ export class MultiplayerGameScene extends Phaser.Scene {
     });
     this.hudText.setScrollFactor(0);
     this.hudText.setDepth(100);
+    this.connectionBanner = this.add.text(0, 14, '', {
+      align: 'center',
+      backgroundColor: '#78350f',
+      color: '#fef3c7',
+      fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace',
+      fontSize: '13px',
+      padding: { x: 12, y: 8 },
+      stroke: '#020617',
+      strokeThickness: 3
+    });
+    this.connectionBanner.setOrigin(0.5, 0);
+    this.connectionBanner.setScrollFactor(0);
+    this.connectionBanner.setDepth(102);
+    this.connectionBanner.setVisible(false);
     this.respawnText = this.add.text(0, 0, '', {
       align: 'center',
       color: '#f8fafc',
@@ -113,12 +129,16 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   private bindNetwork(): void {
-    this.connectionState = { status: networkClient.getSessionId() ? 'connected' : 'disconnected' };
+    this.connectionState = networkClient.getConnectionState();
+    this.renderConnectionPresentation();
     this.disposers.push(
       networkClient.onConnectionStateChanged((state) => {
         this.connectionState = state;
+        this.renderConnectionPresentation();
 
-        if (state.status === 'disconnected' || state.status === 'error') {
+        if (state.lifecycle === 'idle'
+          || state.lifecycle === 'connection_problem'
+          || state.lifecycle === 'terminal_failure') {
           this.scene.start('NetworkTestScene');
         }
       }),
@@ -322,10 +342,11 @@ export class MultiplayerGameScene extends Phaser.Scene {
 
     const profile = networkClient.profile;
     const ownShip = this.getOwnShipSnapshot();
+    const connectionCopy = getConnectionPresentationCopy(this.connectionState);
     const factionLabel = profile?.mode === 'player' ? profile.faction ?? '-' : 'spectator';
     const hpLabel = ownShip ? `${Math.ceil(ownShip.health)} / ${ownShip.maxHealth}` : '-';
     this.hudText.setText([
-      `Status: ${this.connectionState.status}`,
+      `Status: ${connectionCopy.label}`,
       `Nickname: ${profile?.nickname ?? '-'}`,
       `Mode: ${factionLabel}`,
       `HP: ${hpLabel}`,
@@ -339,8 +360,36 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   private layoutHud(): void {
-    this.hudText?.setPosition(16, 14);
+    this.connectionBanner?.setPosition(this.scale.width / 2, 14);
+    this.connectionBanner?.setWordWrapWidth(
+      Math.min(520, Math.max(280, this.scale.width - 32)),
+      true
+    );
+    const hudTop = this.connectionBanner?.visible
+      ? 26 + this.connectionBanner.displayHeight
+      : 14;
+    this.hudText?.setPosition(16, hudTop);
     this.respawnText?.setPosition(this.scale.width / 2, this.scale.height * 0.42);
+  }
+
+  private renderConnectionPresentation(): void {
+    if (!this.connectionBanner) {
+      return;
+    }
+
+    const copy = getConnectionPresentationCopy(this.connectionState);
+    const visible = this.connectionState.lifecycle === 'connection_lost'
+      || this.connectionState.lifecycle === 'reconnecting'
+      || this.connectionState.lifecycle === 'reconnected'
+      || this.connectionState.lifecycle === 'connection_problem'
+      || Boolean(this.connectionState.error);
+
+    this.connectionBanner.setText(`${copy.label} — ${this.connectionState.error ?? copy.detail}`);
+    const successful = copy.tone === 'success' && !this.connectionState.error;
+    this.connectionBanner.setBackgroundColor(successful ? '#14532d' : '#78350f');
+    this.connectionBanner.setColor(successful ? '#dcfce7' : '#fef3c7');
+    this.connectionBanner.setVisible(visible);
+    this.layoutHud();
   }
 
   private updateRespawnOverlay(ownShip: ShipSnapshot | undefined): void {

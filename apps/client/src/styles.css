@@ -161,6 +161,7 @@ canvas {
 }
 
 .network-test__status,
+.network-test__status-detail,
 .network-test__room-info,
 .network-test__error {
   margin-top: 7px;
@@ -168,15 +169,20 @@ canvas {
   font-size: 13px;
 }
 
-.network-test__status-value[data-status="connected"] {
+.network-test__status-detail {
+  color: #bfdbfe;
+}
+
+.network-test__status-value[data-tone="success"] {
   color: #86efac;
 }
 
-.network-test__status-value[data-status="connecting"] {
+.network-test__status-value[data-tone="progress"],
+.network-test__status-value[data-tone="warning"] {
   color: #fde68a;
 }
 
-.network-test__status-value[data-status="error"],
+.network-test__status-value[data-tone="failure"],
 .network-test__error {
   color: #fca5a5;
 }

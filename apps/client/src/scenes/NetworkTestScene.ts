@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { JoinMode, JoinRequest, RoomParticipant } from '@burningspace/protocol';
 import type { Faction } from '@burningspace/shared';
 import { NetworkClient, type ConnectionState, type Unsubscribe } from '../network/NetworkClient';
+import { getConnectionPresentationCopy } from '../network/connectionPresentation';
 import { networkClient } from '../network/networkSession';
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -26,6 +27,7 @@ export class NetworkTestScene extends Phaser.Scene {
   private network?: NetworkClient;
   private root?: HTMLDivElement;
   private statusValue?: HTMLSpanElement;
+  private statusDetail?: HTMLDivElement;
   private errorText?: HTMLDivElement;
   private profileErrorText?: HTMLDivElement;
   private roomInfoText?: HTMLDivElement;
@@ -38,7 +40,7 @@ export class NetworkTestScene extends Phaser.Scene {
   private enterMultiplayerButton?: HTMLButtonElement;
   private disconnectButton?: HTMLButtonElement;
   private participantsList?: HTMLUListElement;
-  private connectionState: ConnectionState = { status: 'disconnected' };
+  private connectionState: ConnectionState = networkClient.getConnectionState();
   private readonly disposers: Unsubscribe[] = [];
   private keepConnectionOnShutdown = false;
 
@@ -58,14 +60,15 @@ export class NetworkTestScene extends Phaser.Scene {
   private createUi(): void {
     const root = createElement('div', 'network-test');
     const panel = createElement('section', 'network-test__panel');
-    const title = createElement('h1', 'network-test__title', 'BurningSpace Multiplayer Test');
+    const title = createElement('h1', 'network-test__title', 'BurningSpace Public Arena');
 
     const status = createElement('div', 'network-test__status');
     status.append('Server: ');
-    this.statusValue = createElement('span', 'network-test__status-value', 'disconnected');
+    this.statusValue = createElement('span', 'network-test__status-value', 'Not connected');
     status.append(this.statusValue);
 
     this.roomInfoText = createElement('div', 'network-test__room-info', '');
+    this.statusDetail = createElement('div', 'network-test__status-detail', '');
     this.errorText = createElement('div', 'network-test__error', '');
     this.profileErrorText = createElement('div', 'network-test__error', '');
 
@@ -106,6 +109,7 @@ export class NetworkTestScene extends Phaser.Scene {
     panel.append(
       title,
       status,
+      this.statusDetail,
       this.roomInfoText,
       this.errorText,
       this.profileErrorText,
@@ -120,7 +124,9 @@ export class NetworkTestScene extends Phaser.Scene {
 
     this.connectButton.addEventListener('click', () => {
       void this.network?.connect().then(() => {
-        this.network?.setProfile(this.getProfile());
+        if (this.network?.getConnectionState().status === 'connected') {
+          this.network.setProfile(this.getProfile());
+        }
       });
     });
     this.applyButton.addEventListener('click', () => this.network?.setProfile(this.getProfile()));
@@ -182,10 +188,17 @@ export class NetworkTestScene extends Phaser.Scene {
 
   private render(): void {
     const status = this.connectionState.status;
+    const presentation = getConnectionPresentationCopy(this.connectionState);
 
     if (this.statusValue) {
-      this.statusValue.textContent = status;
-      this.statusValue.dataset.status = status;
+      this.statusValue.textContent = presentation.label;
+      this.statusValue.dataset.lifecycle = this.connectionState.lifecycle;
+      this.statusValue.dataset.tone = presentation.tone;
+    }
+
+    if (this.statusDetail) {
+      this.statusDetail.textContent = presentation.detail;
+      this.statusDetail.hidden = this.connectionState.lifecycle === 'terminal_failure';
     }
 
     if (this.errorText) {
@@ -206,23 +219,25 @@ export class NetworkTestScene extends Phaser.Scene {
     }
 
     const connected = status === 'connected';
-    const canDisconnect = status === 'connected' || status === 'error';
-    const connecting = status === 'connecting';
+    const operationActive = this.connectionState.operation !== 'none';
+    const canDisconnect = connected || this.connectionState.recovery === 'disconnect';
+    const canRetry = this.connectionState.recovery === 'retry_connection';
 
     if (this.connectButton) {
-      this.connectButton.disabled = connecting || canDisconnect;
+      this.connectButton.textContent = canRetry ? 'Start new connection' : 'Connect';
+      this.connectButton.disabled = operationActive || canDisconnect;
     }
 
     if (this.applyButton) {
-      this.applyButton.disabled = !connected || connecting;
+      this.applyButton.disabled = !connected || operationActive;
     }
 
     if (this.enterMultiplayerButton) {
-      this.enterMultiplayerButton.disabled = !this.network?.profile || !connected || connecting;
+      this.enterMultiplayerButton.disabled = !this.network?.profile || !connected || operationActive;
     }
 
     if (this.disconnectButton) {
-      this.disconnectButton.disabled = !canDisconnect || connecting;
+      this.disconnectButton.disabled = !canDisconnect || operationActive;
     }
 
     const spectator = this.modeSelect?.value === 'spectator';
