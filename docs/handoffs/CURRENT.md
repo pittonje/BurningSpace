@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-08-11
-Updated by: Codex — OPS-001 post-merge reconciliation
+Last updated: 2026-08-23
+Updated by: Codex — UX-001 authority bootstrap
 
 ## Repository state
 
@@ -48,7 +48,13 @@ Updated by: Codex — OPS-001 post-merge reconciliation
 - SEC-007 and NET-001 remain complete. This reconciliation makes no runtime,
   gameplay, protocol, campaign, account, persistence, authority, reconnect,
   accepted-decision, package-contract, or dependency change.
-- UX-001 implementation is NOT STARTED and NOT YET AUTHORIZED.
+- UX-001 — Public Arena Connection, Error, and Reconnect UX is `AUTHORITY
+  DEFINED / IMPLEMENTATION NOT STARTED`. Its bounded authority is defined by
+  `docs/tasks/ux-001-public-arena-connection-error-reconnect-ux.md` and becomes
+  effective when this bootstrap is present on `main`.
+- UX-001 introduces no accepted game-design decision. The accepted decision
+  count remains 35, the campaign roadmap remains unchanged, DOCARCH-004
+  remains paused, and external Public Arena deployment remains unperformed.
 
 ## Review and merge gate
 
@@ -59,13 +65,18 @@ are complete. Human merge of PR #57 is complete. The earlier
 implementation-head Category-C infrastructure override remains historical
 evidence and is not a failing gate on the merged state.
 
-This LOW-RISK documentation-only reconciliation requires Core checks, human
-review, and human-only merge. Claude QA is advisory unless it identifies a
-concrete factual error. No external deployment is authorized.
+The UX-001 authority bootstrap is a LOW-RISK documentation-only change. The
+future UX-001 implementation is NORMAL risk and requires Core CI/tests,
+independent Network/Runtime review, independent Visual/UX review, Product
+Architect approval, and human merge. Claude QA is advisory/non-blocking unless
+risk is elevated or scope expands into a HIGH-RISK boundary. Gameplay,
+Security, and Architecture review triggers remain as defined by the task. No
+external deployment is authorized.
 
 ## Next safe action
 
-Prepare UX-001 task authority/bootstrap for UX-001 — Public Arena Connection,
-Error, and Reconnect UX. This is planning/authority work only and may create or
-refine task authority only after Product Architect direction. Do not implement
-UI, client networking, reconnect behavior, gameplay, assets, or visual design.
+After this authority bootstrap is merged, create a fresh UX-001 implementation
+branch and implement only the bounded client-side task defined in
+`docs/tasks/ux-001-public-arena-connection-error-reconnect-ux.md`. Preserve
+NET-001 reconnect semantics, SEC-007 boundaries, server authority, and the
+NORMAL-risk reviewer route. UX-001 implementation has not started.
