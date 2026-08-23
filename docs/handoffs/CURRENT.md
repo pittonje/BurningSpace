@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-23
-Updated by: Claude — OPS-002 Phase A post-merge reconciliation
+Updated by: Codex — OPS-002 Phase B environment decision
 
 ## Repository state
 
@@ -217,6 +217,24 @@ Updated by: Claude — OPS-002 Phase A post-merge reconciliation
 - Merging Phase A is repository preparation only. It is not a deployment `GO`
   and does not authorize any external execution.
 
+## OPS-002 Phase B environment decision
+
+- Environment ID: `burningspace-staging-01`.
+- Environment class: `dedicated isolated single-host VPS`.
+- Selection status: `ENVIRONMENT CLASS SELECTED`.
+- Provider: `NOT SELECTED`.
+- Host: `NOT PROVISIONED`.
+- Hostnames: `NOT ASSIGNED`.
+- GO packet: `DRAFT / INCOMPLETE`.
+- Deployment GO: `NOT ISSUED`.
+- Phase B: `NOT AUTHORIZED / NOT STARTED`.
+- External staging: `NOT DEPLOYED`.
+- Public production launch: `NOT AUTHORIZED`.
+- The existing shared host is not selected because staging requires isolation
+  from unrelated services. No private infrastructure inventory is recorded.
+- The environment-class decision and draft GO packet do not authorize host
+  provisioning, credential collection, external access, or deployment.
+
 ## Review and merge gate
 
 OPS-001 review and human merge of PR #57 are complete.
@@ -238,11 +256,12 @@ later exact Product Architect authorization states otherwise.
 
 ## Next safe action
 
-Product Architect selection of one controlled external staging environment and
-preparation of the non-secret Phase B deployment `GO` packet defined by
-`docs/ops/public-arena-external-staging-runbook.md`.
+Provision or designate one dedicated isolated staging VPS satisfying the
+environment decision, then complete the non-secret GO packet and return it for
+an environment-specific Product Architect GO decision.
 
-Phase B execution remains unauthorized. Do not select a provider or hostname,
-request or store credentials, configure DNS, TLS, a reverse proxy, or a
-firewall, issue a deployment `GO`, or deploy externally until the Product
-Architect issues an explicit environment-specific deployment `GO`.
+Phase B execution remains unauthorized and unstarted. No provider or hostname
+is selected, no host is provisioned, no credential is requested or stored, and
+no deployment GO is issued. Do not configure DNS, TLS, a reverse proxy, or a
+firewall, and do not deploy externally until the Product Architect issues an
+explicit environment-specific deployment GO.
