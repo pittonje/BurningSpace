@@ -21,6 +21,16 @@ import {
   type ShipSnapshot
 } from '@burningspace/shared';
 import { loadClientRuntimeConfig } from '../config/runtimeConfig';
+import {
+  classifyInitialConnectionError,
+  createIdleConnectionPresentation,
+  getPlayerConnectionErrorMessage,
+  type ConnectionErrorCategory,
+  type ConnectionLifecycle,
+  type ConnectionOperation,
+  type ConnectionPresentation,
+  type ConnectionRecovery
+} from './connectionPresentation';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type Unsubscribe = () => void;
@@ -82,7 +92,11 @@ interface BattleStateSchema {
 
 export interface ConnectionState {
   status: ConnectionStatus;
+  lifecycle: ConnectionLifecycle;
+  operation: ConnectionOperation;
+  recovery: ConnectionRecovery;
   error?: string;
+  errorCategory?: ConnectionErrorCategory;
   profileError?: string;
   roomInfo?: RoomInfoMessage;
 }
@@ -105,6 +119,7 @@ type ConnectionStateCallback = (state: ConnectionState) => void;
 
 const CONSENTED_CLOSE_CODE = 4000;
 const RECONNECT_DELAYS_MS = Object.freeze([250, 500, 1000, 2000, 3000]);
+const RECONNECTED_PRESENTATION_MS = 1200;
 const isDev = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
 function toParticipant(schema: ParticipantStateSchema): RoomParticipant {
@@ -164,6 +179,7 @@ export class NetworkClient {
   private readonly roomName: string;
   private room?: Room<BattleStateSchema>;
   private status: ConnectionStatus = 'disconnected';
+  private presentation = createIdleConnectionPresentation();
   private error?: string;
   private profileError?: string;
   private roomInfo?: RoomInfoMessage;
@@ -174,6 +190,7 @@ export class NetworkClient {
   private connectionEpoch = 0;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private resolveReconnectDelay?: (active: boolean) => void;
+  private reconnectedPresentationTimer?: ReturnType<typeof setTimeout>;
   private disposed = false;
   private inputSequence = 0;
   private serverClockOffsetMs = 0;
@@ -235,7 +252,12 @@ export class NetworkClient {
 
   async connect(): Promise<void> {
     if (this.disposed) {
-      this.setConnectionState('error', 'This network client has been disposed.');
+      this.setConnectionState('error', {
+        lifecycle: 'terminal_failure',
+        operation: 'none',
+        recovery: 'none',
+        errorCategory: 'unexpected_failure'
+      });
       return;
     }
 
@@ -244,7 +266,12 @@ export class NetworkClient {
     }
 
     const epoch = this.beginConnectionOperation();
-    this.setConnectionState('connecting');
+    this.profileError = undefined;
+    this.setConnectionState('connecting', {
+      lifecycle: 'connecting',
+      operation: 'initial_connect',
+      recovery: 'none'
+    });
     const operation = this.connectInternal(epoch);
     this.connectingPromise = operation;
 
@@ -259,7 +286,8 @@ export class NetworkClient {
 
   setProfile(profile: JoinRequest): void {
     if (!this.room) {
-      this.setConnectionState('error', 'Connect before applying a profile.');
+      this.profileError = 'Connect before applying a profile.';
+      this.emitConnectionState();
       return;
     }
 
@@ -369,6 +397,16 @@ export class NetworkClient {
     return () => this.connectionCallbacks.delete(callback);
   }
 
+  getConnectionState(): ConnectionState {
+    return {
+      status: this.status,
+      ...this.presentation,
+      error: this.error,
+      profileError: this.profileError,
+      roomInfo: this.roomInfo
+    };
+  }
+
   private async connectInternal(epoch: number): Promise<void> {
     try {
       const room = await this.client.joinOrCreate<BattleStateSchema>(this.roomName);
@@ -379,7 +417,11 @@ export class NetworkClient {
       }
 
       this.bindRoom(room, epoch);
-      this.setConnectionState('connected');
+      this.setConnectionState('connected', {
+        lifecycle: 'connected',
+        operation: 'none',
+        recovery: 'none'
+      });
     } catch (error) {
       if (!this.isConnectionOperationActive(epoch)) {
         return;
@@ -392,7 +434,12 @@ export class NetworkClient {
       this.clearParticipants();
       this.clearShips();
       this.clearProjectiles();
-      this.setConnectionState('error', error instanceof Error ? error.message : 'Connection failed.');
+      this.setConnectionState('error', {
+        lifecycle: 'terminal_failure',
+        operation: 'none',
+        recovery: 'retry_connection',
+        errorCategory: classifyInitialConnectionError(error)
+      });
     }
   }
 
@@ -427,7 +474,7 @@ export class NetworkClient {
 
       this.acceptedProfile = message;
       this.profileError = undefined;
-      this.setConnectionState('connected', undefined, this.roomInfo);
+      this.emitConnectionState();
     });
 
     room.onMessage<ProfileRejectedMessage>(ProfileServerMessages.PROFILE_REJECTED, (message) => {
@@ -474,7 +521,9 @@ export class NetworkClient {
         return;
       }
 
-      this.setConnectionState('error', message ?? `Room error ${code}.`, this.roomInfo);
+      void code;
+      void message;
+      this.setConnectionNotice('unexpected_failure');
     });
 
     room.onLeave((code) => {
@@ -496,16 +545,31 @@ export class NetworkClient {
         this.clearParticipants();
         this.clearShips();
         this.clearProjectiles();
-        this.setConnectionState(
-          code === CONSENTED_CLOSE_CODE ? 'disconnected' : 'error',
-          code === CONSENTED_CLOSE_CODE ? undefined : `Disconnected (${code}).`
-        );
+        this.setConnectionState(code === CONSENTED_CLOSE_CODE ? 'disconnected' : 'error',
+          code === CONSENTED_CLOSE_CODE
+            ? createIdleConnectionPresentation()
+            : {
+                lifecycle: 'terminal_failure',
+                operation: 'none',
+                recovery: 'retry_connection',
+                errorCategory: 'connection_lost'
+              });
         return;
       }
 
+      this.setConnectionState('disconnected', {
+        lifecycle: 'connection_lost',
+        operation: 'none',
+        recovery: 'none',
+        errorCategory: 'connection_lost'
+      });
       const reconnectEpoch = this.beginConnectionOperation();
-      this.setConnectionState('connecting');
       const operation = this.reconnectInternal(token, reconnectEpoch);
+      this.setConnectionState('connecting', {
+        lifecycle: 'reconnecting',
+        operation: 'reconnect',
+        recovery: 'none'
+      });
       this.connectingPromise = operation;
       void operation.finally(() => {
         if (this.connectingPromise === operation) {
@@ -818,6 +882,7 @@ export class NetworkClient {
   private beginConnectionOperation(): number {
     this.connectionEpoch += 1;
     this.cancelReconnectDelay();
+    this.cancelReconnectedPresentation();
     return this.connectionEpoch;
   }
 
@@ -846,7 +911,12 @@ export class NetworkClient {
         }
 
         this.bindRoom(room, epoch);
-        this.setConnectionState('connected');
+        this.setConnectionState('connected', {
+          lifecycle: 'reconnected',
+          operation: 'none',
+          recovery: 'none'
+        });
+        this.scheduleConnectedPresentation(epoch, room);
         return;
       } catch (error) {
         if (!this.isConnectionOperationActive(epoch)) {
@@ -867,10 +937,13 @@ export class NetworkClient {
     this.clearParticipants();
     this.clearShips();
     this.clearProjectiles();
-    const message = finalError instanceof Error
-      ? finalError.message
-      : 'Reconnect attempts exhausted.';
-    this.setConnectionState('error', message);
+    void finalError;
+    this.setConnectionState('error', {
+      lifecycle: 'terminal_failure',
+      operation: 'none',
+      recovery: 'retry_connection',
+      errorCategory: 'reconnect_failed'
+    });
   }
 
   private waitForReconnectDelay(delayMs: number, epoch: number): Promise<boolean> {
@@ -900,6 +973,30 @@ export class NetworkClient {
     resolve?.(false);
   }
 
+  private scheduleConnectedPresentation(epoch: number, room: Room<BattleStateSchema>): void {
+    this.cancelReconnectedPresentation();
+    this.reconnectedPresentationTimer = setTimeout(() => {
+      this.reconnectedPresentationTimer = undefined;
+
+      if (!this.isActiveRoom(room, epoch) || this.presentation.lifecycle !== 'reconnected') {
+        return;
+      }
+
+      this.setConnectionState('connected', {
+        lifecycle: 'connected',
+        operation: 'none',
+        recovery: 'none'
+      });
+    }, RECONNECTED_PRESENTATION_MS);
+  }
+
+  private cancelReconnectedPresentation(): void {
+    if (this.reconnectedPresentationTimer !== undefined) {
+      clearTimeout(this.reconnectedPresentationTimer);
+      this.reconnectedPresentationTimer = undefined;
+    }
+  }
+
   private async disconnectInternal(): Promise<void> {
     this.beginConnectionOperation();
     const room = this.room;
@@ -921,7 +1018,7 @@ export class NetworkClient {
         await room.leave(true);
       }
     } finally {
-      this.setConnectionState('disconnected');
+      this.setConnectionState('disconnected', createIdleConnectionPresentation());
     }
   }
 
@@ -960,20 +1057,29 @@ export class NetworkClient {
     }
   }
 
-  private setConnectionState(status: ConnectionStatus, error?: string, roomInfo = this.roomInfo): void {
+  private setConnectionState(
+    status: ConnectionStatus,
+    presentation: ConnectionPresentation,
+    roomInfo = this.roomInfo
+  ): void {
     this.status = status;
-    this.error = error;
+    this.presentation = presentation;
+    this.error = presentation.lifecycle === 'terminal_failure' && presentation.errorCategory
+      ? getPlayerConnectionErrorMessage(presentation.errorCategory)
+      : undefined;
     this.roomInfo = roomInfo;
     this.emitConnectionState();
   }
 
-  private getConnectionState(): ConnectionState {
-    return {
-      status: this.status,
-      error: this.error,
-      profileError: this.profileError,
-      roomInfo: this.roomInfo
+  private setConnectionNotice(errorCategory: ConnectionErrorCategory): void {
+    this.status = 'error';
+    this.presentation = {
+      ...this.presentation,
+      recovery: 'disconnect',
+      errorCategory
     };
+    this.error = getPlayerConnectionErrorMessage(errorCategory);
+    this.emitConnectionState();
   }
 
   private emitConnectionState(): void {

@@ -181,9 +181,9 @@ async function main(): Promise<void> {
   const shipEvents: string[] = [];
   const projectileEvents: string[] = [];
   const hitEvents: string[] = [];
-  let firstState: ConnectionState = { status: 'disconnected' };
-  let secondState: ConnectionState = { status: 'disconnected' };
-  let spectatorState: ConnectionState = { status: 'disconnected' };
+  let firstState: ConnectionState = first.getConnectionState();
+  let secondState: ConnectionState = second.getConnectionState();
+  let spectatorState: ConnectionState = spectator.getConnectionState();
   let profileErrorKeptConnection = false;
 
   first.onConnectionStateChanged((state) => {
