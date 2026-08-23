@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "environmentId": "public-arena-alpha.example.invalid",
+  "environmentClass": "external-staging",
+  "alphaNonPersistent": true,
+  "publicClientOrigin": "https://arena.example.invalid",
+  "publicServerOrigin": "https://arena-api.example.invalid",
+  "allowedOrigins": [
+    "https://arena.example.invalid"
+  ],
+  "serverBindHost": "127.0.0.1",
+  "serverBindPort": 2567,
+  "clientBindHost": "127.0.0.1",
+  "clientBindPort": 8080,
+  "previousApprovedCommit": "1111111111111111111111111111111111111111",
+  "targetCommit": "2222222222222222222222222222222222222222",
+  "edgeConfigId": "edge-config.example.invalid",
+  "rollbackMode": "previous-approved-release",
+  "deploymentGoReference": "NOT-AUTHORIZED",
+  "externalExecutionAuthorized": false,
+  "publicProductionLaunchAuthorized": false
+}

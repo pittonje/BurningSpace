@@ -60,6 +60,43 @@ jobs:
       - name: Combat diagnostic
         run: npx tsx apps/server/scripts/combat-check.ts
 
+      - name: Typecheck external staging verification scripts
+        run: npx tsc -p apps/server/scripts/tsconfig.external-staging.json --noEmit
+
+      - name: Validate external staging preflight and committed templates
+        run: |
+          npx tsx apps/server/scripts/external-staging-preflight.ts --self-test
+          npx tsx apps/server/scripts/external-staging-preflight.ts \
+            --template \
+            --env deploy/external-staging.env.example \
+            --plan deploy/external-staging-plan.example.json
+
+      - name: Scan Phase A files for high-signal secret material
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const files = [
+            'deploy/external-staging.env.example',
+            'deploy/external-staging-plan.example.json',
+            'apps/server/scripts/external-staging-preflight.ts',
+            'apps/server/scripts/external-staging-smoke.ts',
+            'apps/server/scripts/tsconfig.external-staging.json',
+            'docs/ops/public-arena-external-staging-runbook.md',
+            '.github/workflows/pr-checks.yml'
+          ];
+          const contents = files.map((file) => readFileSync(file, 'utf8')).join('\n');
+          const findings = [
+            /-----BEGIN [A-Z ]*PRIVATE KEY-----\r?\n[A-Za-z0-9+/=]{20,}/u,
+            /\b(?:ghp_|github_pat_|xox[baprs]-|AKIA)[A-Za-z0-9_-]{20,}\b/u,
+            /\bsk-[A-Za-z0-9_-]{20,}\b/u
+          ].filter((pattern) => pattern.test(contents));
+          if (findings.length > 0) {
+            throw new Error('High-signal credential or private-key material detected in Phase A files.');
+          }
+          console.log(JSON.stringify({ ok: true, event: 'phase_a_secret_scan_completed', files: files.length }));
+          NODE
+
       - name: Validate staging containers and runtime lifecycle
         shell: bash
         env:
@@ -84,6 +121,36 @@ jobs:
           trap cleanup EXIT
 
           compose config --quiet
+          compose config --format json >"$RUNNER_TEMP/burningspace-compose.json"
+          node - "$RUNNER_TEMP/burningspace-compose.json" <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const model = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          const services = Object.values(model.services || {});
+          if (services.length !== 2) throw new Error('Expected exactly two Compose services.');
+          for (const service of services) {
+            for (const port of service.ports || []) {
+              if (port.host_ip !== '127.0.0.1') throw new Error('Every published port must bind exactly 127.0.0.1.');
+            }
+            if (service.privileged === true) throw new Error('Privileged Compose service is forbidden.');
+            if (service.network_mode === 'host') throw new Error('Host networking is forbidden.');
+            if (service.read_only !== true) throw new Error('Every service must retain a read-only root filesystem.');
+            if (!Array.isArray(service.tmpfs) || !service.tmpfs.some((entry) => String(entry).startsWith('/tmp'))) {
+              throw new Error('Every service must retain its /tmp tmpfs.');
+            }
+            for (const mount of service.volumes || []) {
+              const source = typeof mount === 'string' ? mount : mount.source;
+              const target = typeof mount === 'string' ? mount : mount.target;
+              if (String(source).includes('docker.sock') || String(target).includes('docker.sock')) {
+                throw new Error('Docker socket mounts are forbidden.');
+              }
+              if (typeof mount === 'object' && mount.type === 'volume') {
+                throw new Error('Persistent named volumes are forbidden.');
+              }
+            }
+          }
+          if (model.volumes && Object.keys(model.volumes).length > 0) throw new Error('Named volumes are forbidden.');
+          console.log(JSON.stringify({ ok: true, event: 'compose_exposure_validated', services: services.length }));
+          NODE
           compose build server client
           compose up -d server client
 
@@ -208,7 +275,53 @@ jobs:
           fi
           echo "missing_asset=$missing_asset status=$response_status cache-control=<absent>"
 
+          mapfile -t generated_assets < <(find apps/client/dist -type f -name 'index-*.js' -print)
+          if [ "${#generated_assets[@]}" -eq 0 ]; then
+            echo "No generated client JavaScript entry asset was available for inspection." >&2
+            exit 1
+          fi
+          node - "${generated_assets[@]}" <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const contents = process.argv.slice(2).map((file) => readFileSync(file, 'utf8')).join('\n');
+          if (!contents.includes('https://arena-api.example.invalid')) {
+            throw new Error('Expected public server origin is absent from generated client assets.');
+          }
+          const forbidden = [
+            /-----BEGIN [A-Z ]*PRIVATE KEY-----/u,
+            /\b(?:github_pat_|ghp_|xox[baprs]-|AKIA)[A-Za-z0-9_-]{12,}\b/u,
+            /\bsk-[A-Za-z0-9_-]{20,}\b/u,
+            /reconnectionToken\s*[:=]\s*["'][A-Za-z0-9_-]{8,}:[A-Za-z0-9_-]{8,}["']/u,
+            /(?:^|\n)(?:NODE_ENV|BURNINGSPACE_ALLOWED_ORIGINS|SSH_PRIVATE_KEY|PROVIDER_API_TOKEN)=/u
+          ];
+          if (forbidden.some((pattern) => pattern.test(contents))) {
+            throw new Error('Generated client assets contain high-signal secret, token, or environment-file material.');
+          }
+          console.log(JSON.stringify({ ok: true, event: 'generated_client_asset_safety_validated', files: process.argv.length - 2 }));
+          NODE
+
           npx tsx apps/server/scripts/public-arena-smoke.ts
+
+          external_smoke="$({
+            BURNINGSPACE_EXTERNAL_SMOKE_CLIENT_ORIGIN=http://127.0.0.1:8080 \
+            BURNINGSPACE_EXTERNAL_SMOKE_SERVER_ORIGIN=http://127.0.0.1:2567 \
+            BURNINGSPACE_EXTERNAL_SMOKE_ALLOWED_ORIGIN=https://arena.example.com \
+            BURNINGSPACE_EXTERNAL_SMOKE_HOSTILE_ORIGIN=https://hostile.example.invalid \
+            BURNINGSPACE_EXTERNAL_SMOKE_ALLOW_LOOPBACK_HTTP=true \
+            BURNINGSPACE_EXTERNAL_SMOKE_TIMEOUT_MS=15000 \
+              npx tsx apps/server/scripts/external-staging-smoke.ts
+          })"
+          printf '%s\n' "$external_smoke"
+          EXTERNAL_SMOKE_RESULT="$external_smoke" node <<'NODE'
+          const result = JSON.parse(process.env.EXTERNAL_SMOKE_RESULT || '{}');
+          const checks = result.checks || {};
+          if (!result.ok || !checks.hostileRawWebSocketRejected || !checks.reconnectCallSucceeded ||
+              !checks.sameSession || !checks.shipContinuity || !checks.noDuplicateParticipantPlayer ||
+              !checks.noDuplicateShip || !checks.noDuplicateParticipantOrShip ||
+              result.reconnectTokenPrinted !== false) {
+            throw new Error('External staging loopback smoke omitted a mandatory assertion.');
+          }
+          console.log(JSON.stringify({ ok: true, event: 'external_smoke_assertions_verified' }));
+          NODE
 
           server_id="$(compose ps -q server)"
           compose stop server
