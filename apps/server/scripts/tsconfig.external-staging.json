@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../../.."
+  },
+  "include": [
+    "external-staging-preflight.ts",
+    "external-staging-smoke.ts"
+  ]
+}

@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-23
-Updated by: Codex — OPS-002 authority bootstrap
+Updated by: Claude — OPS-002 Phase A review evidence
 
 ## Repository state
 
@@ -29,9 +29,11 @@ Updated by: Codex — OPS-002 authority bootstrap
 - UX-001: `MERGED / CLOSED` through PR #60 and normal merge commit
   `c365b0b81cdda80e5f8aa5e499dee0baa26bf207`.
 - OPS-002 — Public Arena External Staging Deployment and Validation is the
-  selected next bounded milestone. Its durable state after this authority
-  bootstrap reaches `main` is `AUTHORITY DEFINED / IMPLEMENTATION NOT
-  STARTED`.
+  active bounded milestone. Its authority bootstrap is merged on `main`
+  through PR #62.
+- OPS-002 Phase A: `PHASE A IMPLEMENTATION COMPLETE / REVIEW APPROVED /
+  AWAITING EVIDENCE-HEAD CORE AND MERGE`.
+- OPS-002 Phase B: `NOT AUTHORIZED / NOT STARTED`.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 - Campaign systems remain deferred and the canonical campaign roadmap is
@@ -64,7 +66,7 @@ Updated by: Codex — OPS-002 authority bootstrap
 - Review artifact:
   `docs/reviews/ux-001-public-arena-connection-error-reconnect-ux-review.md`.
 
-## Claude QA advisory
+## UX-001 Claude QA advisory
 
 - Run: `32612275281`.
 - Reviewed head: `74053b29c3049dc4875854cc59831271dbdee4e4`.
@@ -100,29 +102,71 @@ Updated by: Codex — OPS-002 authority bootstrap
 ## OPS-002 authority
 
 - Task: `OPS-002 — Public Arena External Staging Deployment and Validation`.
-- Pre-merge bootstrap state: `AUTHORITY BOOTSTRAP IN PROGRESS`; this marker is
-  historical once the bootstrap is present on `main`.
-- Durable state when this bootstrap reaches `main`: `AUTHORITY DEFINED /
-  IMPLEMENTATION NOT STARTED`.
+- Durable state of the authority bootstrap: `AUTHORITY DEFINED`, merged on
+  `main` through PR #62.
 - Implementation risk: `HIGH`.
-- Authority bootstrap branch: `docs/ops-002-external-staging-authority`.
 - Task authority:
   `docs/tasks/ops-002-public-arena-external-staging-deployment.md`.
-- Integrated review template:
+- Integrated review artifact:
   `docs/reviews/ops-002-public-arena-external-staging-deployment-review.md`.
 - OPS-002 separates Phase A repository/dry-run preparation from Phase B
   controlled external staging execution.
-- Bootstrap merge does not authorize deployment. External execution requires
-  reviewed and merged Phase A implementation, green required checks, approved
-  Operations/Security and Network/Runtime evidence, mandatory Claude QA or a
-  policy-compliant Product Architect infrastructure disposition, and an
-  explicit environment-specific Product Architect deployment `GO`.
-- Future OPS-002 implementation is human-merge-only unless a later exact
-  Product Architect authorization states otherwise.
+- External execution requires reviewed and merged Phase A implementation,
+  green required checks, approved Operations/Security and Network/Runtime
+  evidence, mandatory Claude QA or a policy-compliant Product Architect
+  infrastructure disposition, and an explicit environment-specific Product
+  Architect deployment `GO`.
 - External Public Arena deployment remains `NOT PERFORMED`. No staging service
-  is online or claimed by this authority bootstrap, and no real provider,
-  hostname, address, credential, or environment value is recorded.
+  is online or claimed, and no real provider, hostname, address, credential,
+  or environment value is recorded.
 - No other runtime task is active.
+
+## OPS-002 Phase A state
+
+- State: `PHASE A IMPLEMENTATION COMPLETE / REVIEW APPROVED / AWAITING
+  EVIDENCE-HEAD CORE AND MERGE`.
+- Pull request: #63 — `OPS-002 Phase A — External Staging Preparation`.
+- Branch: `ops/ops-002-phase-a-external-staging-preparation`.
+- Base: `45c7f2e12aaa45548829239eacfc18333d855ce5`.
+- Reviewed implementation head:
+  `3522116d62d8fb93a4a4ca1756aec6818280f0bb`.
+- Implementation-head Core run `32615914407`: `SUCCESS` on
+  `3522116d62d8fb93a4a4ca1756aec6818280f0bb`, with 13 test files and 163
+  tests, workspace build and typecheck, external script typecheck, 24
+  preflight self-tests, smoke self-tests, template validation, secret scans,
+  machine-readable loopback-only Compose validation, real container startup,
+  Public Arena and external loopback smoke, hostile raw WebSocket rejection,
+  authoritative movement, reconnect continuity with no duplicate ownership,
+  absent token output, graceful shutdown, and cleanup.
+- Operations/Security: `APPROVE`.
+- Network/Runtime: `APPROVE`.
+- Product Architect: `APPROVE PHASE A`.
+- Blocking findings: None. No HIGH or MEDIUM finding remains open. Earlier
+  implementation-review MEDIUM findings were closed by the hardening commit
+  `3522116d62d8fb93a4a4ca1756aec6818280f0bb`.
+- Non-blocking: two Operations/Security LOW items and the Claude QA
+  suggestions are `DEFERRED / NON-BLOCKING` and were not implemented in the
+  evidence commit.
+- Mandatory Claude QA run `32615914388` on
+  `3522116d62d8fb93a4a4ca1756aec6818280f0bb`: usable substantive verdict
+  `Approved with suggestions` with `0` blockers, followed by a wrapper
+  conclusion of `FAILURE — summary exceeds max length 2000`. The explicit
+  Product Architect Category-C infrastructure disposition satisfies the
+  mandatory gate. Wrapper success is not claimed and a manual rerun is not
+  required.
+- Evidence state: one authorized documentation-only evidence commit is being
+  created on the Phase A branch. PR #63 is not merged and Phase A is not yet
+  on `main`.
+- Phase A external execution: `NONE`. No provider, VPS, DNS, certificate
+  service, firewall, reverse proxy, or public hostname was accessed.
+- Phase B: `NOT AUTHORIZED / NOT STARTED`.
+- Deployment `GO`: `NOT ISSUED`.
+- Target provider/environment: `NOT SELECTED`.
+- External deployment: `NOT PERFORMED`.
+- Public production launch: `NOT AUTHORIZED`.
+- Accepted decision count: 35, unchanged.
+- Campaign roadmap: unchanged.
+- DOCARCH-004: `PAUSED`.
 
 ## Review and merge gate
 
@@ -136,16 +180,26 @@ Claude wrapper result remains non-blocking.
 The one-time autonomous merge authorization used for PR #60 does not authorize
 any later runtime task or future implementation PR.
 
-The OPS-002 authority/bootstrap PR has a separate one-time Product Architect
+The OPS-002 authority/bootstrap PR had a separate one-time Product Architect
 authorization limited to its three documentation paths. That exception does
-not authorize OPS-002 implementation or external execution.
+not authorize OPS-002 external execution.
+
+OPS-002 Phase A has an exact one-time Product Architect autonomous merge
+authorization that applies only to PR #63 after one authorized documentation
+evidence commit and a successful evidence-head Core run, and to one LOW-risk
+post-merge reconciliation pull request changing only
+`docs/handoffs/CURRENT.md`. That authorization supersedes human-merge-only
+authority for those two pull requests alone. It does not authorize Phase B,
+any external execution, any later OPS-002 infrastructure PR, public production
+launch, or any unrelated PR.
 
 ## Next safe action
 
-After this bootstrap reaches `main`, create a fresh OPS-002
-implementation/preparation branch and begin only Phase A repository and dry-run
-preparation within the task authority.
+1. Validate the evidence-head Core run created after this evidence commit.
+2. Merge PR #63 only under the exact one-time Product Architect authorization.
+3. Perform the documentation-only post-merge reconciliation of this handoff.
+4. Do not select, access, or deploy an external environment in this gate.
 
 No external staging execution is authorized until the Product Architect issues
 an explicit environment-specific deployment `GO`. Do not deploy externally as
-part of authority bootstrap or Phase A merge.
+part of Phase A merge.
