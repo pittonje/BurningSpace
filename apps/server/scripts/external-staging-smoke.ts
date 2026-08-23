@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { connect as connectTcp, type Socket } from 'node:net';
 import { connect as connectTls, type TLSSocket } from 'node:tls';
 import type { MapSchema } from '@colyseus/schema';
-import { Client, Room } from 'colyseus.js';
+import { Client, Room, type ClientOptions } from 'colyseus.js';
 import {
   ProfileClientMessages,
   ProfileServerMessages,
@@ -36,10 +36,36 @@ class SmokeError extends Error {
 }
 
 class QuietSmokeClient extends Client {
+  private readonly abortController = new AbortController();
+  private readonly trackedRooms = new Set<Room<unknown>>();
+
+  constructor(settings: string, options: ClientOptions) {
+    super(settings, options);
+    const originalPost = this.http.post.bind(this.http);
+    this.http.post = ((path, requestOptions = {}) => originalPost(path, {
+      ...requestOptions,
+      signal: this.abortController.signal
+    })) as typeof this.http.post;
+  }
+
   protected override createRoom<T = unknown>(roomName: string): Room<T> {
     const room = new Room<T>(roomName);
     room.onMessage('*', () => undefined);
+    this.trackedRooms.add(room as Room<unknown>);
+    room.onLeave(() => this.trackedRooms.delete(room as Room<unknown>));
     return room;
+  }
+
+  abortPending(): void {
+    this.abortController.abort();
+    for (const room of this.trackedRooms) room.connection?.close();
+    this.trackedRooms.clear();
+  }
+
+  closeLateRoom(room: Room<unknown>): void {
+    this.trackedRooms.delete(room);
+    if (room.connection?.isOpen) void room.leave(true).catch(() => room.connection?.close());
+    else room.connection?.close();
   }
 }
 
@@ -91,9 +117,69 @@ async function boundedText(response: Response): Promise<string> {
   if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
     fail('HTTP_SIZE', 'A required HTTP response exceeded the bounded size.');
   }
-  const text = await response.text();
-  if (text.length > MAX_RESPONSE_BYTES) fail('HTTP_SIZE', 'A required HTTP response exceeded the bounded size.');
-  return text;
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    totalBytes += value.byteLength;
+    if (totalBytes > MAX_RESPONSE_BYTES) {
+      await reader.cancel().catch(() => undefined);
+      fail('HTTP_SIZE', 'A required HTTP response exceeded the bounded size.');
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(bytes);
+}
+
+function withBoundedOperation<T>(
+  operation: Promise<T>,
+  timeoutMs: number,
+  timeoutError: SmokeError,
+  onTimeout: () => void,
+  onLateResolve: (value: T) => void
+): Promise<T> {
+  return new Promise((resolveOperation, rejectOperation) => {
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      onTimeout();
+      rejectOperation(timeoutError);
+    }, timeoutMs);
+    operation.then(
+      (value) => {
+        if (timedOut) { onLateResolve(value); return; }
+        clearTimeout(timer);
+        resolveOperation(value);
+      },
+      (error: unknown) => {
+        if (timedOut) return;
+        clearTimeout(timer);
+        rejectOperation(error);
+      }
+    );
+  });
+}
+
+function boundedRoomOperation<T>(
+  client: QuietSmokeClient,
+  operation: Promise<Room<T>>,
+  timeoutMs: number,
+  code: string,
+  message: string
+): Promise<Room<T>> {
+  return withBoundedOperation(
+    operation,
+    timeoutMs,
+    new SmokeError(code, message),
+    () => client.abortPending(),
+    (room) => client.closeLateRoom(room as Room<unknown>)
+  );
 }
 
 async function checkClient(clientOrigin: URL, timeoutMs: number): Promise<void> {
@@ -121,11 +207,19 @@ async function checkJsonEndpoint(serverOrigin: URL, path: '/health' | '/ready', 
   }
 }
 
-async function checkHostileMatchmaking(serverOrigin: URL, hostileOrigin: string): Promise<void> {
+async function checkHostileMatchmaking(serverOrigin: URL, hostileOrigin: string, timeoutMs: number): Promise<void> {
   const client = new QuietSmokeClient(serverOrigin.origin, { headers: { Origin: hostileOrigin } });
   let room: Room<BattleStateSchema> | undefined;
-  try { room = await client.joinOrCreate<BattleStateSchema>('battle'); }
-  catch { return; }
+  try {
+    room = await boundedRoomOperation(
+      client,
+      client.joinOrCreate<BattleStateSchema>('battle'),
+      timeoutMs,
+      'HOSTILE_MATCHMAKING_TIMEOUT',
+      'Hostile matchmaking did not return a bounded rejection.'
+    );
+  }
+  catch (error) { if (error instanceof SmokeError) throw error; return; }
   finally { if (room?.connection.isOpen) await room.leave(true).catch(() => undefined); }
   fail('HOSTILE_MATCHMAKING', 'Hostile Origin unexpectedly passed matchmaking.');
 }
@@ -182,16 +276,6 @@ function rawHostileWebSocketProbe(serverOrigin: URL, hostileOrigin: string, time
 
 function delay(ms: number): Promise<void> { return new Promise((resolveDelay) => setTimeout(resolveDelay, ms)); }
 
-function withTimeout<T>(operation: Promise<T>, timeoutMs: number, code: string, message: string): Promise<T> {
-  return new Promise((resolveOperation, rejectOperation) => {
-    const timer = setTimeout(() => rejectOperation(new SmokeError(code, message)), timeoutMs);
-    operation.then(
-      (value) => { clearTimeout(timer); resolveOperation(value); },
-      (error: unknown) => { clearTimeout(timer); rejectOperation(error); }
-    );
-  });
-}
-
 async function waitFor(condition: () => boolean, label: string, timeoutMs: number): Promise<void> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
@@ -214,7 +298,13 @@ async function checkGameplayAndReconnect(serverOrigin: URL, allowedOrigin: strin
   let room: Room<BattleStateSchema> | undefined;
   let reconnected: Room<BattleStateSchema> | undefined;
   try {
-    room = await client.joinOrCreate<BattleStateSchema>('battle');
+    room = await boundedRoomOperation(
+      client,
+      client.joinOrCreate<BattleStateSchema>('battle'),
+      timeoutMs,
+      'ALLOWED_MATCHMAKING_TIMEOUT',
+      'Allowed matchmaking did not complete within the bounded timeout.'
+    );
     const accepted: ProfileAcceptedMessage[] = [];
     room.onMessage<ProfileAcceptedMessage>(ProfileServerMessages.PROFILE_ACCEPTED, (message) => accepted.push(message));
     room.send(ProfileClientMessages.SET_PROFILE, { nickname: 'ExternalSmoke', mode: 'player', faction: 'red' });
@@ -248,7 +338,8 @@ async function checkGameplayAndReconnect(serverOrigin: URL, allowedOrigin: strin
 
     await room.leave(false);
     room = undefined;
-    reconnected = await withTimeout(
+    reconnected = await boundedRoomOperation(
+      client,
       client.reconnect<BattleStateSchema>(token),
       timeoutMs,
       'RECONNECT_TIMEOUT',
@@ -287,6 +378,61 @@ function safeError(error: unknown): { code: string; message: string } {
   return { code: 'UNEXPECTED', message: redacted || 'Unexpected bounded external smoke failure.' };
 }
 
+async function runSmokeSelfTests(): Promise<void> {
+  let timeoutCleanup = 0;
+  try {
+    await withBoundedOperation(
+      new Promise<number>(() => undefined),
+      5,
+      new SmokeError('SELF_TEST_TIMEOUT', 'Synthetic operation timed out.'),
+      () => { timeoutCleanup += 1; },
+      () => undefined
+    );
+    fail('SELF_TEST', 'Stalled-operation self-test did not time out.');
+  } catch (error) {
+    if (!(error instanceof SmokeError) || error.code !== 'SELF_TEST_TIMEOUT' || timeoutCleanup !== 1) {
+      fail('SELF_TEST', 'Stalled-operation cleanup self-test failed.');
+    }
+  }
+
+  let resolveLate: ((value: number) => void) | undefined;
+  let lateCleanup = 0;
+  const lateOperation = new Promise<number>((resolveLateOperation) => { resolveLate = resolveLateOperation; });
+  try {
+    await withBoundedOperation(
+      lateOperation,
+      5,
+      new SmokeError('SELF_TEST_LATE', 'Synthetic late operation timed out.'),
+      () => undefined,
+      () => { lateCleanup += 1; }
+    );
+    fail('SELF_TEST', 'Late-operation self-test did not time out.');
+  } catch (error) {
+    if (!(error instanceof SmokeError) || error.code !== 'SELF_TEST_LATE') {
+      fail('SELF_TEST', 'Late-operation timeout self-test failed.');
+    }
+  }
+  resolveLate?.(1);
+  await delay(0);
+  if (lateCleanup !== 1) fail('SELF_TEST', 'Late-resolving operation was not cleaned up exactly once.');
+
+  const oversized = new Response(new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(40_000));
+      controller.enqueue(new Uint8Array(40_000));
+      controller.close();
+    }
+  }));
+  try {
+    await boundedText(oversized);
+    fail('SELF_TEST', 'Chunked response self-test did not enforce its byte limit.');
+  } catch (error) {
+    if (!(error instanceof SmokeError) || error.code !== 'HTTP_SIZE') {
+      fail('SELF_TEST', 'Chunked response byte-limit self-test failed.');
+    }
+  }
+}
+
 async function run(environment: SmokeEnvironment): Promise<void> {
   const startedAt = Date.now();
   const client = exactOrigin(environment.BURNINGSPACE_EXTERNAL_SMOKE_CLIENT_ORIGIN, 'client origin');
@@ -303,7 +449,7 @@ async function run(environment: SmokeEnvironment): Promise<void> {
   await checkClient(client, timeoutMs);
   await checkJsonEndpoint(server, '/health', timeoutMs);
   await checkJsonEndpoint(server, '/ready', timeoutMs);
-  await checkHostileMatchmaking(server, hostile.origin);
+  await checkHostileMatchmaking(server, hostile.origin, timeoutMs);
   await rawHostileWebSocketProbe(server, hostile.origin, timeoutMs);
   await checkGameplayAndReconnect(server, allowed.origin, timeoutMs);
 
@@ -325,7 +471,21 @@ async function run(environment: SmokeEnvironment): Promise<void> {
   }));
 }
 
-run(process.env).catch((error: unknown) => {
-  console.error(JSON.stringify({ ok: false, event: 'external_staging_smoke_failed', error: safeError(error) }));
-  process.exitCode = 1;
-});
+const selfTest = process.argv.slice(2).includes('--self-test');
+const operation = selfTest ? runSmokeSelfTests() : run(process.env);
+operation.then(
+  () => {
+    if (selfTest) console.log(JSON.stringify({
+      ok: true,
+      event: 'external_staging_smoke_self_tested',
+      tests: 3,
+      stalledOperationsBounded: true,
+      lateResolutionCleaned: true,
+      chunkedResponseBounded: true
+    }));
+  },
+  (error: unknown) => {
+    console.error(JSON.stringify({ ok: false, event: 'external_staging_smoke_failed', error: safeError(error) }));
+    process.exitCode = 1;
+  }
+);

@@ -68,6 +68,7 @@ jobs:
       - name: Validate external staging preflight and committed templates
         run: |
           npx tsx apps/server/scripts/external-staging-preflight.ts --self-test
+          npx tsx apps/server/scripts/external-staging-smoke.ts --self-test
           npx tsx apps/server/scripts/external-staging-preflight.ts \
             --template \
             --env deploy/external-staging.env.example \

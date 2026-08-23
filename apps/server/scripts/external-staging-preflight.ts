@@ -27,8 +27,11 @@ interface DeploymentPlan {
 
 interface ValidationOptions {
   mode: Mode;
-  checkRepository?: (previous: string, target: string) => void;
+  checkRepository?: (previous: string, target: string, mode: Mode) => void;
 }
+
+interface GitResult { status: number | null; stdout: string; }
+type GitRunner = (args: string[]) => GitResult;
 
 class SafeValidationError extends Error {
   constructor(readonly code: string, message: string) {
@@ -153,6 +156,10 @@ function normalizeOrigin(value: unknown, code: string): string {
   return url.origin;
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '[::1]';
+}
+
 function assertSafeInventory(env: Record<string, string>, planObject: Record<string, unknown>): void {
   for (const key of Object.keys(env)) {
     if (!ENV_KEYS.has(key)) fail('UNEXPECTED_ENV_KEY', 'Environment inventory contains an unexpected key.');
@@ -183,17 +190,30 @@ function assertCommit(value: unknown, mode: Mode, code: string): string {
   return commit;
 }
 
-function defaultRepositoryCheck(previous: string, target: string): void {
+function runGit(args: string[]): GitResult {
+  const result = spawnSync('git', args, { cwd: resolve('.'), encoding: 'utf8', windowsHide: true });
+  return { status: result.status, stdout: result.stdout };
+}
+
+function repositoryCheck(previous: string, target: string, mode: Mode, git: GitRunner = runGit): void {
   for (const commit of [previous, target]) {
-    const exists = spawnSync('git', ['cat-file', '-e', `${commit}^{commit}`], {
-      cwd: resolve('.'), encoding: 'utf8', windowsHide: true
-    });
+    const exists = git(['cat-file', '-e', `${commit}^{commit}`]);
     if (exists.status !== 0) fail('COMMIT_NOT_LOCAL', 'A bound commit does not exist in the local repository.');
-    const reachable = spawnSync('git', ['branch', '--all', '--contains', commit], {
-      cwd: resolve('.'), encoding: 'utf8', windowsHide: true
-    });
+    const reachable = git(['branch', '--all', '--contains', commit]);
     if (reachable.status !== 0 || reachable.stdout.trim().length === 0) {
       fail('COMMIT_NOT_REACHABLE', 'A bound commit is not reachable from repository history.');
+    }
+  }
+
+  if (mode === 'phase-b') {
+    const checkedOut = git(['rev-parse', 'HEAD']);
+    if (checkedOut.status !== 0 || checkedOut.stdout.trim() !== target) {
+      fail('TARGET_NOT_CHECKED_OUT', 'Phase B target must equal the exact checked-out commit.');
+    }
+    for (const commit of [previous, target]) {
+      if (git(['merge-base', '--is-ancestor', commit, 'origin/main']).status !== 0) {
+        fail('TARGET_NOT_APPROVED', 'Phase B commits must be reachable from trusted origin/main history.');
+      }
     }
   }
 }
@@ -228,6 +248,15 @@ function validate(env: Record<string, string>, rawPlan: unknown, options: Valida
   }
   const hostileOrigin = normalizeOrigin(env.BURNINGSPACE_EXTERNAL_SMOKE_HOSTILE_ORIGIN, 'HOSTILE_ORIGIN');
   if (hostileOrigin === clientOrigin) fail('HOSTILE_ORIGIN', 'Hostile smoke Origin must differ from the approved client origin.');
+  const edgeConfigId = requireString(plan.edgeConfigId, 'EDGE_CONFIG');
+  if (options.mode !== 'template') {
+    const identifiers = [plan.environmentId, edgeConfigId];
+    const origins = [new URL(clientOrigin), new URL(serverOrigin), new URL(hostileOrigin)];
+    if (identifiers.some((value) => value.includes('.example.invalid') || value === 'NOT-AUTHORIZED') ||
+        origins.some((url) => url.hostname.endsWith('.example.invalid') || isLoopbackHostname(url.hostname))) {
+      fail('PLACEHOLDER_INVENTORY', 'Real preparation modes reject placeholder or loopback external inventory.');
+    }
+  }
 
   if (!Array.isArray(plan.allowedOrigins) || plan.allowedOrigins.length === 0) {
     fail('ALLOWLIST', 'Allowed Origins must be a non-empty array.');
@@ -291,10 +320,9 @@ function validate(env: Record<string, string>, rawPlan: unknown, options: Valida
   if (options.mode === 'phase-b' && (go === 'NOT-AUTHORIZED' || go.endsWith('.example.invalid'))) {
     fail('GO_REQUIRED', 'Phase B requires a non-placeholder deployment GO reference.');
   }
-  requireString(plan.edgeConfigId, 'EDGE_CONFIG');
-  if (plan.edgeConfigId !== env.BURNINGSPACE_EDGE_CONFIG_ID) fail('EDGE_MISMATCH', 'Plan and environment edge IDs do not agree.');
+  if (edgeConfigId !== env.BURNINGSPACE_EDGE_CONFIG_ID) fail('EDGE_MISMATCH', 'Plan and environment edge IDs do not agree.');
 
-  if (options.mode !== 'template') (options.checkRepository ?? defaultRepositoryCheck)(previous, target);
+  if (options.mode !== 'template') (options.checkRepository ?? repositoryCheck)(previous, target, options.mode);
 }
 
 function readInputs(envPath: string, planPath: string): { env: Record<string, string>; plan: unknown } {
@@ -323,11 +351,36 @@ function baseFixture(): { env: Record<string, string>; plan: DeploymentPlan } {
   return { env: { ...env }, plan: structuredClone(plan as DeploymentPlan) };
 }
 
+function applyRealInventory(fixture: ReturnType<typeof baseFixture>): void {
+  fixture.plan.environmentId = 'ops002-staging-review';
+  fixture.env.BURNINGSPACE_EXTERNAL_ENVIRONMENT_ID = fixture.plan.environmentId;
+  fixture.plan.publicClientOrigin = 'https://arena.ops002-review.example.org';
+  fixture.env.BURNINGSPACE_PUBLIC_CLIENT_ORIGIN = fixture.plan.publicClientOrigin;
+  fixture.plan.publicServerOrigin = 'https://arena-api.ops002-review.example.org';
+  fixture.env.BURNINGSPACE_PUBLIC_SERVER_ORIGIN = fixture.plan.publicServerOrigin;
+  fixture.env.VITE_BURNINGSPACE_SERVER_URL = fixture.plan.publicServerOrigin;
+  fixture.plan.allowedOrigins = [fixture.plan.publicClientOrigin];
+  fixture.env.BURNINGSPACE_ALLOWED_ORIGINS = fixture.plan.publicClientOrigin;
+  fixture.env.BURNINGSPACE_EXTERNAL_SMOKE_HOSTILE_ORIGIN = 'https://hostile.ops002-review.example.org';
+  fixture.plan.edgeConfigId = 'ops002-edge-review-v1';
+  fixture.env.BURNINGSPACE_EDGE_CONFIG_ID = fixture.plan.edgeConfigId;
+}
+
 function expectFailure(name: string, mutate: (fixture: ReturnType<typeof baseFixture>) => void, mode: Mode, code: string): void {
   const fixture = baseFixture();
   mutate(fixture);
   try {
     validate(fixture.env, fixture.plan, { mode, checkRepository: () => undefined });
+  } catch (error) {
+    if (error instanceof SafeValidationError && error.code === code) return;
+    fail('SELF_TEST', `Self-test ${name} failed with an unexpected safe error.`);
+  }
+  fail('SELF_TEST', `Self-test ${name} did not fail closed.`);
+}
+
+function expectSafeCode(name: string, operation: () => void, code: string): void {
+  try {
+    operation();
   } catch (error) {
     if (error instanceof SafeValidationError && error.code === code) return;
     fail('SELF_TEST', `Self-test ${name} failed with an unexpected safe error.`);
@@ -348,8 +401,9 @@ function runSelfTests(): number {
   expectFailure('bind', (f) => { f.plan.serverBindHost = '0.0.0.0'; }, 'template', 'BIND_HOST');
   expectFailure('port', (f) => { f.plan.clientBindPort = 0; }, 'template', 'CLIENT_PORT');
   expectFailure('production', (f) => { f.plan.publicProductionLaunchAuthorized = true; f.env.BURNINGSPACE_PUBLIC_PRODUCTION_LAUNCH_AUTHORIZED = 'true'; }, 'template', 'PRODUCTION_LAUNCH');
-  expectFailure('phase-a-execution', (f) => { f.plan.externalExecutionAuthorized = true; f.env.BURNINGSPACE_EXTERNAL_EXECUTION_AUTHORIZED = 'true'; }, 'phase-a', 'PHASE_A_EXECUTION');
+  expectFailure('phase-a-execution', (f) => { applyRealInventory(f); f.plan.externalExecutionAuthorized = true; f.env.BURNINGSPACE_EXTERNAL_EXECUTION_AUTHORIZED = 'true'; }, 'phase-a', 'PHASE_A_EXECUTION');
   expectFailure('phase-b-go', (f) => {
+    applyRealInventory(f);
     const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).stdout.trim();
     const parent = spawnSync('git', ['rev-parse', 'HEAD^'], { encoding: 'utf8', windowsHide: true }).stdout.trim();
     f.plan.externalExecutionAuthorized = true;
@@ -359,7 +413,7 @@ function runSelfTests(): number {
     f.env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT = parent;
     f.env.BURNINGSPACE_TARGET_COMMIT = head;
   }, 'phase-b', 'GO_REQUIRED');
-  expectFailure('placeholder-real', () => undefined, 'phase-a', 'PREVIOUS_COMMIT');
+  expectFailure('placeholder-real', (f) => applyRealInventory(f), 'phase-a', 'PREVIOUS_COMMIT');
   expectFailure('equal-commits', (f) => { f.plan.targetCommit = f.plan.previousApprovedCommit; f.env.BURNINGSPACE_TARGET_COMMIT = f.plan.targetCommit; }, 'template', 'EQUAL_COMMITS');
   expectFailure('secret-key', (f) => { f.env.DEPLOY_PASSWORD = 'seeded-fake-secret-never-echo'; }, 'template', 'UNEXPECTED_ENV_KEY');
   expectFailure('private-key', (f) => { f.plan.edgeConfigId = '-----BEGIN PRIVATE KEY-----'; }, 'template', 'SECRET_VALUE');
@@ -367,11 +421,56 @@ function runSelfTests(): number {
   const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).stdout.trim();
   const parent = spawnSync('git', ['rev-parse', 'HEAD^'], { encoding: 'utf8', windowsHide: true }).stdout.trim();
   const real = baseFixture();
+  applyRealInventory(real);
   real.plan.previousApprovedCommit = parent;
   real.plan.targetCommit = head;
   real.env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT = parent;
   real.env.BURNINGSPACE_TARGET_COMMIT = head;
   validate(real.env, real.plan, { mode: 'phase-a' });
+
+  expectFailure('placeholder-inventory', (f) => {
+    f.plan.previousApprovedCommit = parent;
+    f.plan.targetCommit = head;
+    f.env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT = parent;
+    f.env.BURNINGSPACE_TARGET_COMMIT = head;
+  }, 'phase-a', 'PLACEHOLDER_INVENTORY');
+  expectFailure('loopback-real-target', (f) => {
+    applyRealInventory(f);
+    f.plan.previousApprovedCommit = parent;
+    f.plan.targetCommit = head;
+    f.env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT = parent;
+    f.env.BURNINGSPACE_TARGET_COMMIT = head;
+    f.plan.publicClientOrigin = 'http://127.0.0.1:8080';
+    f.env.BURNINGSPACE_PUBLIC_CLIENT_ORIGIN = f.plan.publicClientOrigin;
+    f.plan.allowedOrigins = [f.plan.publicClientOrigin];
+    f.env.BURNINGSPACE_ALLOWED_ORIGINS = f.plan.publicClientOrigin;
+  }, 'phase-a', 'PLACEHOLDER_INVENTORY');
+
+  const previous = '3333333333333333333333333333333333333333';
+  const target = '4444444444444444444444444444444444444444';
+  expectSafeCode('unmerged-phase-b-target', () => repositoryCheck(previous, target, 'phase-b', (args) => {
+    if (args[0] === 'rev-parse') return { status: 0, stdout: `${target}\n` };
+    if (args[0] === 'merge-base' && args[2] === target) return { status: 1, stdout: '' };
+    return { status: 0, stdout: 'trusted-branch\n' };
+  }), 'TARGET_NOT_APPROVED');
+
+  const phaseB = baseFixture();
+  applyRealInventory(phaseB);
+  phaseB.plan.previousApprovedCommit = previous;
+  phaseB.plan.targetCommit = target;
+  phaseB.env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT = previous;
+  phaseB.env.BURNINGSPACE_TARGET_COMMIT = target;
+  phaseB.plan.externalExecutionAuthorized = true;
+  phaseB.env.BURNINGSPACE_EXTERNAL_EXECUTION_AUTHORIZED = 'true';
+  phaseB.plan.deploymentGoReference = 'PA-GO-OPS002-REVIEW';
+  phaseB.env.BURNINGSPACE_DEPLOYMENT_GO_REFERENCE = phaseB.plan.deploymentGoReference;
+  validate(phaseB.env, phaseB.plan, {
+    mode: 'phase-b',
+    checkRepository: (boundPrevious, boundTarget, mode) => repositoryCheck(boundPrevious, boundTarget, mode, (args) => {
+      if (args[0] === 'rev-parse') return { status: 0, stdout: `${target}\n` };
+      return { status: 0, stdout: 'trusted-branch\n' };
+    })
+  });
 
   const seeded = 'seeded-fake-secret-never-echo';
   let safeFailure = '';
@@ -384,7 +483,7 @@ function runSelfTests(): number {
   }
   if (safeFailure.includes(seeded)) fail('SELF_TEST', 'Failure output exposed a seeded value.');
   if (safeFailure.length > 800) fail('SELF_TEST', 'Failure output exceeded the bounded limit.');
-  return 20;
+  return 24;
 }
 
 function argumentValue(args: string[], name: string): string {
