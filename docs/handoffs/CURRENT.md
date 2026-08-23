@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-23
-Updated by: Codex — UX-001 post-merge reconciliation
+Updated by: Codex — OPS-002 authority bootstrap
 
 ## Repository state
 
@@ -28,6 +28,10 @@ Updated by: Codex — UX-001 post-merge reconciliation
   404 responses.
 - UX-001: `MERGED / CLOSED` through PR #60 and normal merge commit
   `c365b0b81cdda80e5f8aa5e499dee0baa26bf207`.
+- OPS-002 — Public Arena External Staging Deployment and Validation is the
+  selected next bounded milestone. Its durable state after this authority
+  bootstrap reaches `main` is `AUTHORITY DEFINED / IMPLEMENTATION NOT
+  STARTED`.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 - Campaign systems remain deferred and the canonical campaign roadmap is
@@ -93,6 +97,33 @@ Updated by: Codex — UX-001 post-merge reconciliation
   edge, production proxy, production credential, or external infrastructure
   was configured. UX-001 completion does not launch Public Arena externally.
 
+## OPS-002 authority
+
+- Task: `OPS-002 — Public Arena External Staging Deployment and Validation`.
+- Pre-merge bootstrap state: `AUTHORITY BOOTSTRAP IN PROGRESS`; this marker is
+  historical once the bootstrap is present on `main`.
+- Durable state when this bootstrap reaches `main`: `AUTHORITY DEFINED /
+  IMPLEMENTATION NOT STARTED`.
+- Implementation risk: `HIGH`.
+- Authority bootstrap branch: `docs/ops-002-external-staging-authority`.
+- Task authority:
+  `docs/tasks/ops-002-public-arena-external-staging-deployment.md`.
+- Integrated review template:
+  `docs/reviews/ops-002-public-arena-external-staging-deployment-review.md`.
+- OPS-002 separates Phase A repository/dry-run preparation from Phase B
+  controlled external staging execution.
+- Bootstrap merge does not authorize deployment. External execution requires
+  reviewed and merged Phase A implementation, green required checks, approved
+  Operations/Security and Network/Runtime evidence, mandatory Claude QA or a
+  policy-compliant Product Architect infrastructure disposition, and an
+  explicit environment-specific Product Architect deployment `GO`.
+- Future OPS-002 implementation is human-merge-only unless a later exact
+  Product Architect authorization states otherwise.
+- External Public Arena deployment remains `NOT PERFORMED`. No staging service
+  is online or claimed by this authority bootstrap, and no real provider,
+  hostname, address, credential, or environment value is recorded.
+- No other runtime task is active.
+
 ## Review and merge gate
 
 OPS-001 review and human merge of PR #57 are complete.
@@ -105,9 +136,16 @@ Claude wrapper result remains non-blocking.
 The one-time autonomous merge authorization used for PR #60 does not authorize
 any later runtime task or future implementation PR.
 
+The OPS-002 authority/bootstrap PR has a separate one-time Product Architect
+authorization limited to its three documentation paths. That exception does
+not authorize OPS-002 implementation or external execution.
+
 ## Next safe action
 
-Product Architect selection and authority/bootstrap for the next bounded
-runtime task.
+After this bootstrap reaches `main`, create a fresh OPS-002
+implementation/preparation branch and begin only Phase A repository and dry-run
+preparation within the task authority.
 
-No new runtime implementation is authorized yet.
+No external staging execution is authorized until the Product Architect issues
+an explicit environment-specific deployment `GO`. Do not deploy externally as
+part of authority bootstrap or Phase A merge.
