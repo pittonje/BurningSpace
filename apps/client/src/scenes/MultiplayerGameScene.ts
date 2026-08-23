@@ -136,7 +136,9 @@ export class MultiplayerGameScene extends Phaser.Scene {
         this.connectionState = state;
         this.renderConnectionPresentation();
 
-        if (state.lifecycle === 'idle' || state.lifecycle === 'terminal_failure') {
+        if (state.lifecycle === 'idle'
+          || state.lifecycle === 'connection_problem'
+          || state.lifecycle === 'terminal_failure') {
           this.scene.start('NetworkTestScene');
         }
       }),
@@ -358,8 +360,15 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   private layoutHud(): void {
-    this.hudText?.setPosition(16, 14);
     this.connectionBanner?.setPosition(this.scale.width / 2, 14);
+    this.connectionBanner?.setWordWrapWidth(
+      Math.min(520, Math.max(280, this.scale.width - 32)),
+      true
+    );
+    const hudTop = this.connectionBanner?.visible
+      ? 26 + this.connectionBanner.displayHeight
+      : 14;
+    this.hudText?.setPosition(16, hudTop);
     this.respawnText?.setPosition(this.scale.width / 2, this.scale.height * 0.42);
   }
 
@@ -372,6 +381,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
     const visible = this.connectionState.lifecycle === 'connection_lost'
       || this.connectionState.lifecycle === 'reconnecting'
       || this.connectionState.lifecycle === 'reconnected'
+      || this.connectionState.lifecycle === 'connection_problem'
       || Boolean(this.connectionState.error);
 
     this.connectionBanner.setText(`${copy.label} — ${this.connectionState.error ?? copy.detail}`);
@@ -379,6 +389,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
     this.connectionBanner.setBackgroundColor(successful ? '#14532d' : '#78350f');
     this.connectionBanner.setColor(successful ? '#dcfce7' : '#fef3c7');
     this.connectionBanner.setVisible(visible);
+    this.layoutHud();
   }
 
   private updateRespawnOverlay(ownShip: ShipSnapshot | undefined): void {

@@ -261,8 +261,8 @@ export class NetworkClient {
       return;
     }
 
-    if (this.room || this.connectingPromise) {
-      return this.connectingPromise ?? Promise.resolve();
+    if (this.room || this.connectingPromise || this.disconnectingPromise) {
+      return this.connectingPromise ?? this.disconnectingPromise ?? Promise.resolve();
     }
 
     const epoch = this.beginConnectionOperation();
@@ -998,7 +998,7 @@ export class NetworkClient {
   }
 
   private async disconnectInternal(): Promise<void> {
-    this.beginConnectionOperation();
+    const epoch = this.beginConnectionOperation();
     const room = this.room;
 
     this.clearRoomListeners(room);
@@ -1018,7 +1018,9 @@ export class NetworkClient {
         await room.leave(true);
       }
     } finally {
-      this.setConnectionState('disconnected', createIdleConnectionPresentation());
+      if (this.connectionEpoch === epoch) {
+        this.setConnectionState('disconnected', createIdleConnectionPresentation());
+      }
     }
   }
 
@@ -1074,11 +1076,12 @@ export class NetworkClient {
   private setConnectionNotice(errorCategory: ConnectionErrorCategory): void {
     this.status = 'error';
     this.presentation = {
-      ...this.presentation,
+      lifecycle: 'connection_problem',
+      operation: 'none',
       recovery: 'disconnect',
       errorCategory
     };
-    this.error = getPlayerConnectionErrorMessage(errorCategory);
+    this.error = getPlayerConnectionErrorMessage(errorCategory, 'disconnect');
     this.emitConnectionState();
   }
 

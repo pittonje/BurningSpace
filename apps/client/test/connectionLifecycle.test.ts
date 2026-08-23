@@ -186,6 +186,7 @@ describe('connection presentation', () => {
       'connection_lost',
       'reconnecting',
       'reconnected',
+      'connection_problem',
       'terminal_failure'
     ] as const) {
       const copy = getConnectionPresentationCopy({
@@ -331,6 +332,32 @@ describe('NetworkClient lifecycle ownership', () => {
     expect(reconnect).not.toHaveBeenCalled();
   });
 
+  it('prevents a new connect from racing a pending explicit disconnect', async () => {
+    const { network, joinOrCreate } = createHarness();
+    const firstRoom = createTestRoom('disconnecting');
+    const pendingLeave = deferred<void>();
+    firstRoom.leave = vi.fn(() => pendingLeave.promise);
+    joinOrCreate.mockResolvedValueOnce(firstRoom);
+    await network.connect();
+
+    const disconnect = network.disconnect();
+    const connectDuringDisconnect = network.connect();
+    expect(joinOrCreate).toHaveBeenCalledTimes(1);
+
+    pendingLeave.resolve();
+    await Promise.all([disconnect, connectDuringDisconnect]);
+    expect(network.getConnectionState()).toMatchObject({
+      status: 'disconnected',
+      lifecycle: 'idle',
+      operation: 'none'
+    });
+
+    joinOrCreate.mockResolvedValueOnce(createTestRoom('after-disconnect'));
+    await network.connect();
+    expect(joinOrCreate).toHaveBeenCalledTimes(2);
+    expect(network.getConnectionState().lifecycle).toBe('connected');
+  });
+
   it('uses the unchanged bounded reconnect schedule, then permits a new connection', async () => {
     vi.useFakeTimers();
     const { network, joinOrCreate, reconnect } = createHarness();
@@ -364,6 +391,29 @@ describe('NetworkClient lifecycle ownership', () => {
     await network.connect();
     expect(joinOrCreate).toHaveBeenCalledTimes(2);
     expect(network.getConnectionState().lifecycle).toBe('connected');
+  });
+
+  it('prevents a stale reconnected presentation timer from clearing a newer room error', async () => {
+    vi.useFakeTimers();
+    const { network, joinOrCreate, reconnect } = createHarness();
+    const firstRoom = createTestRoom('timer-first');
+    const reconnectedRoom = createTestRoom('timer-reconnected');
+    joinOrCreate.mockResolvedValueOnce(firstRoom);
+    reconnect.mockResolvedValueOnce(reconnectedRoom);
+    await network.connect();
+
+    firstRoom.onLeave.invoke(1006);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(network.getConnectionState().lifecycle).toBe('reconnected');
+
+    reconnectedRoom.onError.invoke(500, 'raw internal failure');
+    expect(network.getConnectionState().lifecycle).toBe('connection_problem');
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(network.getConnectionState()).toMatchObject({
+      status: 'error',
+      lifecycle: 'connection_problem',
+      recovery: 'disconnect'
+    });
   });
 
   it('rejects a stale prior operation after a newer operation succeeds', async () => {
@@ -406,13 +456,18 @@ describe('NetworkClient lifecycle ownership', () => {
     room.onError.invoke(500, 'stack token=secret https://internal.example');
     expect(network.getConnectionState()).toMatchObject({
       status: 'error',
-      lifecycle: 'connected',
+      lifecycle: 'connection_problem',
       recovery: 'disconnect',
       errorCategory: 'unexpected_failure'
     });
     expect(network.getConnectionState().error).toBe(
-      getPlayerConnectionErrorMessage('unexpected_failure')
+      getPlayerConnectionErrorMessage('unexpected_failure', 'disconnect')
     );
+    expect(network.getConnectionState().error).toMatch(/disconnect, then connect again/i);
+    expect(getConnectionPresentationCopy(network.getConnectionState())).toMatchObject({
+      label: 'Connection problem',
+      tone: 'warning'
+    });
 
     const callsBeforeUnsubscribe = callback.mock.calls.length;
     unsubscribe();

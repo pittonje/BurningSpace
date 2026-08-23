@@ -5,6 +5,7 @@ export type ConnectionLifecycle =
   | 'connection_lost'
   | 'reconnecting'
   | 'reconnected'
+  | 'connection_problem'
   | 'terminal_failure';
 
 export type ConnectionOperation = 'none' | 'initial_connect' | 'reconnect';
@@ -66,7 +67,14 @@ export function classifyInitialConnectionError(error: unknown): ConnectionErrorC
     : 'join_failed';
 }
 
-export function getPlayerConnectionErrorMessage(category: ConnectionErrorCategory): string {
+export function getPlayerConnectionErrorMessage(
+  category: ConnectionErrorCategory,
+  recovery: ConnectionRecovery = 'none'
+): string {
+  if (category === 'unexpected_failure' && recovery === 'disconnect') {
+    return 'The arena reported a connection problem. Disconnect, then connect again.';
+  }
+
   return PLAYER_ERROR_MESSAGES[category];
 }
 
@@ -104,11 +112,17 @@ export function getConnectionPresentationCopy(
         detail: 'Your arena session was restored.',
         tone: 'success'
       };
+    case 'connection_problem':
+      return {
+        label: 'Connection problem',
+        detail: 'The active arena connection reported a problem.',
+        tone: 'warning'
+      };
     case 'terminal_failure':
       return {
         label: 'Connection failed',
         detail: presentation.errorCategory
-          ? getPlayerConnectionErrorMessage(presentation.errorCategory)
+          ? getPlayerConnectionErrorMessage(presentation.errorCategory, presentation.recovery)
           : PLAYER_ERROR_MESSAGES.unexpected_failure,
         tone: 'failure'
       };
