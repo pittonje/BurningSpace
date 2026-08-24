@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-24
-Updated by: Codex — OPS-002 post-hardening host reconciliation
+Updated by: Claude — OPS-002 Caddy edge review evidence
 
 ## Repository state
 
@@ -36,9 +36,12 @@ Updated by: Codex — OPS-002 post-hardening host reconciliation
 - OPS-002 shared-host repository hardening: `MERGED / COMPLETE` through PR #67
   and normal merge commit `21a4ce2fe796f655d20911d8a52a60c69eec432d`.
 - OPS-002 host-gate discovery: `COMPLETE`. Host remediation remains required
-  before deployment GO. Edge design/preparation is the next authorized
-  repository stage; external deployment remains `NOT AUTHORIZED`, deployment
-  GO is `NOT ISSUED`, and Phase B live execution is `NOT STARTED`.
+  before deployment GO. External deployment remains `NOT AUTHORIZED`,
+  deployment GO is `NOT ISSUED`, and Phase B live execution is `NOT STARTED`.
+- OPS-002 Caddy edge repository preparation: `CADDY EDGE REPOSITORY
+  PREPARATION IMPLEMENTATION COMPLETE / REVIEW APPROVED / AWAITING
+  EVIDENCE-HEAD CORE AND HUMAN MERGE` on open PR #69. Host installation, DNS,
+  TLS, image publication, and deployment remain unauthorized.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 - Campaign systems remain deferred and the canonical campaign roadmap is
@@ -210,6 +213,68 @@ Updated by: Codex — OPS-002 post-hardening host reconciliation
   Product Architect decision, not the pull-request body. This is a `LOW`
   audit-clarity item with no repository effect.
 
+## OPS-002 Caddy edge repository preparation
+
+- Status: `CADDY EDGE REPOSITORY PREPARATION IMPLEMENTATION COMPLETE / REVIEW
+  APPROVED / AWAITING EVIDENCE-HEAD CORE AND HUMAN MERGE`.
+- Pull request: #69 — `OPS-002 — Prepare Caddy external staging edge`, `OPEN`,
+  non-draft, unmerged.
+- Branch: `ops/ops-002-caddy-edge-preparation`.
+- Base: `4533291d8b042858a0bcb143aadfec7061d44984`.
+- Corrected reviewed implementation head:
+  `864d1aacb2f902e43e0395b5058fe3e970a9dc11`.
+- Implementation-head Core run `32740776653`: `SUCCESS` on
+  `864d1aacb2f902e43e0395b5058fe3e970a9dc11`, with 13 test files and 163/163
+  repository tests, workspace build and typecheck, protocol compatibility,
+  existing callback/movement/combat diagnostics, external script typecheck, 47
+  existing external-staging preflight self-tests, 58 corrected edge preflight
+  self-tests, immutable Caddy `2.11.4` artifact verification against recorded
+  SHA-256, SHA-512, and checksum-manifest bindings, Caddy format/adapt/validate
+  of the rendered configuration, eight rejected Origin-mutation negative cases,
+  `systemd-analyze verify` of the drop-in against a safe temporary unit tree,
+  and a Unix admin runtime contract of 28 tests with all 26 required
+  assertions true.
+- Mandatory Claude QA run `32740776780` on
+  `864d1aacb2f902e43e0395b5058fe3e970a9dc11`: wrapper `SUCCESS`, substantive
+  verdict `Approved with suggestions`, `0` blockers.
+- Operations/Security: `APPROVE`.
+- Network/Runtime: `APPROVE`.
+- Product Architect: `APPROVE CADDY EDGE REPOSITORY PREPARATION`.
+- `OPS-002-EDGE-PA-F1`: `CLOSED`. The Caddy admin API no longer uses an
+  unauthenticated loopback TCP listener on the shared host.
+- Blocking findings: none. No HIGH or MEDIUM finding remains open.
+- Non-blocking: host ownership and socket-mode verification deferred to
+  installation, deliberate checksum duplication, the CI unrelated-test-user
+  runner assumption, duplicated Origin-negative coverage, and documentation
+  suggestions all remain `DEFERRED / NON-BLOCKING` and were not implemented.
+- Selected implementation: host-managed Caddy systemd service.
+- Caddy validation baseline: `2.11.4`, bound to the official immutable
+  `linux/amd64` release archive with recorded SHA-256 and SHA-512 values.
+- Admin control plane: permission-restricted Unix-domain socket, with a
+  `/run/caddy` runtime directory at mode `0700` and service `UMask=0077`.
+- Admin socket: `unix//run/caddy/burningspace-admin.sock`.
+- TCP Caddy admin listener: `FORBIDDEN`. Linux Core verified none is present,
+  including the Caddy default TCP `2019`.
+- Client upstream: `127.0.0.1:18080`.
+- Server upstream: `127.0.0.1:2567`.
+- Host installation: `NOT PERFORMED / NOT AUTHORIZED`.
+- DNS: `NOT CONFIGURED`.
+- TLS: `NOT CONFIGURED`.
+- Images: `NOT PUBLISHED / NOT SELECTED`.
+- External validation: `NOT STARTED`.
+- Deployment: `NOT AUTHORIZED / NOT STARTED`.
+- Deployment `GO`: `NOT ISSUED`.
+- Evidence state: exactly one authorized documentation-only evidence commit
+  records this review. Final-head Core on the evidence head is required before
+  merge, and PR #69 remains human-merge-only.
+- Accepted decision count: `35`, unchanged. The campaign roadmap is unchanged
+  and DOCARCH-004 remains `PAUSED`.
+- Review artifact:
+  `docs/reviews/ops-002-public-arena-external-staging-deployment-review.md`.
+- Edge external execution: `NONE`. No Contabo access, no host installation, no
+  public TCP 80/443 binding, no DNS or certificate service contact, no image
+  publication, and no deployment occurred at any point.
+
 ## Deployment boundary
 
 - OPS-002 Phase B live execution: `NOT STARTED`. External deployment remains
@@ -245,9 +310,11 @@ Updated by: Codex — OPS-002 post-hardening host reconciliation
 - Host-gate discovery: `COMPLETE`.
 - Host remediation: `REQUIRED BEFORE DEPLOYMENT GO`.
 - Root firewall review: `REQUIRED BEFORE GO`.
-- Edge design/preparation: `NEXT AUTHORIZED PREPARATION STAGE`.
-- Edge, DNS, TLS, immutable target/rollback images, external validation:
-  `NOT COMPLETE`.
+- Edge repository design/preparation: `IMPLEMENTATION COMPLETE / REVIEW
+  APPROVED / AWAITING EVIDENCE-HEAD CORE AND HUMAN MERGE` on PR #69. Host edge
+  installation and ownership: `NOT STARTED / NOT AUTHORIZED`.
+- Edge host installation, DNS, TLS, immutable target/rollback images, external
+  validation: `NOT COMPLETE`.
 - GO packet: `DRAFT / INCOMPLETE`.
 - Deployment GO: `NOT ISSUED`.
 - External deployment: `NOT AUTHORIZED`.
@@ -275,10 +342,11 @@ Updated by: Codex — OPS-002 post-hardening host reconciliation
 - The forum and all other unrelated host workloads remain outside BurningSpace
   ownership and must not be modified by BurningSpace deployment operations.
 - Host selection is `APPROVED`; repository hardening is `MERGED / COMPLETE`.
-  The next authorized stage is repository-only edge design/preparation.
-  Selecting or preparing the edge authorizes no external access, credential
-  collection, installation, public binding, DNS/TLS change, container
-  creation, image publication, or deployment.
+  Repository-only edge design/preparation is implemented and review-approved on
+  PR #69 and awaits evidence-head Core and human merge. Selecting, preparing,
+  approving, or merging the repository edge contract authorizes no external
+  access, credential collection, host installation, public binding, DNS/TLS
+  change, container creation, image publication, or deployment.
 - Remaining pre-GO gates include root-level effective firewall review;
   restriction of the public plaintext dashboard on TCP 4000; restriction or
   effective-ingress verification for Cockpit on TCP 9090; review/restriction
@@ -308,29 +376,42 @@ approval, and human merge. Network, Security, QA, Gameplay, and Visual review
 are not applicable because it changes no executable behavior, infrastructure,
 security implementation, acceptance test, gameplay, or presentation surface.
 
+OPS-002 Caddy edge repository preparation is implementation-complete and
+review-approved on PR #69 at corrected head
+`864d1aacb2f902e43e0395b5058fe3e970a9dc11`. Independent Operations/Security
+and Network/Runtime reviews approve, mandatory Claude QA passed with wrapper
+`SUCCESS` and `0` blockers, `OPS-002-EDGE-PA-F1` is closed, and the Product
+Architect approved the repository preparation and authorized exactly one
+documentation-only evidence commit. Merge is not authorized until final-head
+Core succeeds on the evidence head and the Product Architect issues the final
+merge disposition. Approval of the repository preparation authorizes no host
+installation, Contabo mutation, DNS or TLS change, image publication, external
+execution, or deployment `GO`.
+
 The one-time autonomous merge authorizations used for PR #60, PR #62, and PR
 #63 are exhausted. PR #67 entered `main` through a normal human merge. None of
 those actions authorizes any later runtime task, any future implementation PR,
-OPS-002 Phase B, or any external execution. This reconciliation and future
-OPS-002 work remain human-merge-only unless a later exact Product Architect
+OPS-002 Phase B, or any external execution. No autonomous merge authorization
+exists for PR #69. That pull request, this evidence commit, and future OPS-002
+work remain human-merge-only unless a later exact Product Architect
 authorization states otherwise.
 
 ## Next safe action
 
-Prepare a bounded repository edge design for the selected
-`burningspace-staging-01` Contabo environment. A later edge task may select the
-implementation and define versioned configuration, TLS ownership,
-HTTP-to-HTTPS behavior, client and server/WebSocket routing, exact Origin
-preservation, query-safe logging, bounded WebSocket timeouts, rollback, health
-checks, and deployment validation. It may not install an edge, bind public
-80/443, request certificates, change DNS, deploy game containers, or publish a
-public service.
+1. Validate the final-head Core run triggered by the OPS-002 Caddy edge
+   evidence commit on PR #69.
+2. If that run succeeds and no new factual blocker exists, perform a
+   human-only merge of PR #69.
+3. Do not install Caddy and do not start host execution in this gate.
+
+Approving or merging the Caddy edge repository preparation does not activate
+host installation.
 
 Host maintenance, root-level effective firewall review, public/admin port
-remediation, edge ownership, DNS, TLS, immutable release and rollback binding,
-and external validation remain outstanding and must be completed before the
-non-secret GO packet can be returned for an environment-specific Product
-Architect GO decision.
+remediation, host edge installation and ownership, DNS, TLS, immutable release
+and rollback binding, and external validation remain outstanding and must be
+completed before the non-secret GO packet can be returned for an
+environment-specific Product Architect GO decision.
 
 Phase B live execution remains unstarted and external deployment remains
 unauthorized. No hostname is assigned, no credential is requested or stored,
