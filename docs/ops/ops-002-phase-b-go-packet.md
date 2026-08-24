@@ -17,6 +17,14 @@ can make an environment-specific GO decision.
 - Phase A implementation head: `3522116d62d8fb93a4a4ca1756aec6818280f0bb`
 - Phase A evidence head: `d2322e24ac2ff0525d5b6332143098bb048d6262`
 - Phase A review: `APPROVED / COMPLETE`
+- Shared-host hardening merge: `21a4ce2fe796f655d20911d8a52a60c69eec432d`
+- Shared-host hardening implementation head:
+  `aa611ece4b0f974c30951a10e6954749b3aa10c4`
+- Authority transition: `MERGED / COMPLETE`
+- Repository hardening: `COMPLETE` — shared-host repository hardening is
+  `MERGED / COMPLETE`
+- Host-gate discovery: `COMPLETE`
+- Edge design/preparation: `NEXT AUTHORIZED PREPARATION STAGE`
 - Phase B external execution authorized: `false`
 - Deployment GO issued: `false`
 - Public production launch authorized: `false`
@@ -25,24 +33,36 @@ can make an environment-specific GO decision.
 
 [The environment decision](ops-002-phase-b-environment-decision.md) is the
 single source of truth for the measured host evidence summarized here. These
-facts resolve host selection only; they satisfy no hardening, edge, DNS, TLS,
-rollback, or validation gate.
+facts resolve host selection, repository hardening, host discovery, and
+resource-headroom assessment only. They satisfy no host-remediation, edge,
+DNS, TLS, release/rollback, or external-validation gate.
 
 - Environment selected: `YES`
 - Provider selected: `YES` — Contabo
 - Environment class selected: `YES`
-- Host capacity evidence: `AVAILABLE` — recorded in the environment decision
-- Public 80/443 availability: `VERIFIED FREE AFTER FORUM STOP`
-- Loopback pair: `SELECTED` — `127.0.0.1:2567` server and `127.0.0.1:8080`
-  client
-- Shared-host hardening complete: `NO`
-- Firewall review complete: `NO`
-- Edge configured: `NO`
-- DNS bound: `NO`
-- TLS ready: `NO`
-- Immutable target/rollback images: `NO`
-- External validation: `NO`
-- Deployment GO: `NO`
+- Host discovery: `COMPLETE`
+- Resource headroom: `PASS` — point-in-time measured evidence, not guaranteed
+  capacity
+- Forum: `STOPPED / PRESERVED / AUTOSTART DISABLED / RESTART POLICY NO`
+- Public 80/443: `AVAILABLE`
+- Server loopback: `127.0.0.1:2567`
+- Client loopback: `127.0.0.1:18080` for this selected host; the generic
+  Compose default remains `8080`
+- Shared-host repository hardening: `MERGED / COMPLETE`
+- Host remediation: `REQUIRED BEFORE DEPLOYMENT GO`
+- Firewall: `ROOT REVIEW REQUIRED`
+- TCP 4000: `RESTRICT BEFORE GO`
+- TCP 9090: `RESTRICT / VERIFY BEFORE GO`
+- TeamSpeak administrative/query ingress: `VERIFY BEFORE GO`
+- Maintenance: `REQUIRED BEFORE CONTAINER CREATION`
+- Edge: `NOT CONFIGURED`
+- DNS: `NOT CONFIGURED`
+- TLS: `NOT CONFIGURED`
+- Target image digest: `NOT SELECTED / PUBLISHED`
+- Rollback image digests: `NOT SELECTED / PUBLISHED`
+- External validation: `NOT STARTED`
+- Deployment GO: `NOT ISSUED`
+- Packet state: `DRAFT / INCOMPLETE`
 
 ## Incomplete environment and execution bindings
 
@@ -61,7 +81,7 @@ rollback, or validation gate.
 - Previous client image digest: `NOT PROVIDED`
 - Edge configuration identifier: `NOT PROVIDED`
 - Rollback mode: `NOT PROVIDED`
-- Resource-limit validation against the real host: `NOT PERFORMED`
+- Effective resource-limit validation on deployed containers: `NOT PERFORMED`
 - Management-access owner: `NOT PROVIDED`
 - Abort owner: `NOT PROVIDED`
 - Credentials-ready confirmation without values: `NOT VERIFIED`
@@ -79,16 +99,17 @@ rollback, or validation gate.
 
 ## Repository hardening contract
 
-The unmerged shared-host hardening implementation defines this provisional
-controlled-staging contract:
+PR #67 merged the controlled-staging repository contract:
 
 - authoritative server maximum: `1.00 CPU`, `1 GiB RAM`;
 - static client maximum: `0.25 CPU`, `256 MiB RAM`;
 - both containers: Docker `json-file`, `max-size=10m`, `max-file=3`;
 - one non-external project-scoped `burningspace` bridge network;
-- host publications remain exactly `127.0.0.1:2567` and
-  `127.0.0.1:8080` unless a later approved inventory selects other loopback
-  ports;
+- host publications remain loopback-only through supported bind-port
+  configuration. For `burningspace-staging-01`, intended environment values
+  are `BURNINGSPACE_SERVER_BIND_PORT=2567` and
+  `BURNINGSPACE_CLIENT_BIND_PORT=18080`; the latter is a selected-host override
+  of the valid generic `8080` default;
 - the real staging Compose path contains immutable image references and no
   source-context build;
 - local/CI source builds use a separate override and are not a shared-host
@@ -98,8 +119,9 @@ controlled-staging contract:
 - rollback switches to the recorded previous-approved digests without a
   rebuild.
 
-These limits remain `PROVISIONAL — MUST BE VALIDATED DURING STAGING`. No
-registry is selected and no image is published by repository hardening.
+These repository limits remain `SUITABLE / MUST BE VERIFIED WHEN DEPLOYED`.
+Host capacity is not guaranteed. No registry is selected and no image was
+published by repository hardening.
 
 ## GO prerequisites
 
@@ -113,6 +135,15 @@ registry is selected and no image is published by repository hardening.
   Compose project, container, and project-scoped network boundaries, explicit
   loopback binds, explicit resource limits, and immutable release and rollback
   bindings — is implemented and verified.
+- Host maintenance is complete before any BurningSpace container is created,
+  and the post-maintenance forum, port, Docker, unrelated-service, and
+  firewall checks pass.
+- Root-level effective IPv4/IPv6 firewall evidence is complete, including
+  Docker-aware forwarding and `DOCKER-USER` treatment. TCP 4000 is restricted;
+  TCP 9090 ingress is restricted or effectively verified; and TeamSpeak
+  administrative/query TCP 10011, 10022, and 10080 are reviewed/restricted.
+- The forum standstill is acknowledged: the preserved forum remains stopped
+  with restart policy `no` while the BurningSpace staging edge owns TCP 80/443.
 - The exact environment, public origins, Origin allowlist, release bindings,
   edge configuration, rollback binding, resource limits, owners, and evidence
   destination are complete.
@@ -141,6 +172,8 @@ for:
   limits, plus confirmation that sufficient host reserve remains.
 - Confirmation that unrelated host workloads, including the preserved and
   stopped forum, were not modified by BurningSpace deployment operations.
+- Confirmation that the forum standstill and preservation/prune prohibition
+  remained effective through maintenance, Docker restarts, and edge cutover.
 - Original Origin preservation, hostile and absent Origin rejection, and
   WebSocket upgrade behavior.
 - Allowed gameplay, authoritative state and movement, reconnect continuity,
@@ -185,7 +218,9 @@ CI output, and evidence. This packet records readiness by category only.
 
 GO: `NOT ISSUED`
 
-Reason: Host selection is now complete, but shared-host and repository
-hardening, firewall review, edge ownership, DNS, TLS, immutable release and
-rollback bindings, and external validation evidence all remain outstanding.
-Selecting the environment is not a deployment authorization.
+Reason: Environment selection, repository hardening, host discovery, and the
+resource-headroom assessment are complete, but required host maintenance,
+root firewall review, TCP 4000/9090 and TeamSpeak administrative ingress
+dispositions, edge ownership/configuration, DNS, TLS, immutable release and
+rollback bindings, and external validation evidence remain outstanding. Edge
+design/preparation is authorized; deployment is not.

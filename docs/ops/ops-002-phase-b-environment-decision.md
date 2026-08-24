@@ -1,11 +1,12 @@
 # OPS-002 Phase B — External Staging Environment Decision
 
-Status: `ENVIRONMENT SELECTED / HARDENING REQUIRED / GO NOT ISSUED`
+Status: `HOST DISCOVERY COMPLETE / EDGE PREPARATION AUTHORIZED / GO NOT ISSUED`
 
-Amended: 2026-08-24 — shared-host authority transition. The originally
-recorded class `dedicated-isolated-single-host-vps` is superseded for OPS-002
-controlled low-traffic external staging only. The supersession rationale and
-the preserved historical audit conclusion are recorded below.
+Amended: 2026-08-24 — post-hardening host reconciliation. Repository hardening
+is merged and host discovery is complete. The originally recorded class
+`dedicated-isolated-single-host-vps` remains superseded for OPS-002 controlled
+low-traffic external staging only. The supersession rationale and the
+preserved historical audit conclusion are recorded below.
 
 ## Decision
 
@@ -18,7 +19,8 @@ the preserved historical audit conclusion are recorded below.
 - Provider account: `NOT RECORDED IN CANONICAL DOCUMENTATION`
 - Host: `SELECTED — existing shared VPS`
 - Physical isolation: `NO`
-- Operational isolation: `REQUIRED / NOT YET IMPLEMENTED`
+- Operational isolation repository contract: `MERGED / COMPLETE`
+- Host-side deployment and verification: `NOT STARTED`
 - Region: `NOT RECORDED`
 - Public IP: `NOT RECORDED IN CANONICAL DOCUMENTATION`
 - Public client hostname: `NOT ASSIGNED`
@@ -26,11 +28,14 @@ the preserved historical audit conclusion are recorded below.
 - DNS zone: `NOT SELECTED`
 - TLS edge: `NOT CONFIGURED`
 - Reverse proxy: `NOT CONFIGURED`
-- Firewall: `NOT REVIEWED`
+- Firewall: `ROOT REVIEW REQUIRED BEFORE GO`
 - Deployment credentials: `NOT REQUESTED`
-- Shared-host hardening preparation: `AUTHORIZED`
-- Repository hardening implementation: `AUTHORIZED AFTER THIS DECISION MERGES
-  / NOT IMPLEMENTED`
+- Authority transition: `MERGED / COMPLETE`
+- Shared-host repository hardening: `MERGED / COMPLETE` — PR #67, merge
+  `21a4ce2fe796f655d20911d8a52a60c69eec432d`
+- Host-gate discovery: `COMPLETE`
+- Host remediation: `REQUIRED BEFORE DEPLOYMENT GO`
+- Edge design/preparation: `NEXT AUTHORIZED PREPARATION STAGE`
 - External deployment: `NOT AUTHORIZED`
 - Deployment GO: `NOT ISSUED`
 - Phase B live execution: `NOT STARTED`
@@ -46,14 +51,20 @@ This decision authorizes:
 
 - use of the existing Contabo VPS as the controlled low-traffic BurningSpace
   external staging host;
-- bounded shared-host hardening preparation;
-- bounded repository hardening implementation once this decision is merged.
+- repository-only edge design/preparation: selection of an edge implementation
+  and definition of versioned configuration, TLS ownership, HTTP-to-HTTPS
+  behavior, client and server/WebSocket routing, exact Origin preservation,
+  query-safe logging, bounded WebSocket timeouts, rollback configuration,
+  health checks, and deployment validation.
 
 This decision does not authorize:
 
 - public production launch;
 - general-purpose or multi-tenant deployment;
 - deployment before the remaining mandatory hardening gates below are met;
+- installing an edge on Contabo, binding public TCP 80/443, requesting
+  certificates, changing DNS, creating BurningSpace containers, publishing
+  images, or otherwise mutating the external host;
 - removal of the preserved BurningForge forum;
 - unrestricted reuse of unrelated host services.
 
@@ -66,17 +77,38 @@ firewall, proxy, DNS, or TLS mutation occurred.
 - Provider: Contabo.
 - Environment ID: `burningspace-staging-01`.
 - Host class: `shared-existing-vps-with-isolated-compose-staging`.
-- Capacity measured after forum shutdown: 4 vCPU, approximately 6.9 GiB
-  available RAM, approximately 48 GiB free disk, root filesystem approximately
-  35% used, very low observed load.
+- Host OS: Ubuntu 24.04.4 LTS.
+- Capacity measured after forum shutdown: 4 vCPU, approximately 7.8 GiB total
+  RAM with approximately 6.9 GiB available, approximately 48 GiB free disk,
+  root filesystem approximately 35% used, and very low observed load. These
+  point-in-time observations establish current resource headroom; they do not
+  guarantee future capacity.
 - Docker: healthy.
+- System health: zero failed units and no current reboot-required marker.
+- Package metadata was fresh during the audit; approximately 34 packages were
+  pending, including Docker Engine, Docker CLI, containerd, Docker Compose
+  plugin, and Docker Buildx.
 - BurningForge forum: stopped, autostart disabled, restart policy `no`, with
   container, image, and data preserved. Forum recovery remains available
   through an explicitly recorded out-of-band operational rollback procedure.
 - Public TCP 80: free.
 - Public TCP 443: free.
-- Selected BurningSpace internal loopback endpoints: `127.0.0.1:2567` for the
-  authoritative server and `127.0.0.1:8080` for the static client.
+- Selected BurningSpace host loopback endpoints:
+  `BURNINGSPACE_SERVER_BIND_PORT=2567` (`127.0.0.1:2567`) and
+  `BURNINGSPACE_CLIENT_BIND_PORT=18080` (`127.0.0.1:18080`). Client port
+  `18080` is an environment-specific override: the generic Compose default of
+  `8080` remains valid, but a preserved stopped legacy landing container
+  reserves host port `8080` in its Docker metadata and could collide if
+  started out of band.
+- No public database, cache, or Docker API exposure was observed.
+- TCP 4000 is a Dashy dashboard exposed on public IPv4 and IPv6 wildcards over
+  plaintext HTTP; no authentication evidence was observed.
+- TCP 9090 is Cockpit host administration exposed on public wildcards with
+  PAM-backed authentication and a self-signed certificate at its direct
+  endpoint.
+- Unrelated TeamSpeak voice service on UDP 9987 and required file transfer may
+  remain subject to host-owner requirements. Its administrative/query TCP
+  10011, 10022, and 10080 require explicit effective-ingress review.
 - Unrelated stable services remained operational during and after the forum
   shutdown.
 
@@ -132,6 +164,12 @@ operationally and must be bounded and explicit:
 - explicit resource limits for every BurningSpace container;
 - explicit immutable release and rollback bindings.
 
+PR #67 implements the repository side of this contract: the project-scoped
+network, loopback-only configurable publications, explicit container resource
+limits and bounded logs, immutable release/rollback reference validation, and
+off-host/CI build boundary are merged. No host-side deployment or verification
+has begun.
+
 Other host workloads remain outside BurningSpace ownership and must not be
 modified by BurningSpace deployment operations. The preserved forum is not
 part of the BurningSpace runtime.
@@ -155,41 +193,72 @@ part of the BurningSpace runtime.
 
 ## Mandatory conditions before deployment GO
 
-Every condition below remains open. None is satisfied by this decision.
+Repository hardening is complete. Every host remediation, edge, DNS/TLS,
+rollback-release binding, and external-validation condition below remains
+open unless explicitly marked complete.
 
 ### Repository hardening
 
-Required before GO:
+Status: `MERGED / COMPLETE` through PR #67.
 
-- explicit server CPU limit;
-- explicit server RAM limit;
-- explicit client CPU limit;
-- explicit client RAM limit;
+Merged controls:
+
+- explicit server/client CPU and RAM limits;
 - bounded Docker log rotation;
-- immutable target image reference;
-- immutable rollback image reference;
-- off-host or CI image build;
-- no source-context production or staging build on this shared host.
-
-Recommended and expected:
-
+- digest-only immutable target and rollback image-reference validation;
+- off-host or CI image build with no source-context staging build on this
+  shared host; and
 - an explicit project-scoped Docker network.
+
+The actual target and previous-approved image digests remain unselected and
+unpublished; those environment-specific values remain an open release/rollback
+gate rather than unfinished repository hardening.
 
 ### Host hardening
 
 Required before GO:
 
-- root-level firewall review;
-- explicit disposition of public TCP 4000;
-- identification and disposition of TCP 9090;
+- root-level effective firewall review covering `ufw status verbose`,
+  `nft list ruleset`, `iptables -S`, `ip6tables -S`, the `DOCKER-USER` chain,
+  and effective IPv4/IPv6 exposure for TCP 22, 4000, 9090, 10011, 10022,
+  10080, 30033, and UDP 9987. UFW is enabled with default INPUT and FORWARD
+  policy DROP, but privileged effective rules were not available during the
+  audit and Docker-published ports do not rely solely on UFW INPUT. Firewall
+  status is therefore not a PASS;
+- TCP 4000: `RESTRICT BEFORE GO`. A future approved action must either rebind
+  Dashy to loopback behind an appropriately authenticated administrative path,
+  or restrict ingress through an effective Docker-aware host boundary such as
+  `DOCKER-USER`/source filtering. This decision does not select a mechanism;
+- TCP 9090: `RETAIN SERVICE / RESTRICT OR VERIFY EFFECTIVE INGRESS BEFORE GO`.
+  Future evidence must bind root-level effective IPv4 and IPv6 ingress and the
+  operator access path. Cockpit must not be removed;
+- TeamSpeak administrative/query TCP 10011, 10022, and 10080:
+  `REVIEW / RESTRICT BEFORE GO`. BurningSpace operations do not own the
+  TeamSpeak runtime;
 - verification that no unintended public database, cache, or Docker API
   exposure exists;
-- maintenance and update review;
+- host maintenance before any BurningSpace containers are created. The audit
+  found approximately 34 pending packages, including Docker Engine, Docker
+  CLI, containerd, Docker Compose plugin, and Docker Buildx; maintenance may
+  restart the Docker daemon;
 - confirmation of sufficient host reserve after resource-limit selection.
+
+After maintenance, reverify Docker health; exact individual forum container
+state and restart policy; TCP 80/443 and selected loopback-port availability;
+unrelated-service operation; and effective firewall state. Exact individual
+container inspection is authoritative on this host because Docker aggregate
+container counters have disagreed with individually inspected state; do not
+use `docker info ContainersRunning` alone as a stop/GO gate.
+
+The preserved forum must not be started while the BurningSpace staging edge
+owns TCP 80/443. Recheck forum stopped, restart policy `no`, and TCP 80/443
+free immediately before edge activation and after every host reboot, Docker
+daemon restart, or host maintenance event.
 
 ### Edge
 
-Required before GO:
+Status: `DESIGN / PREPARATION AUTHORIZED`; configuration and host installation
+remain incomplete. Required before GO:
 
 - independent BurningSpace reverse proxy or edge ownership;
 - dedicated public 80/443 use for BurningSpace staging;
@@ -242,20 +311,20 @@ Required before GO:
 
 ## Risk classification and review process
 
-The upcoming shared-host hardening implementation is `HIGH RISK` because it
-affects deployment isolation, resource containment, logs, release and rollback
-reproducibility, public edge preparation, and security boundaries.
+This post-hardening reconciliation is `NORMAL RISK`: it changes documentation
+and authority only and performs no external action. It requires documentation
+validation, one independent read-only Operations/Architecture review, Product
+Architect approval, and human merge. Network, Security, QA, Gameplay, and
+Visual reviewers are skipped because this reconciliation changes no
+executable network/security behavior, acceptance tests, gameplay, or player
+presentation.
 
-Its implementation requires:
+Claude QA is advisory and non-blocking for this normal-risk documentation
+reconciliation under the current risk-based process.
 
-- Core CI and tests;
-- independent Operations/Security review;
-- independent Network/Runtime review where network behavior is affected;
-- mandatory Claude QA;
-- Product Architect approval;
-- human merge.
-
-The project's risk-based review policy is not weakened by this decision.
+The later edge implementation retains the reviewer set and risk classification
+selected for its actual implementation surface. This reconciliation does not
+weaken any mandatory edge or deployment review.
 
 ## Rejected environment classes
 
@@ -303,8 +372,8 @@ the following non-secret prerequisites must be complete:
   bindings are completed in the GO packet.
 
 Provisioning is not complete, credentials have not been requested, and this
-decision is not authorization to perform any prerequisite beyond bounded
-repository and shared-host hardening preparation.
+decision authorizes only bounded repository edge design/preparation. External
+host mutation remains closed until separate Product Architect authorization.
 
 ## Decision expiration
 
