@@ -4,7 +4,7 @@
 
 This runbook separates OPS-002 repository preparation from any later controlled external execution. The Public Arena remains alpha and non-persistent: one in-memory authoritative server process and one static-client container, with no accounts, persistence, horizontal scaling, production SLA, or public-production launch. A server restart or rollback resets active rooms and world state.
 
-The existing [local/container staging runbook](public-arena-staging-runbook.md) remains the source for the bounded local Compose lifecycle. This document adds the shared-host staging, external edge, authorization, validation, and rollback contract. The selected provider and environment are recorded in the Phase B environment decision; that selection does not authorize deployment.
+The existing [local/container staging runbook](public-arena-staging-runbook.md) remains the source for the bounded local Compose lifecycle. This document adds the shared-host staging, external edge, authorization, validation, and rollback contract. The selected provider and environment are recorded in the Phase B environment decision; that selection does not authorize deployment. The selected edge implementation and its repository validation contract are defined in the [Caddy edge runbook](public-arena-caddy-edge-runbook.md).
 
 ## Authorization boundary
 
@@ -65,6 +65,14 @@ Do not add credential slots to copyable example environment files.
 
 ## Provider-neutral edge contract
 
+For `burningspace-staging-01`, the selected implementation is an independent
+host-managed Caddy systemd service. Repository validation is pinned to official
+Caddy `2.11.4` with no plugins. Caddy is not part of the Compose project and is
+not installed or configured by repository preparation. The provider-neutral
+requirements below remain authoritative; implementation-specific validation,
+reload, rollback, ownership, and logging details live in the Caddy edge
+runbook.
+
 The selected edge must:
 
 - terminate TLS for the exact client and server names and redirect HTTP to HTTPS where appropriate;
@@ -74,13 +82,17 @@ The selected edge must:
 - provide a bounded timeout suitable for long-lived WebSockets;
 - route only to explicit loopback upstreams;
 - expose no direct Node/static-client service ports or administrative/dashboard ports;
+- expose Caddy administration only through the service-owned
+  `/run/caddy/burningspace-admin.sock` inside a systemd-managed `caddy:caddy`
+  mode-`0700` runtime directory with `UMask=0077`; no TCP admin listener is
+  allowed;
 - treat forwarded client IP only as operations metadata, never identity or gameplay authority.
 
 For external targets, TLS verification remains enabled. Do not recover from edge failures by weakening the exact Origin allowlist, using plaintext external transport, or exposing Compose ports publicly.
 
 ## Access-log safety
 
-Colyseus may carry a reconnect bearer token in a WebSocket query string. The effective edge/access-log format must not retain request query strings for WebSocket routes, and logs/evidence must not contain reconnect tokens. Verify the actual effective logging behavior of the selected edge; no single provider-specific directive is assumed sufficient. Application lifecycle logs must remain bounded and omit Origin lists, headers, tokens, and gameplay state.
+Colyseus may carry a reconnect bearer token in a WebSocket query string. The effective edge access and runtime/error-log formats must not retain request query strings for WebSocket routes, including failed-upstream paths, and logs/evidence must not contain reconnect tokens. Verify the actual effective logging behavior of the selected edge; no single provider-specific directive is assumed sufficient. Application lifecycle logs must remain bounded and omit Origin lists, headers, tokens, and gameplay state.
 
 ## Phase A commands
 
@@ -89,11 +101,14 @@ These commands operate only on committed examples, repository state, or loopback
 ```sh
 npx tsc -p apps/server/scripts/tsconfig.external-staging.json --noEmit
 npx tsx apps/server/scripts/external-staging-preflight.ts --self-test
+npx tsx apps/server/scripts/external-staging-edge-preflight.ts --self-test
+npx tsx apps/server/scripts/external-staging-edge-preflight.ts --template
+npx tsx apps/server/scripts/external-staging-edge-contract-check.ts --self-test
 docker compose --env-file deploy/external-staging.env.example -f deploy/docker-compose.staging.yml config --format json | npx tsx apps/server/scripts/external-staging-preflight.ts --template --env deploy/external-staging.env.example --plan deploy/external-staging-plan.example.json --compose-stdin
 docker compose --env-file deploy/staging.env.example -f deploy/docker-compose.staging.yml -f deploy/docker-compose.staging.build.yml config --format json
 ```
 
-A real Phase A plan uses full local commit SHAs, keeps `externalExecutionAuthorized=false`, and is validated with `--phase-a`. Do not run `--phase-b` without the later environment-specific authorization packet. None of these commands deploys or contacts `.example.invalid`.
+A real Phase A plan uses full local commit SHAs, keeps `externalExecutionAuthorized=false`, and is validated with `--phase-a`. The separate edge Phase A inventory keeps `hostInstallationAuthorized=false` and `externalExecutionAuthorized=false`. Do not run either `--phase-b` mode without the later exact environment-specific authorization packet. None of these commands deploys or contacts `.example.invalid`. When no local Caddy binary is available, the edge contract tool reports that runtime execution was unavailable; Linux Core must then provide the authoritative checksum-bound Caddy runtime evidence.
 
 For the Core loopback smoke only, both targets must be loopback and `BURNINGSPACE_EXTERNAL_SMOKE_ALLOW_LOOPBACK_HTTP=true` must be explicit. That override cannot enable HTTP for a non-loopback target.
 
@@ -185,6 +200,8 @@ Before the Product Architect can issue GO, provide one non-secret packet contain
 - target and previous approved commit/image bindings;
 - exact client/server origins and allowlist;
 - edge configuration ID;
+- previous edge configuration ID, exact Caddy version/source, and rendered and
+  adapted configuration hashes;
 - exact final Core run and reviewed head;
 - Operations/Security and Network/Runtime verdict bindings;
 - mandatory Claude QA result and reviewed head;
@@ -203,7 +220,11 @@ Only after explicit GO:
 2. Confirm credentials are available through secure channels and no value will enter repository output.
 3. Confirm maintenance and all shared-host remediation gates are complete,
    including the forum standstill and cleanup prohibition.
-4. Confirm DNS/TLS/edge configuration and service-port exposure against the approved inventory.
+4. Confirm the selected Caddy version, effective systemd drop-in and service
+   identity, `/run/caddy` ownership/mode, service umask, Unix admin socket and
+   reload path, absence of IPv4/IPv6 TCP admin listeners, current/previous
+   config IDs, rendered/adapted hashes, DNS/TLS edge state, log safety, and
+   service-port exposure against the approved inventory and Caddy runbook.
 5. Pull or otherwise retrieve the exact prebuilt, digest-pinned target images derived from the approved merged commit; never build from source on the shared host.
 6. Apply the provider-neutral edge configuration and one-server/one-client deployment through the approved operational mechanism.
 7. Run the complete external matrix below, including machine reconnect/session smoke and separate browser UX evidence.

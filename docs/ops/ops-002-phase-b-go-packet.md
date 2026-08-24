@@ -24,7 +24,18 @@ can make an environment-specific GO decision.
 - Repository hardening: `COMPLETE` — shared-host repository hardening is
   `MERGED / COMPLETE`
 - Host-gate discovery: `COMPLETE`
-- Edge design/preparation: `NEXT AUTHORIZED PREPARATION STAGE`
+- Edge implementation: `SELECTED — Caddy host systemd service`
+- Edge repository preparation: `IN PROGRESS — COMPLETE ONLY AFTER HUMAN MERGE`
+- Caddy validation baseline: `2.11.4`
+- Host Caddy installation: `NOT PERFORMED`
+- Installed Caddy version: `NOT VERIFIED`
+- Admin control plane: `SELECTED — permission-restricted Unix socket`
+- Admin socket: `unix//run/caddy/burningspace-admin.sock`
+- Admin TCP listener: `FORBIDDEN`
+- Systemd runtime directory: `NOT INSTALLED / NOT VERIFIED` — intended
+  `/run/caddy`, `caddy:caddy`, mode `0700`, service `UMask=0077`
+- Socket permission evidence: `NOT VERIFIED`
+- Host reload evidence: `NOT VERIFIED`
 - Phase B external execution authorized: `false`
 - Deployment GO issued: `false`
 - Public production launch authorized: `false`
@@ -55,7 +66,7 @@ DNS, TLS, release/rollback, or external-validation gate.
 - TCP 9090: `RESTRICT / VERIFY BEFORE GO`
 - TeamSpeak administrative/query ingress: `VERIFY BEFORE GO`
 - Maintenance: `REQUIRED BEFORE CONTAINER CREATION`
-- Edge: `NOT CONFIGURED`
+- Edge: `SELECTED / REPOSITORY PREPARATION IN PROGRESS / NOT INSTALLED`
 - DNS: `NOT CONFIGURED`
 - TLS: `NOT CONFIGURED`
 - Target image digest: `NOT SELECTED / PUBLISHED`
@@ -79,7 +90,11 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Previous approved commit: `NOT PROVIDED`
 - Previous server image digest: `NOT PROVIDED`
 - Previous client image digest: `NOT PROVIDED`
-- Edge configuration identifier: `NOT PROVIDED`
+- Edge configuration identifier: `NOT SELECTED FOR REAL ENVIRONMENT`
+- Previous edge configuration identifier: `NOT SELECTED`
+- Installed Caddy version/source: `NOT VERIFIED`
+- Effective Caddy systemd unit/drop-in, runtime-directory ownership/mode, Unix
+  socket ownership/mode, and absence of TCP admin listeners: `NOT VERIFIED`
 - Rollback mode: `NOT PROVIDED`
 - Effective resource-limit validation on deployed containers: `NOT PERFORMED`
 - Management-access owner: `NOT PROVIDED`
@@ -147,6 +162,11 @@ published by repository hardening.
 - The exact environment, public origins, Origin allowlist, release bindings,
   edge configuration, rollback binding, resource limits, owners, and evidence
   destination are complete.
+- The effective Caddy unit uses the reviewed drop-in, runs as `caddy:caddy`,
+  creates `/run/caddy` mode `0700` with `UMask=0077`, exposes only
+  `/run/caddy/burningspace-admin.sock` for administration, denies an unrelated
+  local user, and reloads successfully through that socket with no TCP admin
+  listener before or after reload.
 - The target and previous-approved server/client image references are all
   supplied, digest-pinned, non-placeholder, and derived from approved
   off-host builds.
@@ -167,6 +187,10 @@ for:
 - The environment ID, public client/server origins, and edge configuration.
 - DNS and TLS status, loopback bindings, firewall exposure, and management
   separation.
+- Effective Caddy service identity, committed drop-in, runtime-directory and
+  socket ownership/modes, service umask, Unix-socket reload result, unrelated
+  local-user denial, post-reload routing, and live proof that no TCP admin
+  listener exists on IPv4 or IPv6.
 - The bounded Compose project, container, and project-scoped network
   boundaries and the effective per-container CPU, RAM, and log-rotation
   limits, plus confirmation that sufficient host reserve remains.
@@ -188,7 +212,9 @@ for:
 
 Abort for invalid TLS or DNS; stripped or rewritten Origin; hostile or absent
 Origin acceptance; wildcard allowlisting; broken WebSocket upgrade; direct
-service, admin, or dashboard port exposure; plaintext external transport;
+service, admin, or dashboard port exposure; any TCP Caddy admin listener; an
+admin socket reachable by an unrelated local user; wrong Caddy runtime-directory
+ownership, mode, or umask; failed Unix-socket reload; plaintext external transport;
 disabled TLS verification; credential, reconnect-token, query-string, or
 environment leakage; readiness failure; client endpoint mismatch; duplicate
 reconnect ownership; stale review or Core bindings; unavailable rollback;
