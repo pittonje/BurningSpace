@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-24
-Updated by: Claude — OPS-002 Caddy edge review evidence
+Updated by: Codex — OPS-002 Caddy edge post-merge reconciliation
 
 ## Repository state
 
@@ -38,10 +38,11 @@ Updated by: Claude — OPS-002 Caddy edge review evidence
 - OPS-002 host-gate discovery: `COMPLETE`. Host remediation remains required
   before deployment GO. External deployment remains `NOT AUTHORIZED`,
   deployment GO is `NOT ISSUED`, and Phase B live execution is `NOT STARTED`.
-- OPS-002 Caddy edge repository preparation: `CADDY EDGE REPOSITORY
-  PREPARATION IMPLEMENTATION COMPLETE / REVIEW APPROVED / AWAITING
-  EVIDENCE-HEAD CORE AND HUMAN MERGE` on open PR #69. Host installation, DNS,
-  TLS, image publication, and deployment remain unauthorized.
+- OPS-002 Caddy edge repository preparation: `MERGED / COMPLETE` through PR
+  #69 and normal merge commit
+  `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Host installation, DNS, TLS,
+  image publication, external validation, deployment, and deployment `GO`
+  remain incomplete or unauthorized.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 - Campaign systems remain deferred and the canonical campaign roadmap is
@@ -215,14 +216,15 @@ Updated by: Claude — OPS-002 Caddy edge review evidence
 
 ## OPS-002 Caddy edge repository preparation
 
-- Status: `CADDY EDGE REPOSITORY PREPARATION IMPLEMENTATION COMPLETE / REVIEW
-  APPROVED / AWAITING EVIDENCE-HEAD CORE AND HUMAN MERGE`.
-- Pull request: #69 — `OPS-002 — Prepare Caddy external staging edge`, `OPEN`,
-  non-draft, unmerged.
+- Status: `MERGED / COMPLETE`.
+- Pull request: #69 — `OPS-002 — Prepare Caddy external staging edge`, merged
+  normally into `main` on 2026-08-24.
 - Branch: `ops/ops-002-caddy-edge-preparation`.
 - Base: `4533291d8b042858a0bcb143aadfec7061d44984`.
 - Corrected reviewed implementation head:
   `864d1aacb2f902e43e0395b5058fe3e970a9dc11`.
+- Evidence head: `ee41232b4eff513ec3d3d04ee8a03845e719171d`.
+- Merge commit: `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`.
 - Implementation-head Core run `32740776653`: `SUCCESS` on
   `864d1aacb2f902e43e0395b5058fe3e970a9dc11`, with 13 test files and 163/163
   repository tests, workspace build and typecheck, protocol compatibility,
@@ -237,9 +239,18 @@ Updated by: Claude — OPS-002 Caddy edge review evidence
 - Mandatory Claude QA run `32740776780` on
   `864d1aacb2f902e43e0395b5058fe3e970a9dc11`: wrapper `SUCCESS`, substantive
   verdict `Approved with suggestions`, `0` blockers.
+- Final evidence-head Core run `32746509383`: `SUCCESS` on
+  `ee41232b4eff513ec3d3d04ee8a03845e719171d`, with all required repository,
+  edge-preflight, immutable-artifact, Caddy validation, systemd, and Unix-admin
+  runtime checks passing.
+- Evidence-head Claude QA run `32746509019` had wrapper `FAILURE` only because
+  output validation rejected an overlength minor suggestion. Its substantive
+  verdict was `Approved with suggestions, pending final-head Core success`;
+  that temporal condition was closed by Core run `32746509383`, and the run
+  identified no factual blocker. This is not recorded as wrapper success.
 - Operations/Security: `APPROVE`.
 - Network/Runtime: `APPROVE`.
-- Product Architect: `APPROVE CADDY EDGE REPOSITORY PREPARATION`.
+- Product Architect: `APPROVE FOR MERGE`.
 - `OPS-002-EDGE-PA-F1`: `CLOSED`. The Caddy admin API no longer uses an
   unauthenticated loopback TCP listener on the shared host.
 - Blocking findings: none. No HIGH or MEDIUM finding remains open.
@@ -264,9 +275,9 @@ Updated by: Claude — OPS-002 Caddy edge review evidence
 - External validation: `NOT STARTED`.
 - Deployment: `NOT AUTHORIZED / NOT STARTED`.
 - Deployment `GO`: `NOT ISSUED`.
-- Evidence state: exactly one authorized documentation-only evidence commit
-  records this review. Final-head Core on the evidence head is required before
-  merge, and PR #69 remains human-merge-only.
+- Evidence state: the authorized documentation-only evidence commit and its
+  final-head checks are complete. The exact one-time merge authorization was
+  used for PR #69 and is exhausted.
 - Accepted decision count: `35`, unchanged. The campaign roadmap is unchanged
   and DOCARCH-004 remains `PAUSED`.
 - Review artifact:
@@ -310,9 +321,9 @@ Updated by: Claude — OPS-002 Caddy edge review evidence
 - Host-gate discovery: `COMPLETE`.
 - Host remediation: `REQUIRED BEFORE DEPLOYMENT GO`.
 - Root firewall review: `REQUIRED BEFORE GO`.
-- Edge repository design/preparation: `IMPLEMENTATION COMPLETE / REVIEW
-  APPROVED / AWAITING EVIDENCE-HEAD CORE AND HUMAN MERGE` on PR #69. Host edge
-  installation and ownership: `NOT STARTED / NOT AUTHORIZED`.
+- Edge repository design/preparation: `MERGED / COMPLETE` through PR #69 and
+  merge `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Host edge installation and
+  ownership: `NOT STARTED / NOT AUTHORIZED`.
 - Edge host installation, DNS, TLS, immutable target/rollback images, external
   validation: `NOT COMPLETE`.
 - GO packet: `DRAFT / INCOMPLETE`.
@@ -342,11 +353,11 @@ Updated by: Claude — OPS-002 Caddy edge review evidence
 - The forum and all other unrelated host workloads remain outside BurningSpace
   ownership and must not be modified by BurningSpace deployment operations.
 - Host selection is `APPROVED`; repository hardening is `MERGED / COMPLETE`.
-  Repository-only edge design/preparation is implemented and review-approved on
-  PR #69 and awaits evidence-head Core and human merge. Selecting, preparing,
-  approving, or merging the repository edge contract authorizes no external
-  access, credential collection, host installation, public binding, DNS/TLS
-  change, container creation, image publication, or deployment.
+  Repository-only edge design/preparation is `MERGED / COMPLETE` through PR
+  #69. Selecting, preparing, approving, or merging the repository edge contract
+  authorizes no external access, credential collection, host installation,
+  public binding, DNS/TLS change, container creation, image publication, or
+  deployment.
 - Remaining pre-GO gates include root-level effective firewall review;
   restriction of the public plaintext dashboard on TCP 4000; restriction or
   effective-ingress verification for Cockpit on TCP 9090; review/restriction
@@ -376,33 +387,35 @@ approval, and human merge. Network, Security, QA, Gameplay, and Visual review
 are not applicable because it changes no executable behavior, infrastructure,
 security implementation, acceptance test, gameplay, or presentation surface.
 
-OPS-002 Caddy edge repository preparation is implementation-complete and
-review-approved on PR #69 at corrected head
-`864d1aacb2f902e43e0395b5058fe3e970a9dc11`. Independent Operations/Security
-and Network/Runtime reviews approve, mandatory Claude QA passed with wrapper
-`SUCCESS` and `0` blockers, `OPS-002-EDGE-PA-F1` is closed, and the Product
-Architect approved the repository preparation and authorized exactly one
-documentation-only evidence commit. Merge is not authorized until final-head
-Core succeeds on the evidence head and the Product Architect issues the final
-merge disposition. Approval of the repository preparation authorizes no host
-installation, Contabo mutation, DNS or TLS change, image publication, external
-execution, or deployment `GO`.
+OPS-002 Caddy edge repository preparation is merged and complete through PR
+#69. Corrected implementation head
+`864d1aacb2f902e43e0395b5058fe3e970a9dc11`, evidence head
+`ee41232b4eff513ec3d3d04ee8a03845e719171d`, and merge commit
+`4d691b056a8fa5cc558f52ae81da51d69aff2fc1` are the fixed bindings.
+Independent Operations/Security and Network/Runtime reviews approve; Product
+Architect approval is recorded; `OPS-002-EDGE-PA-F1` is closed; implementation
+Claude run `32740776780` succeeded with `Approved with suggestions` and `0`
+blockers; and final-head Core run `32746509383` succeeded. Evidence-head Claude
+run `32746509019` failed output validation after a substantively approving
+review whose only temporal condition was closed by that Core success; it is
+not represented as wrapper success and establishes no factual blocker. The
+exact one-time merge authorization used for PR #69 is exhausted. Merge of the
+repository preparation authorizes no host installation, Contabo mutation, DNS
+or TLS change, image publication, external execution, or deployment `GO`.
 
-The one-time autonomous merge authorizations used for PR #60, PR #62, and PR
-#63 are exhausted. PR #67 entered `main` through a normal human merge. None of
-those actions authorizes any later runtime task, any future implementation PR,
-OPS-002 Phase B, or any external execution. No autonomous merge authorization
-exists for PR #69. That pull request, this evidence commit, and future OPS-002
-work remain human-merge-only unless a later exact Product Architect
+The one-time autonomous merge authorizations used for PR #60, PR #62, PR #63,
+and PR #69 are exhausted. PR #67 entered `main` through a normal human merge.
+None of those actions authorizes any later runtime task, any future
+implementation PR, OPS-002 Phase B, or any external execution. Future OPS-002
+work remains human-merge-only unless a later exact Product Architect
 authorization states otherwise.
 
 ## Next safe action
 
-1. Validate the final-head Core run triggered by the OPS-002 Caddy edge
-   evidence commit on PR #69.
-2. If that run succeeds and no new factual blocker exists, perform a
-   human-only merge of PR #69.
-3. Do not install Caddy and do not start host execution in this gate.
+Prepare a separately authorized host-maintenance and
+root-firewall/public-service-remediation gate before any Caddy installation or
+BurningSpace container creation. Do not start host execution in this
+reconciliation gate.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.

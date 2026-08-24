@@ -1,9 +1,10 @@
 # OPS-002 Phase B — External Staging Environment Decision
 
-Status: `HOST DISCOVERY COMPLETE / EDGE PREPARATION AUTHORIZED / GO NOT ISSUED`
+Status: `EDGE REPOSITORY PREPARATION MERGED / COMPLETE / HOST REMEDIATION AND INSTALLATION GATES REMAIN / GO NOT ISSUED`
 
-Amended: 2026-08-24 — post-hardening host reconciliation. Repository hardening
-is merged and host discovery is complete. The originally recorded class
+Amended: 2026-08-24 — post-Caddy-edge-merge reconciliation. Repository
+hardening and Caddy edge repository preparation are merged, and host discovery
+is complete. The originally recorded class
 `dedicated-isolated-single-host-vps` remains superseded for OPS-002 controlled
 low-traffic external staging only. The supersession rationale and the
 preserved historical audit conclusion are recorded below.
@@ -35,7 +36,11 @@ preserved historical audit conclusion are recorded below.
   `21a4ce2fe796f655d20911d8a52a60c69eec432d`
 - Host-gate discovery: `COMPLETE`
 - Host remediation: `REQUIRED BEFORE DEPLOYMENT GO`
-- Edge design/preparation: `NEXT AUTHORIZED PREPARATION STAGE`
+- Edge repository preparation: `MERGED / COMPLETE` — PR #69, implementation
+  head `864d1aacb2f902e43e0395b5058fe3e970a9dc11`, evidence head
+  `ee41232b4eff513ec3d3d04ee8a03845e719171d`, merge
+  `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`
+- Host Caddy installation: `NOT STARTED / NOT AUTHORIZED`
 - External deployment: `NOT AUTHORIZED`
 - Deployment GO: `NOT ISSUED`
 - Phase B live execution: `NOT STARTED`
@@ -257,8 +262,12 @@ daemon restart, or host maintenance event.
 
 ### Edge
 
-Status: `DESIGN / PREPARATION AUTHORIZED`; configuration and host installation
-remain incomplete. Required before GO:
+Status: repository contract `MERGED / COMPLETE`; real-host configuration,
+installation, effective ownership, and public-listener evidence remain
+incomplete. Repository evidence does not prove the required `caddy:caddy`
+identity, runtime-directory or socket permissions, absence of TCP admin
+listeners on the real host, public ingress, DNS, TLS, or certificate state.
+Required before GO:
 
 - independent BurningSpace reverse proxy or edge ownership;
 - dedicated public 80/443 use for BurningSpace staging;
@@ -322,9 +331,10 @@ presentation.
 Claude QA is advisory and non-blocking for this normal-risk documentation
 reconciliation under the current risk-based process.
 
-The later edge implementation retains the reviewer set and risk classification
-selected for its actual implementation surface. This reconciliation does not
-weaken any mandatory edge or deployment review.
+The completed edge repository implementation retained the reviewer set and
+risk classification selected for its implementation surface. This
+reconciliation does not weaken any mandatory host, edge-installation, or
+deployment review.
 
 ## Rejected environment classes
 
@@ -371,9 +381,9 @@ the following non-secret prerequisites must be complete:
 - Log-redaction, rollback-readiness, external-smoke, review, and evidence
   bindings are completed in the GO packet.
 
-Provisioning is not complete, credentials have not been requested, and this
-decision authorizes only bounded repository edge design/preparation. External
-host mutation remains closed until separate Product Architect authorization.
+Repository edge preparation is complete, but provisioning is not complete and
+credentials have not been requested. External host mutation, including Caddy
+installation, remains closed until separate Product Architect authorization.
 
 ## Decision expiration
 

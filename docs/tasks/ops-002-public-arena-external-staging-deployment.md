@@ -6,7 +6,7 @@ Track: `Public Arena Alpha launch track`
 
 ## Status
 
-`ACTIVE — EDGE DESIGN / PREPARATION NEXT; DEPLOYMENT NOT AUTHORIZED`
+`ACTIVE — EDGE REPOSITORY PREPARATION COMPLETE; HOST/RELEASE/DNS/TLS/VALIDATION REMAIN; DEPLOYMENT NOT AUTHORIZED`
 
 ## Risk
 
@@ -32,9 +32,12 @@ authorize external staging execution.
   merge commit `21a4ce2fe796f655d20911d8a52a60c69eec432d`.
 - Read-only host-gate discovery is `COMPLETE`. Host remediation remains
   required before deployment GO.
-- Edge design/preparation is the next authorized repository stage. No edge is
-  selected or configured, and this authority permits no external host
-  mutation.
+- Caddy edge repository preparation is `MERGED / COMPLETE` through PR #69 and
+  merge `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Caddy is not installed or
+  configured on the host, and this authority permits no external host mutation.
+- Host remediation, target and rollback image publication/binding, DNS/TLS,
+  Caddy installation, and external validation remain required. Deployment `GO`
+  remains `NOT ISSUED`.
 - The accepted decision count remains 35. OPS-002 creates no accepted game
   design, architecture, process, or CI decision.
 - The campaign roadmap and DOCARCH-004 paused state are unchanged.
@@ -98,8 +101,10 @@ authoritative ship replication, movement, and intentional cleanup.
 
 The provider and environment class are selected by the merged
 [Phase B environment decision](../ops/ops-002-phase-b-environment-decision.md).
-No hostname, address, credential, firewall product, TLS issuer, or edge
-implementation is selected by current repository authority.
+No hostname, address, credential, firewall product, or TLS issuer is selected
+by current repository authority. The selected edge implementation is a
+host-managed Caddy systemd service; its repository contract is merged, but it
+is not installed or configured on the host.
 
 ## Hard architectural invariants
 
@@ -173,11 +178,14 @@ successful Phase A merge alone is not deployment authorization.
 
 ### Current edge-preparation authority
 
-The Product Architect authorizes a later bounded repository task to select an
-edge implementation and define versioned configuration, TLS ownership,
-HTTP-to-HTTPS behavior, client routing, server/WebSocket routing, exact Origin
-preservation, query-safe logging, bounded WebSocket timeout behavior, rollback
-configuration, health checks, and deployment validation.
+The authorized bounded repository task selected a host-managed Caddy systemd
+service and defined versioned configuration, TLS ownership, HTTP-to-HTTPS
+behavior, client routing, server/WebSocket routing, exact Origin preservation,
+query-safe logging, bounded WebSocket timeout behavior, rollback configuration,
+health checks, and deployment validation. It is `MERGED / COMPLETE` through PR
+#69 at implementation head `864d1aacb2f902e43e0395b5058fe3e970a9dc11`,
+evidence head `ee41232b4eff513ec3d3d04ee8a03845e719171d`, and merge
+`4d691b056a8fa5cc558f52ae81da51d69aff2fc1`.
 
 This does not authorize installing the edge on Contabo, binding public TCP
 80/443, requesting certificates, changing DNS, creating BurningSpace
