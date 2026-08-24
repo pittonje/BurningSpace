@@ -25,7 +25,11 @@ can make an environment-specific GO decision.
   `MERGED / COMPLETE`
 - Host-gate discovery: `COMPLETE`
 - Edge implementation: `SELECTED — Caddy host systemd service`
-- Edge repository preparation: `IN PROGRESS — COMPLETE ONLY AFTER HUMAN MERGE`
+- Edge repository preparation: `MERGED / COMPLETE` through PR #69
+- Edge reviewed implementation:
+  `864d1aacb2f902e43e0395b5058fe3e970a9dc11`
+- Edge evidence: `ee41232b4eff513ec3d3d04ee8a03845e719171d`
+- Edge merge: `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`
 - Caddy validation baseline: `2.11.4`
 - Host Caddy installation: `NOT PERFORMED`
 - Installed Caddy version: `NOT VERIFIED`
@@ -66,7 +70,7 @@ DNS, TLS, release/rollback, or external-validation gate.
 - TCP 9090: `RESTRICT / VERIFY BEFORE GO`
 - TeamSpeak administrative/query ingress: `VERIFY BEFORE GO`
 - Maintenance: `REQUIRED BEFORE CONTAINER CREATION`
-- Edge: `SELECTED / REPOSITORY PREPARATION IN PROGRESS / NOT INSTALLED`
+- Edge: `SELECTED / REPOSITORY PREPARATION MERGED AND COMPLETE / NOT INSTALLED`
 - DNS: `NOT CONFIGURED`
 - TLS: `NOT CONFIGURED`
 - Target image digest: `NOT SELECTED / PUBLISHED`
@@ -245,8 +249,10 @@ CI output, and evidence. This packet records readiness by category only.
 GO: `NOT ISSUED`
 
 Reason: Environment selection, repository hardening, host discovery, and the
-resource-headroom assessment are complete, but required host maintenance,
+resource-headroom assessment and Caddy repository preparation are complete,
+but required host maintenance,
 root firewall review, TCP 4000/9090 and TeamSpeak administrative ingress
 dispositions, edge ownership/configuration, DNS, TLS, immutable release and
-rollback bindings, and external validation evidence remain outstanding. Edge
-design/preparation is authorized; deployment is not.
+rollback bindings, and external validation evidence remain outstanding. Host
+Caddy installation and deployment are not authorized, and deployment `GO` is
+not issued.
