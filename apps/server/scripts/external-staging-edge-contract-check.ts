@@ -360,6 +360,7 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
   let caddy: ChildProcessWithoutNullStreams | undefined;
   let stdout = '';
   let stderr = '';
+  let stage = 'initialization';
   try {
     const [clientPort, serverPort, clientUpstreamPort, serverUpstreamPort] = await freePorts(4);
     const ports = {
@@ -368,6 +369,7 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
     };
     clientUpstream = await startUpstream('client', ports.clientUpstream, seen);
     serverUpstream = await startUpstream('server', ports.serverUpstream, seen);
+    stage = 'configuration-validation';
     writeFileSync(configPath, testCaddyfile(ports), { encoding: 'utf8', mode: 0o600 });
     const formatted = spawnSync(exactBinary, ['fmt', '--overwrite', configPath], { encoding: 'utf8', windowsHide: true });
     if (formatted.status !== 0) fail('CADDY_VALIDATION', 'Temporary Caddy configuration could not be formatted.');
@@ -387,6 +389,7 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
     caddy.stdout.on('data', (chunk: string) => { stdout = `${stdout}${chunk}`.slice(-65_536); });
     caddy.stderr.on('data', (chunk: string) => { stderr = `${stderr}${chunk}`.slice(-65_536); });
     await waitForCaddy(ports.clientPort);
+    stage = 'admin-socket-inspection';
     if (!existsSync(adminSocket) || !lstatSync(adminSocket).isSocket()) fail('ADMIN_SOCKET', 'Caddy did not create the configured Unix admin socket.');
     const directory = statSync(work);
     const socket = statSync(adminSocket);
@@ -397,6 +400,7 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
     assertNoAdminTcpListener();
     assertUnrelatedUserDenied(adminSocket);
 
+    stage = 'routing-contract';
     const client = await boundedRequest(ports.clientPort, `/index.html?canary=${CLIENT_QUERY_CANARY}`, {
       Host: 'arena.example.invalid', Authorization: AUTH_CANARY, Cookie: `session=${COOKIE_CANARY}`
     });
@@ -430,6 +434,7 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
     if (failureStatus !== 502) fail('ERROR_PATH', 'Unavailable upstream did not exercise the expected Caddy error path.');
     await delay(100);
 
+    stage = 'unix-socket-reload';
     const reloadValidation = spawnSync(exactBinary, ['validate', '--config', configPath, '--adapter', 'caddyfile'], { encoding: 'utf8', windowsHide: true });
     if (reloadValidation.status !== 0) fail('RELOAD_VALIDATE', 'Reload-time validation failed without external services.');
     serverUpstream = await startUpstream('server', ports.serverUpstream, seen);
@@ -437,6 +442,8 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
       encoding: 'utf8', windowsHide: true, timeout: TIMEOUT_MS
     });
     if (reload.status !== 0) fail('ADMIN_RELOAD', 'Caddy reload through the Unix admin socket failed.');
+    await waitForCaddy(ports.clientPort);
+    stage = 'post-reload-routing';
     const postReloadClient = await boundedRequest(ports.clientPort, '/post-reload-client', { Host: 'arena.example.invalid' });
     const postReloadServer = await boundedRequest(ports.serverPort, '/post-reload-server', {
       Host: 'arena-api.example.invalid', Origin: 'https://arena.example.invalid'
@@ -447,6 +454,7 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
     await stopProcess(caddy);
     caddy = undefined;
     await delay(100);
+    stage = 'cleanup-and-log-inspection';
     if (existsSync(adminSocket)) rmSync(adminSocket, { force: true });
     if (existsSync(adminSocket)) fail('ADMIN_SOCKET_CLEANUP', 'Admin socket cleanup after process termination failed.');
     const clientLog = readFileSync(join(work, 'client-access.log'), 'utf8');
@@ -470,6 +478,9 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
       postReloadClientRouting: true, postReloadServerRouting: true,
       errorLogSafe: true, reloadValidationOffline: true, socketCleanup: true, cleanupBounded: true
     };
+  } catch (error) {
+    if (error instanceof ContractError) throw error;
+    fail('RUNTIME_UNEXPECTED', `Unexpected bounded edge-contract failure during ${stage}.`);
   } finally {
     await stopProcess(caddy);
     await closeServer(clientUpstream);
