@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-08-23
-Updated by: Codex — OPS-002 Phase B environment decision
+Last updated: 2026-08-24
+Updated by: Claude — OPS-002 Phase B shared staging authority transition
 
 ## Repository state
 
@@ -33,7 +33,9 @@ Updated by: Codex — OPS-002 Phase B environment decision
   through PR #62.
 - OPS-002 Phase A: `MERGED / COMPLETE` through PR #63 and normal merge commit
   `33bff5009926bb5247acad5ebcf85ba8b7f626ce`.
-- OPS-002 Phase B: `NOT AUTHORIZED / NOT STARTED`.
+- OPS-002 Phase B: environment selected; shared-host hardening preparation is
+  the next authorized step; live deployment is `NOT AUTHORIZED` and Phase B
+  live execution is `NOT STARTED`.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 - Campaign systems remain deferred and the canonical campaign roadmap is
@@ -118,8 +120,9 @@ Updated by: Codex — OPS-002 Phase B environment decision
   infrastructure disposition, and an explicit environment-specific Product
   Architect deployment `GO`.
 - External Public Arena deployment remains `NOT PERFORMED`. No staging service
-  is online or claimed, and no real provider, hostname, address, credential,
-  or environment value is recorded.
+  is online or claimed. The provider and environment class are now recorded as
+  an authority decision; no hostname, public address, credential, SSH
+  material, or secret environment value is recorded.
 - No other runtime task is active.
 
 ## OPS-002 Phase A completion
@@ -206,9 +209,12 @@ Updated by: Codex — OPS-002 Phase B environment decision
 
 ## Deployment boundary
 
-- OPS-002 Phase B: `NOT AUTHORIZED / NOT STARTED`. Phase B execution remains
+- OPS-002 Phase B live execution: `NOT STARTED`. External deployment remains
   unauthorized.
-- Target provider/environment: `NOT SELECTED`.
+- Target provider/environment: `SELECTED` — Contabo,
+  `burningspace-staging-01`, class
+  `shared-existing-vps-with-isolated-compose-staging`. Selection is not
+  deployment authorization.
 - Deployment `GO`: `NOT ISSUED`.
 - External staging: `NOT DEPLOYED`. No staging service is online.
 - Public production launch: `NOT AUTHORIZED`.
@@ -220,20 +226,50 @@ Updated by: Codex — OPS-002 Phase B environment decision
 ## OPS-002 Phase B environment decision
 
 - Environment ID: `burningspace-staging-01`.
-- Environment class: `dedicated isolated single-host VPS`.
-- Selection status: `ENVIRONMENT CLASS SELECTED`.
-- Provider: `NOT SELECTED`.
-- Host: `NOT PROVISIONED`.
+- Environment class: `shared-existing-vps-with-isolated-compose-staging`.
+- Superseded environment class: `dedicated-isolated-single-host-vps`.
+- Selection status: `ENVIRONMENT SELECTED`.
+- Provider: `Contabo`.
+- Host: `SELECTED — existing shared VPS`.
+- Physical isolation: `NO`. Kernel, CPU, RAM, disk, Docker daemon, public IP,
+  host firewall, maintenance domain, and security failure domain remain
+  shared with unrelated workloads.
+- Operational isolation: `REQUIRED / NOT YET IMPLEMENTED`.
 - Hostnames: `NOT ASSIGNED`.
+- Shared-host hardening: `NOT COMPLETE`.
+- Firewall review: `NOT COMPLETE`.
+- Edge, DNS, TLS, immutable target/rollback images, external validation:
+  `NOT COMPLETE`.
 - GO packet: `DRAFT / INCOMPLETE`.
 - Deployment GO: `NOT ISSUED`.
-- Phase B: `NOT AUTHORIZED / NOT STARTED`.
+- External deployment: `NOT AUTHORIZED`.
+- Phase B live execution: `NOT STARTED`.
 - External staging: `NOT DEPLOYED`.
 - Public production launch: `NOT AUTHORIZED`.
-- The existing shared host is not selected because staging requires isolation
-  from unrelated services. No private infrastructure inventory is recorded.
-- The environment-class decision and draft GO packet do not authorize host
-  provisioning, credential collection, external access, or deployment.
+- The earlier rejection of this shared host is superseded for controlled
+  low-traffic staging only. It was driven primarily by the forum container
+  owning public TCP 80/443 and the effective edge; the forum is now stopped,
+  autostart-disabled, restart policy `no`, preserved, recoverable through an
+  out-of-band operational procedure, and no longer owns 80/443. Public 80/443
+  is reserved conceptually for a future independently managed BurningSpace
+  staging edge. The rejection is not superseded for public production.
+- Measured evidence after forum shutdown: 4 vCPU, approximately 6.9 GiB
+  available RAM, approximately 48 GiB free disk, root filesystem approximately
+  35% used, very low observed load, healthy Docker, and unrelated stable
+  services still operational. Loopback pair selected: `127.0.0.1:2567` server
+  and `127.0.0.1:8080` client.
+- No public address, SSH target, SSH fingerprint, container identifier, or
+  unrelated-service private identifier is recorded in canonical documentation.
+- The forum and all other unrelated host workloads remain outside BurningSpace
+  ownership and must not be modified by BurningSpace deployment operations.
+- Host selection is `APPROVED` and shared-host hardening preparation is
+  `AUTHORIZED`. Repository hardening implementation is authorized once this
+  authority change merges. Selecting the environment authorizes no external
+  access, credential collection, or deployment.
+- The upcoming shared-host hardening implementation is `HIGH RISK` and
+  requires Core CI and tests, independent Operations/Security review,
+  independent Network/Runtime review where network behavior is affected,
+  mandatory Claude QA, Product Architect approval, and human merge.
 
 ## Review and merge gate
 
@@ -256,12 +292,24 @@ later exact Product Architect authorization states otherwise.
 
 ## Next safe action
 
-Provision or designate one dedicated isolated staging VPS satisfying the
-environment decision, then complete the non-secret GO packet and return it for
-an environment-specific Product Architect GO decision.
+Implement bounded shared-host repository hardening for the selected
+`burningspace-staging-01` Contabo environment: explicit per-container CPU and
+RAM limits for the server and client, bounded Docker log rotation, immutable
+target and rollback image references, an off-host or CI image build with no
+source-context staging build on the shared host, and an explicit
+project-scoped Docker network. That implementation is `HIGH RISK` and remains
+human-merge-only after Core CI, independent Operations/Security review,
+independent Network/Runtime review where network behavior is affected,
+mandatory Claude QA, and Product Architect approval.
 
-Phase B execution remains unauthorized and unstarted. No provider or hostname
-is selected, no host is provisioned, no credential is requested or stored, and
-no deployment GO is issued. Do not configure DNS, TLS, a reverse proxy, or a
-firewall, and do not deploy externally until the Product Architect issues an
+Host and root-level firewall review, edge ownership, DNS, TLS, rollback
+binding, and external validation remain outstanding and must be completed
+before the non-secret GO packet can be returned for an environment-specific
+Product Architect GO decision.
+
+Phase B live execution remains unstarted and external deployment remains
+unauthorized. No hostname is assigned, no credential is requested or stored,
+and no deployment GO is issued. Do not configure DNS, TLS, a reverse proxy, or
+a firewall, do not modify the preserved forum or any other unrelated host
+workload, and do not deploy externally until the Product Architect issues an
 explicit environment-specific deployment GO.
