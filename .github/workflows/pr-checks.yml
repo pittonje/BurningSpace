@@ -79,6 +79,83 @@ jobs:
               --plan deploy/external-staging-plan.example.json \
               --compose-stdin
 
+      - name: Validate Caddy edge contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release="deploy/edge/caddy/caddy-validation-release.json"
+          artifact_url="$(jq -r '.artifactUrl' "$release")"
+          artifact_name="$(jq -r '.artifactName' "$release")"
+          artifact_sha256="$(jq -r '.sha256' "$release")"
+          artifact_sha512="$(jq -r '.sha512' "$release")"
+          checksums_url="$(jq -r '.checksumManifestUrl' "$release")"
+          checksums_sha256="$(jq -r '.checksumManifestSha256' "$release")"
+          archive="$RUNNER_TEMP/$artifact_name"
+          checksums="$RUNNER_TEMP/caddy-checksums.txt"
+          caddy_root="$RUNNER_TEMP/caddy-2.11.4"
+          rendered="$RUNNER_TEMP/BurningSpace-Caddyfile"
+          adapted="$RUNNER_TEMP/BurningSpace-Caddyfile.json"
+
+          test "$(jq -r '.product' "$release")" = "Caddy"
+          test "$(jq -r '.version' "$release")" = "2.11.4"
+          test "$(jq -r '.architecture' "$release")" = "linux/amd64"
+          test "$(jq -r '.thirdPartyModules | length' "$release")" -eq 0
+          test "$(jq -r '.plugins | length' "$release")" -eq 0
+          test "$(jq -r '.hostPackageInstalled' "$release")" = "false"
+          npx tsx apps/server/scripts/external-staging-edge-preflight.ts --self-test
+          npx tsx apps/server/scripts/external-staging-edge-preflight.ts --template
+          case "$artifact_url" in
+            https://github.com/caddyserver/caddy/releases/download/v2.11.4/*) ;;
+            *) echo "Caddy artifact is not the pinned official release." >&2; exit 1 ;;
+          esac
+
+          curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+            "$artifact_url" --output "$archive"
+          curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error \
+            "$checksums_url" --output "$checksums"
+          printf '%s  %s\n' "$artifact_sha256" "$archive" | sha256sum --check --strict
+          printf '%s  %s\n' "$checksums_sha256" "$checksums" | sha256sum --check --strict
+          printf '%s  %s\n' "$artifact_sha512" "$archive" | sha512sum --check --strict
+          published_sha512="$(awk -v name="$artifact_name" '$2 == name { print $1 }' "$checksums")"
+          test "$published_sha512" = "$artifact_sha512"
+
+          mkdir -p "$caddy_root"
+          tar -xzf "$archive" -C "$caddy_root"
+          caddy="$caddy_root/caddy"
+          test -x "$caddy"
+          test "$("$caddy" version | awk '{print $1}')" = "v2.11.4"
+
+          npx tsx apps/server/scripts/external-staging-edge-preflight.ts \
+            --render --output "$rendered"
+          format_diff="$("$caddy" fmt --diff "$rendered")"
+          if printf '%s\n' "$format_diff" | grep -Eq '^[+-]'; then
+            printf '%s\n' "$format_diff"
+            echo "Rendered Caddyfile is not canonically formatted." >&2
+            exit 1
+          fi
+          "$caddy" adapt --config "$rendered" --adapter caddyfile >"$adapted"
+          "$caddy" validate --config "$rendered" --adapter caddyfile
+          npx tsx apps/server/scripts/external-staging-edge-preflight.ts \
+            --inspect-adapted-config --adapted-config "$adapted"
+
+          contract_result="$(BURNINGSPACE_CADDY_BINARY="$caddy" \
+            npx tsx apps/server/scripts/external-staging-edge-contract-check.ts --self-test)"
+          printf '%s\n' "$contract_result"
+          CONTRACT_RESULT="$contract_result" node <<'NODE'
+          const result = JSON.parse(process.env.CONTRACT_RESULT || '{}');
+          const checks = result.checks || {};
+          if (!result.ok || result.runtimeExecuted !== true || result.caddyVersion !== '2.11.4' ||
+              Object.keys(checks).length !== 17 || Object.values(checks).some((value) => value !== true)) {
+            throw new Error('Caddy runtime contract did not execute every required assertion.');
+          }
+          console.log(JSON.stringify({
+            ok: true,
+            event: 'caddy_edge_contract_assertions_verified',
+            checks: Object.keys(checks).length
+          }));
+          NODE
+
       - name: Scan Phase A files for high-signal secret material
         shell: bash
         run: |
@@ -91,8 +168,16 @@ jobs:
             'deploy/docker-compose.staging.build.yml',
             'apps/server/scripts/external-staging-preflight.ts',
             'apps/server/scripts/external-staging-smoke.ts',
+            'apps/server/scripts/external-staging-edge-preflight.ts',
+            'apps/server/scripts/external-staging-edge-contract-check.ts',
             'apps/server/scripts/tsconfig.external-staging.json',
+            'deploy/edge/caddy/Caddyfile.template',
+            'deploy/edge/caddy/edge.env.example',
+            'deploy/edge/caddy/edge-plan.example.json',
+            'deploy/edge/caddy/caddy-validation-release.json',
+            'docs/ops/public-arena-caddy-edge-runbook.md',
             'docs/ops/public-arena-external-staging-runbook.md',
+            'docs/ops/ops-002-phase-b-go-packet.md',
             '.github/workflows/pr-checks.yml'
           ];
           const contents = files.map((file) => readFileSync(file, 'utf8')).join('\n');

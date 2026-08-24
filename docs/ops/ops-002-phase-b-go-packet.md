@@ -24,7 +24,11 @@ can make an environment-specific GO decision.
 - Repository hardening: `COMPLETE` — shared-host repository hardening is
   `MERGED / COMPLETE`
 - Host-gate discovery: `COMPLETE`
-- Edge design/preparation: `NEXT AUTHORIZED PREPARATION STAGE`
+- Edge implementation: `SELECTED — Caddy host systemd service`
+- Edge repository preparation: `IN PROGRESS — COMPLETE ONLY AFTER HUMAN MERGE`
+- Caddy validation baseline: `2.11.4`
+- Host Caddy installation: `NOT PERFORMED`
+- Installed Caddy version: `NOT VERIFIED`
 - Phase B external execution authorized: `false`
 - Deployment GO issued: `false`
 - Public production launch authorized: `false`
@@ -55,7 +59,7 @@ DNS, TLS, release/rollback, or external-validation gate.
 - TCP 9090: `RESTRICT / VERIFY BEFORE GO`
 - TeamSpeak administrative/query ingress: `VERIFY BEFORE GO`
 - Maintenance: `REQUIRED BEFORE CONTAINER CREATION`
-- Edge: `NOT CONFIGURED`
+- Edge: `SELECTED / REPOSITORY PREPARATION IN PROGRESS / NOT INSTALLED`
 - DNS: `NOT CONFIGURED`
 - TLS: `NOT CONFIGURED`
 - Target image digest: `NOT SELECTED / PUBLISHED`
@@ -79,7 +83,9 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Previous approved commit: `NOT PROVIDED`
 - Previous server image digest: `NOT PROVIDED`
 - Previous client image digest: `NOT PROVIDED`
-- Edge configuration identifier: `NOT PROVIDED`
+- Edge configuration identifier: `NOT SELECTED FOR REAL ENVIRONMENT`
+- Previous edge configuration identifier: `NOT SELECTED`
+- Installed Caddy version/source: `NOT VERIFIED`
 - Rollback mode: `NOT PROVIDED`
 - Effective resource-limit validation on deployed containers: `NOT PERFORMED`
 - Management-access owner: `NOT PROVIDED`
