@@ -597,29 +597,49 @@ function expectComposeFailure(
 }
 
 function runSelfTests(): number {
+  let completedTests = 0;
+  const expectValidationSuccess = (operation: () => void): void => {
+    operation();
+    completedTests += 1;
+  };
+  const expectValidationFailure = (...args: Parameters<typeof expectFailure>): void => {
+    expectFailure(...args);
+    completedTests += 1;
+  };
+  const expectSafeFailure = (...args: Parameters<typeof expectSafeCode>): void => {
+    expectSafeCode(...args);
+    completedTests += 1;
+  };
+  const expectComposeValidationFailure = (...args: Parameters<typeof expectComposeFailure>): void => {
+    expectComposeFailure(...args);
+    completedTests += 1;
+  };
+
   const template = baseFixture();
-  validate(template.env, template.plan, { mode: 'template' });
-  validate(template.env, template.plan, { mode: 'template', composeModel: baseComposeFixture(template.plan) });
-  expectFailure('wildcard', (f) => { f.plan.allowedOrigins = ['*']; f.env.BURNINGSPACE_ALLOWED_ORIGINS = '*'; }, 'template', 'WILDCARD_ORIGIN');
-  expectFailure('http-external', (f) => { f.plan.publicClientOrigin = 'http://arena.example.invalid'; f.env.BURNINGSPACE_PUBLIC_CLIENT_ORIGIN = f.plan.publicClientOrigin; f.plan.allowedOrigins = [f.plan.publicClientOrigin]; f.env.BURNINGSPACE_ALLOWED_ORIGINS = f.plan.publicClientOrigin; }, 'template', 'CLIENT_ORIGIN');
-  expectFailure('path', (f) => { f.plan.publicClientOrigin += '/play'; }, 'template', 'CLIENT_ORIGIN');
-  expectFailure('query', (f) => { f.plan.publicServerOrigin += '?debug=true'; }, 'template', 'SERVER_ORIGIN');
-  expectFailure('credentials', (f) => { f.plan.publicClientOrigin = 'https://user@arena.example.invalid'; }, 'template', 'CLIENT_ORIGIN');
-  expectFailure('equal-origins', (f) => { f.plan.publicServerOrigin = f.plan.publicClientOrigin; f.env.BURNINGSPACE_PUBLIC_SERVER_ORIGIN = f.plan.publicClientOrigin; f.env.VITE_BURNINGSPACE_SERVER_URL = f.plan.publicClientOrigin; }, 'template', 'ORIGIN_EQUAL');
-  expectFailure('allowlist', (f) => { f.plan.allowedOrigins = ['https://other.example.invalid']; }, 'template', 'ALLOWLIST_MISMATCH');
-  expectFailure('bind', (f) => { f.plan.serverBindHost = '0.0.0.0'; }, 'template', 'BIND_HOST');
-  expectFailure('port', (f) => { f.plan.clientBindPort = 0; }, 'template', 'CLIENT_PORT');
-  expectFailure('missing-target-image', (f) => { f.plan.targetServerImage = ''; f.env.BURNINGSPACE_SERVER_IMAGE = ''; }, 'template', 'TARGET_SERVER_IMAGE');
-  expectFailure('mutable-target-image', (f) => { f.plan.targetServerImage = 'registry.example.invalid/burningspace/server:latest'; f.env.BURNINGSPACE_SERVER_IMAGE = f.plan.targetServerImage; }, 'template', 'TARGET_SERVER_IMAGE');
-  expectFailure('tagged-target-digest', (f) => { f.plan.targetServerImage = `registry.example.invalid/burningspace/server:latest@sha256:${'a'.repeat(64)}`; f.env.BURNINGSPACE_SERVER_IMAGE = f.plan.targetServerImage; }, 'template', 'TARGET_SERVER_IMAGE');
-  expectFailure('malformed-target-digest', (f) => { f.plan.targetClientImage = 'registry.example.invalid/burningspace/client@sha256:abc'; f.env.BURNINGSPACE_CLIENT_IMAGE = f.plan.targetClientImage; }, 'template', 'TARGET_CLIENT_IMAGE');
-  expectFailure('missing-rollback-image', (f) => { f.plan.previousServerImage = ''; f.env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE = ''; }, 'template', 'PREVIOUS_SERVER_IMAGE');
-  expectFailure('mutable-rollback-image', (f) => { f.plan.previousClientImage = 'registry.example.invalid/burningspace/client:previous'; f.env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE = f.plan.previousClientImage; }, 'template', 'PREVIOUS_CLIENT_IMAGE');
-  expectFailure('placeholder-image-real', (f) => { applyRealInventory(f); f.plan.targetServerImage = `registry.example.invalid/burningspace/server@sha256:${'1'.repeat(64)}`; f.env.BURNINGSPACE_SERVER_IMAGE = f.plan.targetServerImage; }, 'phase-a', 'PLACEHOLDER_IMAGE');
-  expectFailure('placeholder-image-phase-b', (f) => { applyRealInventory(f); f.plan.previousClientImage = `registry.example.invalid/burningspace/client@sha256:${'4'.repeat(64)}`; f.env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE = f.plan.previousClientImage; }, 'phase-b', 'PLACEHOLDER_IMAGE');
-  expectFailure('production', (f) => { f.plan.publicProductionLaunchAuthorized = true; f.env.BURNINGSPACE_PUBLIC_PRODUCTION_LAUNCH_AUTHORIZED = 'true'; }, 'template', 'PRODUCTION_LAUNCH');
-  expectFailure('phase-a-execution', (f) => { applyRealInventory(f); f.plan.externalExecutionAuthorized = true; f.env.BURNINGSPACE_EXTERNAL_EXECUTION_AUTHORIZED = 'true'; }, 'phase-a', 'PHASE_A_EXECUTION');
-  expectFailure('phase-b-go', (f) => {
+  expectValidationSuccess(() => validate(template.env, template.plan, { mode: 'template' }));
+  expectValidationSuccess(() => validate(template.env, template.plan, { mode: 'template', composeModel: baseComposeFixture(template.plan) }));
+  expectValidationFailure('wildcard', (f) => { f.plan.allowedOrigins = ['*']; f.env.BURNINGSPACE_ALLOWED_ORIGINS = '*'; }, 'template', 'WILDCARD_ORIGIN');
+  expectValidationFailure('http-external', (f) => { f.plan.publicClientOrigin = 'http://arena.example.invalid'; f.env.BURNINGSPACE_PUBLIC_CLIENT_ORIGIN = f.plan.publicClientOrigin; f.plan.allowedOrigins = [f.plan.publicClientOrigin]; f.env.BURNINGSPACE_ALLOWED_ORIGINS = f.plan.publicClientOrigin; }, 'template', 'CLIENT_ORIGIN');
+  expectValidationFailure('path', (f) => { f.plan.publicClientOrigin += '/play'; }, 'template', 'CLIENT_ORIGIN');
+  expectValidationFailure('query', (f) => { f.plan.publicServerOrigin += '?debug=true'; }, 'template', 'SERVER_ORIGIN');
+  expectValidationFailure('credentials', (f) => { f.plan.publicClientOrigin = 'https://user@arena.example.invalid'; }, 'template', 'CLIENT_ORIGIN');
+  expectValidationFailure('equal-origins', (f) => { f.plan.publicServerOrigin = f.plan.publicClientOrigin; f.env.BURNINGSPACE_PUBLIC_SERVER_ORIGIN = f.plan.publicClientOrigin; f.env.VITE_BURNINGSPACE_SERVER_URL = f.plan.publicClientOrigin; }, 'template', 'ORIGIN_EQUAL');
+  expectValidationFailure('allowlist', (f) => { f.plan.allowedOrigins = ['https://other.example.invalid']; }, 'template', 'ALLOWLIST_MISMATCH');
+  expectValidationFailure('bind', (f) => { f.plan.serverBindHost = '0.0.0.0'; }, 'template', 'BIND_HOST');
+  expectValidationFailure('port', (f) => { f.plan.clientBindPort = 0; }, 'template', 'CLIENT_PORT');
+  expectValidationFailure('missing-target-image', (f) => { f.plan.targetServerImage = ''; f.env.BURNINGSPACE_SERVER_IMAGE = ''; }, 'template', 'TARGET_SERVER_IMAGE');
+  expectValidationFailure('mutable-target-image', (f) => { f.plan.targetServerImage = 'registry.example.invalid/burningspace/server:latest'; f.env.BURNINGSPACE_SERVER_IMAGE = f.plan.targetServerImage; }, 'template', 'TARGET_SERVER_IMAGE');
+  expectValidationFailure('tagged-target-digest', (f) => { f.plan.targetServerImage = `registry.example.invalid/burningspace/server:latest@sha256:${'a'.repeat(64)}`; f.env.BURNINGSPACE_SERVER_IMAGE = f.plan.targetServerImage; }, 'template', 'TARGET_SERVER_IMAGE');
+  expectValidationFailure('malformed-target-digest', (f) => { f.plan.targetClientImage = 'registry.example.invalid/burningspace/client@sha256:abc'; f.env.BURNINGSPACE_CLIENT_IMAGE = f.plan.targetClientImage; }, 'template', 'TARGET_CLIENT_IMAGE');
+  expectValidationFailure('missing-rollback-image', (f) => { f.plan.previousServerImage = ''; f.env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE = ''; }, 'template', 'PREVIOUS_SERVER_IMAGE');
+  expectValidationFailure('mutable-rollback-image', (f) => { f.plan.previousClientImage = 'registry.example.invalid/burningspace/client:previous'; f.env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE = f.plan.previousClientImage; }, 'template', 'PREVIOUS_CLIENT_IMAGE');
+  expectValidationFailure('plan-env-image-mismatch', (f) => { f.env.BURNINGSPACE_SERVER_IMAGE = `registry.example.invalid/burningspace/server@sha256:${'a'.repeat(64)}`; }, 'template', 'PLAN_ENV_IMAGE_MISMATCH');
+  expectValidationFailure('equal-target-rollback-image', (f) => { f.plan.previousClientImage = f.plan.targetClientImage; f.env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE = f.plan.targetClientImage; }, 'template', 'EQUAL_IMAGES');
+  expectValidationFailure('placeholder-image-real', (f) => { applyRealInventory(f); f.plan.targetServerImage = `registry.example.invalid/burningspace/server@sha256:${'1'.repeat(64)}`; f.env.BURNINGSPACE_SERVER_IMAGE = f.plan.targetServerImage; }, 'phase-a', 'PLACEHOLDER_IMAGE');
+  expectValidationFailure('placeholder-image-phase-b', (f) => { applyRealInventory(f); f.plan.previousClientImage = `registry.example.invalid/burningspace/client@sha256:${'4'.repeat(64)}`; f.env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE = f.plan.previousClientImage; }, 'phase-b', 'PLACEHOLDER_IMAGE');
+  expectValidationFailure('production', (f) => { f.plan.publicProductionLaunchAuthorized = true; f.env.BURNINGSPACE_PUBLIC_PRODUCTION_LAUNCH_AUTHORIZED = 'true'; }, 'template', 'PRODUCTION_LAUNCH');
+  expectValidationFailure('phase-a-execution', (f) => { applyRealInventory(f); f.plan.externalExecutionAuthorized = true; f.env.BURNINGSPACE_EXTERNAL_EXECUTION_AUTHORIZED = 'true'; }, 'phase-a', 'PHASE_A_EXECUTION');
+  expectValidationFailure('phase-b-go', (f) => {
     applyRealInventory(f);
     const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).stdout.trim();
     const parent = spawnSync('git', ['rev-parse', 'HEAD^'], { encoding: 'utf8', windowsHide: true }).stdout.trim();
@@ -630,10 +650,10 @@ function runSelfTests(): number {
     f.env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT = parent;
     f.env.BURNINGSPACE_TARGET_COMMIT = head;
   }, 'phase-b', 'GO_REQUIRED');
-  expectFailure('placeholder-real', (f) => applyRealInventory(f), 'phase-a', 'PREVIOUS_COMMIT');
-  expectFailure('equal-commits', (f) => { f.plan.targetCommit = f.plan.previousApprovedCommit; f.env.BURNINGSPACE_TARGET_COMMIT = f.plan.targetCommit; }, 'template', 'EQUAL_COMMITS');
-  expectFailure('secret-key', (f) => { f.env.DEPLOY_PASSWORD = 'seeded-fake-secret-never-echo'; }, 'template', 'UNEXPECTED_ENV_KEY');
-  expectFailure('private-key', (f) => { f.plan.edgeConfigId = '-----BEGIN PRIVATE KEY-----'; }, 'template', 'SECRET_VALUE');
+  expectValidationFailure('placeholder-real', (f) => applyRealInventory(f), 'phase-a', 'PREVIOUS_COMMIT');
+  expectValidationFailure('equal-commits', (f) => { f.plan.targetCommit = f.plan.previousApprovedCommit; f.env.BURNINGSPACE_TARGET_COMMIT = f.plan.targetCommit; }, 'template', 'EQUAL_COMMITS');
+  expectValidationFailure('secret-key', (f) => { f.env.DEPLOY_PASSWORD = 'seeded-fake-secret-never-echo'; }, 'template', 'UNEXPECTED_ENV_KEY');
+  expectValidationFailure('private-key', (f) => { f.plan.edgeConfigId = '-----BEGIN PRIVATE KEY-----'; }, 'template', 'SECRET_VALUE');
 
   const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).stdout.trim();
   const parent = spawnSync('git', ['rev-parse', 'HEAD^'], { encoding: 'utf8', windowsHide: true }).stdout.trim();
@@ -643,15 +663,15 @@ function runSelfTests(): number {
   real.plan.targetCommit = head;
   real.env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT = parent;
   real.env.BURNINGSPACE_TARGET_COMMIT = head;
-  validate(real.env, real.plan, { mode: 'phase-a' });
+  expectValidationSuccess(() => validate(real.env, real.plan, { mode: 'phase-a' }));
 
-  expectFailure('placeholder-inventory', (f) => {
+  expectValidationFailure('placeholder-inventory', (f) => {
     f.plan.previousApprovedCommit = parent;
     f.plan.targetCommit = head;
     f.env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT = parent;
     f.env.BURNINGSPACE_TARGET_COMMIT = head;
   }, 'phase-a', 'PLACEHOLDER_INVENTORY');
-  expectFailure('loopback-real-target', (f) => {
+  expectValidationFailure('loopback-real-target', (f) => {
     applyRealInventory(f);
     f.plan.previousApprovedCommit = parent;
     f.plan.targetCommit = head;
@@ -665,7 +685,7 @@ function runSelfTests(): number {
 
   const previous = '3333333333333333333333333333333333333333';
   const target = '4444444444444444444444444444444444444444';
-  expectSafeCode('unmerged-phase-b-target', () => repositoryCheck(previous, target, 'phase-b', (args) => {
+  expectSafeFailure('unmerged-phase-b-target', () => repositoryCheck(previous, target, 'phase-b', (args) => {
     if (args[0] === 'rev-parse') return { status: 0, stdout: `${target}\n` };
     if (args[0] === 'merge-base' && args[2] === target) return { status: 1, stdout: '' };
     return { status: 0, stdout: 'trusted-branch\n' };
@@ -681,76 +701,78 @@ function runSelfTests(): number {
   phaseB.env.BURNINGSPACE_EXTERNAL_EXECUTION_AUTHORIZED = 'true';
   phaseB.plan.deploymentGoReference = 'PA-GO-OPS002-REVIEW';
   phaseB.env.BURNINGSPACE_DEPLOYMENT_GO_REFERENCE = phaseB.plan.deploymentGoReference;
-  validate(phaseB.env, phaseB.plan, {
+  expectValidationSuccess(() => validate(phaseB.env, phaseB.plan, {
     mode: 'phase-b',
     checkRepository: (boundPrevious, boundTarget, mode) => repositoryCheck(boundPrevious, boundTarget, mode, (args) => {
       if (args[0] === 'rev-parse') return { status: 0, stdout: `${target}\n` };
       return { status: 0, stdout: 'trusted-branch\n' };
     })
+  }));
+
+  expectValidationSuccess(() => {
+    const seeded = 'seeded-fake-secret-never-echo';
+    let safeFailure = '';
+    try {
+      const secret = baseFixture();
+      secret.env.DEPLOY_PASSWORD = seeded;
+      validate(secret.env, secret.plan, { mode: 'template' });
+    } catch (error) {
+      safeFailure = JSON.stringify(toSafeError(error));
+    }
+    if (safeFailure.includes(seeded)) fail('SELF_TEST', 'Failure output exposed a seeded value.');
+    if (safeFailure.length > 800) fail('SELF_TEST', 'Failure output exceeded the bounded limit.');
   });
 
-  const seeded = 'seeded-fake-secret-never-echo';
-  let safeFailure = '';
-  try {
-    const secret = baseFixture();
-    secret.env.DEPLOY_PASSWORD = seeded;
-    validate(secret.env, secret.plan, { mode: 'template' });
-  } catch (error) {
-    safeFailure = JSON.stringify(toSafeError(error));
-  }
-  if (safeFailure.includes(seeded)) fail('SELF_TEST', 'Failure output exposed a seeded value.');
-  if (safeFailure.length > 800) fail('SELF_TEST', 'Failure output exceeded the bounded limit.');
-
-  expectComposeFailure('missing-cpu', (model) => {
+  expectComposeValidationFailure('missing-cpu', (model) => {
     delete requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST').cpus;
   }, 'COMPOSE_CPU');
-  expectComposeFailure('missing-memory', (model) => {
+  expectComposeValidationFailure('missing-memory', (model) => {
     delete requireObject(requireObject(model.services, 'SELF_TEST').client, 'SELF_TEST').mem_limit;
   }, 'COMPOSE_MEMORY');
-  expectComposeFailure('missing-log-max-size', (model) => {
+  expectComposeValidationFailure('missing-log-max-size', (model) => {
     const server = requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST');
     delete requireObject(requireObject(server.logging, 'SELF_TEST').options, 'SELF_TEST')['max-size'];
   }, 'COMPOSE_LOG_MAX_SIZE');
-  expectComposeFailure('missing-log-max-file', (model) => {
+  expectComposeValidationFailure('missing-log-max-file', (model) => {
     const client = requireObject(requireObject(model.services, 'SELF_TEST').client, 'SELF_TEST');
     delete requireObject(requireObject(client.logging, 'SELF_TEST').options, 'SELF_TEST')['max-file'];
   }, 'COMPOSE_LOG_MAX_FILE');
-  expectComposeFailure('external-network', (model) => {
+  expectComposeValidationFailure('external-network', (model) => {
     requireObject(requireObject(model.networks, 'SELF_TEST').burningspace, 'SELF_TEST').external = true;
   }, 'COMPOSE_EXTERNAL_NETWORK');
-  expectComposeFailure('shared-fixed-network', (model) => {
+  expectComposeValidationFailure('shared-fixed-network', (model) => {
     requireObject(requireObject(model.networks, 'SELF_TEST').burningspace, 'SELF_TEST').name = 'shared-global-network';
   }, 'COMPOSE_EXTERNAL_NETWORK');
-  expectComposeFailure('host-network', (model) => {
+  expectComposeValidationFailure('host-network', (model) => {
     requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST').network_mode = 'host';
   }, 'COMPOSE_HOST_NETWORK');
-  expectComposeFailure('public-bind', (model) => {
+  expectComposeValidationFailure('public-bind', (model) => {
     const server = requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST');
     const ports = server.ports as unknown[];
     requireObject(ports[0], 'SELF_TEST').host_ip = '0.0.0.0';
   }, 'COMPOSE_PORT');
-  expectComposeFailure('source-build', (model) => {
+  expectComposeValidationFailure('source-build', (model) => {
     requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST').build = { context: '..' };
   }, 'COMPOSE_SOURCE_BUILD');
-  expectComposeFailure('service-image-mismatch', (model) => {
+  expectComposeValidationFailure('service-image-mismatch', (model) => {
     requireObject(requireObject(model.services, 'SELF_TEST').client, 'SELF_TEST').image = 'burningspace-client:latest';
   }, 'COMPOSE_IMAGE');
-  expectComposeFailure('host-root-bind', (model) => {
+  expectComposeValidationFailure('host-root-bind', (model) => {
     requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST').volumes = [
       { type: 'bind', source: '/', target: '/host', read_only: false }
     ];
   }, 'COMPOSE_VOLUME');
-  expectComposeFailure('persistent-state-bind', (model) => {
+  expectComposeValidationFailure('persistent-state-bind', (model) => {
     requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST').volumes = [
       { type: 'bind', source: '/srv/burningspace-state', target: '/app/state', read_only: false }
     ];
   }, 'COMPOSE_VOLUME');
-  expectComposeFailure('docker-socket-bind', (model) => {
+  expectComposeValidationFailure('docker-socket-bind', (model) => {
     requireObject(requireObject(model.services, 'SELF_TEST').client, 'SELF_TEST').volumes = [
       { type: 'bind', source: '/var/run/docker.sock', target: '/var/run/docker.sock', read_only: false }
     ];
   }, 'COMPOSE_VOLUME');
-  return 46;
+  return completedTests;
 }
 
 function argumentValue(args: string[], name: string): string {
