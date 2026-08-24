@@ -97,6 +97,7 @@ jobs:
           caddy_logs="$RUNNER_TEMP/caddy-validation-logs"
           rendered="$RUNNER_TEMP/BurningSpace-Caddyfile"
           adapted="$RUNNER_TEMP/BurningSpace-Caddyfile.json"
+          systemd_root="$RUNNER_TEMP/caddy-systemd-root"
 
           test "$(jq -r '.product' "$release")" = "Caddy"
           test "$(jq -r '.version' "$release")" = "2.11.4"
@@ -141,6 +142,28 @@ jobs:
           npx tsx apps/server/scripts/external-staging-edge-preflight.ts \
             --inspect-adapted-config --adapted-config "$adapted"
 
+          install -d -m 0755 \
+            "$systemd_root/etc/systemd/system/caddy.service.d" \
+            "$systemd_root/etc/caddy" \
+            "$systemd_root/usr/bin"
+          install -m 0755 "$caddy" "$systemd_root/usr/bin/caddy"
+          install -m 0600 "$rendered" "$systemd_root/etc/caddy/Caddyfile"
+          install -m 0644 deploy/edge/caddy/systemd/caddy.service.d/10-burningspace-edge.conf \
+            "$systemd_root/etc/systemd/system/caddy.service.d/10-burningspace-edge.conf"
+          printf '%s\n' \
+            '[Unit]' \
+            'Description=Safe temporary Caddy verification unit' \
+            'DefaultDependencies=no' \
+            '[Service]' \
+            'Type=simple' \
+            'User=caddy' \
+            'Group=caddy' \
+            'ExecStart=/usr/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile' \
+            'ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile --force' \
+            > "$systemd_root/etc/systemd/system/caddy.service"
+          systemd-analyze --root="$systemd_root" verify caddy.service
+          printf '%s\n' '{"ok":true,"event":"caddy_systemd_drop_in_verified","hostServiceMutated":false}'
+
           origin_mutation_tests=(
             'set|header_up Origin https://mutated.example.invalid'
             'add|header_up +Origin https://mutated.example.invalid'
@@ -182,7 +205,7 @@ jobs:
           const result = JSON.parse(process.env.CONTRACT_RESULT || '{}');
           const checks = result.checks || {};
           if (!result.ok || result.runtimeExecuted !== true || result.caddyVersion !== '2.11.4' ||
-              Object.keys(checks).length !== 18 || Object.values(checks).some((value) => value !== true)) {
+              Object.keys(checks).length !== 26 || Object.values(checks).some((value) => value !== true)) {
             throw new Error('Caddy runtime contract did not execute every required assertion.');
           }
           console.log(JSON.stringify({
@@ -211,6 +234,7 @@ jobs:
             'deploy/edge/caddy/edge.env.example',
             'deploy/edge/caddy/edge-plan.example.json',
             'deploy/edge/caddy/caddy-validation-release.json',
+            'deploy/edge/caddy/systemd/caddy.service.d/10-burningspace-edge.conf',
             'docs/ops/public-arena-caddy-edge-runbook.md',
             'docs/ops/public-arena-external-staging-runbook.md',
             'docs/ops/ops-002-phase-b-go-packet.md',

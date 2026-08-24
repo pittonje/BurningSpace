@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { connect, createServer as createTcpServer, type Socket } from 'node:net';
-import { networkInterfaces, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 
@@ -134,7 +134,7 @@ async function startUpstream(kind: 'client' | 'server', port: number, seen: Seen
 }
 
 function testCaddyfile(values: {
-  adminPort: number; clientPort: number; serverPort: number;
+  adminSocket: string; clientPort: number; serverPort: number;
   clientUpstream: number; serverUpstream: number; logDirectory: string;
 }): string {
   const logBlock = (filename: string): string => `
@@ -166,7 +166,7 @@ function testCaddyfile(values: {
 \t\t}
 \t}`;
   return `{
-\tadmin 127.0.0.1:${values.adminPort}
+\tadmin unix/${values.adminSocket}
 \tpersist_config off
 \tauto_https off
 \tgrace_period 2s
@@ -309,22 +309,38 @@ async function stopProcess(process: ChildProcessWithoutNullStreams | undefined):
   ]);
 }
 
-function nonLoopbackAddress(): string | undefined {
-  for (const values of Object.values(networkInterfaces())) {
-    for (const value of values ?? []) if (value.family === 'IPv4' && !value.internal) return value.address;
-  }
-  return undefined;
-}
-
-async function assertAdminNotPublic(port: number): Promise<void> {
-  const address = nonLoopbackAddress();
-  if (!address) return;
+async function assertTcpClosed(host: string, port: number): Promise<void> {
   await new Promise<void>((resolveCheck, rejectCheck) => {
-    const socket = connect({ host: address, port });
+    const socket = connect({ host, port });
     const timer = setTimeout(() => { socket.destroy(); resolveCheck(); }, 500);
-    socket.once('connect', () => { clearTimeout(timer); socket.destroy(); rejectCheck(new ContractError('ADMIN_PUBLIC', 'Temporary Caddy admin listener was reachable on a non-loopback interface.')); });
+    socket.once('connect', () => { clearTimeout(timer); socket.destroy(); rejectCheck(new ContractError('ADMIN_TCP', 'A forbidden TCP Caddy admin listener was reachable.')); });
     socket.once('error', () => { clearTimeout(timer); resolveCheck(); });
   });
+}
+
+function assertNoAdminTcpListener(): void {
+  const listeners = spawnSync('ss', ['-H', '-ltn'], { encoding: 'utf8', timeout: TIMEOUT_MS });
+  if (listeners.status !== 0) fail('ADMIN_TCP_INSPECTION', 'Linux listener inspection with ss failed.');
+  if (listeners.stdout.split(/\r?\n/u).some((line) => /(?:^|\s)\S*:2019(?:\s|$)/u.test(line))) {
+    fail('ADMIN_TCP', 'Live listener state retained a forbidden TCP admin listener on port 2019.');
+  }
+}
+
+function assertUnrelatedUserDenied(socketPath: string): void {
+  const script = [
+    "const { connect } = require('node:net');",
+    "if (typeof process.geteuid !== 'function') process.exit(3);",
+    'const socket = connect(process.argv[1]);',
+    'const timer = setTimeout(() => { socket.destroy(); process.exit(2); }, 1500);',
+    "socket.once('connect', () => { clearTimeout(timer); socket.destroy(); process.exit(0); });",
+    "socket.once('error', (error) => { clearTimeout(timer); process.stdout.write(`DENIED:${error.code}`); process.exit(error.code === 'EACCES' ? 13 : 12); });"
+  ].join('');
+  const denied = spawnSync('sudo', ['-n', '-u', 'nobody', '--', process.execPath, '-e', script, socketPath], {
+    encoding: 'utf8', timeout: TIMEOUT_MS
+  });
+  if (denied.status !== 13 || denied.stdout !== 'DENIED:EACCES' || denied.error) {
+    fail('ADMIN_USER_ACCESS', 'A distinct unprivileged Linux user was not proven denied by socket-directory permissions.');
+  }
 }
 
 async function runRuntime(binary: string): Promise<Record<string, boolean>> {
@@ -334,7 +350,10 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
   if (version.status !== 0 || !version.stdout.startsWith('v2.11.4 ')) fail('CADDY_VERSION', 'Runtime contract check requires exact Caddy v2.11.4.');
 
   const work = mkdtempSync(join(tmpdir(), 'burningspace-caddy-contract-'));
+  chmodSync(work, 0o700);
   const configPath = join(work, 'Caddyfile');
+  const adminSocket = join(work, 'burningspace-admin.sock').replaceAll('\\', '/');
+  const adminAddress = `unix/${adminSocket}`;
   const seen: SeenRequest[] = [];
   let clientUpstream: Server | undefined;
   let serverUpstream: Server | undefined;
@@ -342,9 +361,9 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
   let stdout = '';
   let stderr = '';
   try {
-    const [adminPort, clientPort, serverPort, clientUpstreamPort, serverUpstreamPort] = await freePorts(5);
+    const [clientPort, serverPort, clientUpstreamPort, serverUpstreamPort] = await freePorts(4);
     const ports = {
-      adminPort: adminPort!, clientPort: clientPort!, serverPort: serverPort!,
+      adminSocket, clientPort: clientPort!, serverPort: serverPort!,
       clientUpstream: clientUpstreamPort!, serverUpstream: serverUpstreamPort!, logDirectory: work.replaceAll('\\', '/')
     };
     clientUpstream = await startUpstream('client', ports.clientUpstream, seen);
@@ -357,12 +376,26 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
       const changed = command[0] === 'fmt' && result.stdout.split(/\r?\n/u).some((line) => /^[+-]/u.test(line));
       if (result.status !== 0 || changed) fail('CADDY_VALIDATION', 'Temporary Caddy configuration failed format, adapt, or validate.');
     }
-    caddy = spawn(exactBinary, ['run', '--config', configPath, '--adapter', 'caddyfile'], { stdio: 'pipe', windowsHide: true });
+    const previousUmask = process.umask(0o077);
+    try {
+      caddy = spawn(exactBinary, ['run', '--config', configPath, '--adapter', 'caddyfile'], { stdio: 'pipe', windowsHide: true });
+    } finally {
+      process.umask(previousUmask);
+    }
     caddy.stdout.setEncoding('utf8');
     caddy.stderr.setEncoding('utf8');
     caddy.stdout.on('data', (chunk: string) => { stdout = `${stdout}${chunk}`.slice(-65_536); });
     caddy.stderr.on('data', (chunk: string) => { stderr = `${stderr}${chunk}`.slice(-65_536); });
     await waitForCaddy(ports.clientPort);
+    if (!existsSync(adminSocket) || !lstatSync(adminSocket).isSocket()) fail('ADMIN_SOCKET', 'Caddy did not create the configured Unix admin socket.');
+    const directory = statSync(work);
+    const socket = statSync(adminSocket);
+    if ((directory.mode & 0o777) !== 0o700) fail('ADMIN_DIRECTORY_MODE', 'Temporary admin socket directory was not private mode 0700.');
+    if ((socket.mode & 0o077) !== 0 || socket.uid !== process.geteuid?.()) fail('ADMIN_SOCKET_MODE', 'Admin socket ownership or mode was not service-only.');
+    await assertTcpClosed('127.0.0.1', 2019);
+    await assertTcpClosed('::1', 2019);
+    assertNoAdminTcpListener();
+    assertUnrelatedUserDenied(adminSocket);
 
     const client = await boundedRequest(ports.clientPort, `/index.html?canary=${CLIENT_QUERY_CANARY}`, {
       Host: 'arena.example.invalid', Authorization: AUTH_CANARY, Cookie: `session=${COOKIE_CANARY}`
@@ -387,8 +420,6 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
       fail('FORWARDED_HEADERS', 'Public Host or forwarded protocol metadata was incoherent at the upstream.');
     }
     if (websocket.response !== 'echo:ping') fail('WS_TRAFFIC', 'Bidirectional WebSocket traffic did not pass through Caddy.');
-    await assertAdminNotPublic(ports.adminPort);
-
     await closeServer(serverUpstream);
     serverUpstream = undefined;
     const failureStatus = await boundedStatusRequest(
@@ -401,9 +432,23 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
 
     const reloadValidation = spawnSync(exactBinary, ['validate', '--config', configPath, '--adapter', 'caddyfile'], { encoding: 'utf8', windowsHide: true });
     if (reloadValidation.status !== 0) fail('RELOAD_VALIDATE', 'Reload-time validation failed without external services.');
+    serverUpstream = await startUpstream('server', ports.serverUpstream, seen);
+    const reload = spawnSync(exactBinary, ['reload', '--config', configPath, '--force', '--address', adminAddress], {
+      encoding: 'utf8', windowsHide: true, timeout: TIMEOUT_MS
+    });
+    if (reload.status !== 0) fail('ADMIN_RELOAD', 'Caddy reload through the Unix admin socket failed.');
+    const postReloadClient = await boundedRequest(ports.clientPort, '/post-reload-client', { Host: 'arena.example.invalid' });
+    const postReloadServer = await boundedRequest(ports.serverPort, '/post-reload-server', {
+      Host: 'arena-api.example.invalid', Origin: 'https://arena.example.invalid'
+    });
+    if (postReloadClient.kind !== 'client' || postReloadServer.kind !== 'server' || postReloadServer.origin !== 'https://arena.example.invalid') {
+      fail('POST_RELOAD', 'Routing or Origin preservation was incoherent after Unix-socket reload.');
+    }
     await stopProcess(caddy);
     caddy = undefined;
     await delay(100);
+    if (existsSync(adminSocket)) rmSync(adminSocket, { force: true });
+    if (existsSync(adminSocket)) fail('ADMIN_SOCKET_CLEANUP', 'Admin socket cleanup after process termination failed.');
     const clientLog = readFileSync(join(work, 'client-access.log'), 'utf8');
     const serverLog = readFileSync(join(work, 'server-access.log'), 'utf8');
     const allRuntimeOutput = `${clientLog}\n${serverLog}\n${stdout}\n${stderr}`;
@@ -420,7 +465,10 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
       absentOrigin: true, hostCoherent: true, forwardedProtoCoherent: true, webSocketUpgrade: true,
       bidirectionalWebSocket: true, queryPassThrough: true, tokenLogSafe: true,
       authorizationLogSafe: true, cookieLogSafe: true, routeSeparation: true,
-      adminNotPublic: true, errorLogSafe: true, reloadValidationOffline: true, cleanupBounded: true
+      adminSocketCreated: true, adminSocketDirectoryPrivate: true, adminSocketServiceOnly: true,
+      adminTcpListenerAbsent: true, unrelatedUserDenied: true, unixSocketReload: true,
+      postReloadClientRouting: true, postReloadServerRouting: true,
+      errorLogSafe: true, reloadValidationOffline: true, socketCleanup: true, cleanupBounded: true
     };
   } finally {
     await stopProcess(caddy);
@@ -448,9 +496,16 @@ async function main(): Promise<void> {
     }));
     return;
   }
+  if (process.platform === 'win32') {
+    console.log(JSON.stringify({
+      ok: true, event: 'external_staging_edge_contract_self_tested', tests: 2,
+      runtimeExecuted: false, reason: 'UNIX_ADMIN_RUNTIME_REQUIRES_LINUX', cleanupBounded: true
+    }));
+    return;
+  }
   const checks = await runRuntime(binary);
   console.log(JSON.stringify({
-    ok: true, event: 'external_staging_edge_contract_self_tested', tests: 20,
+    ok: true, event: 'external_staging_edge_contract_self_tested', tests: 28,
     runtimeExecuted: true, caddyVersion: '2.11.4', checks
   }));
 }

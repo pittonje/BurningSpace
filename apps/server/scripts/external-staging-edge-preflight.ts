@@ -1,7 +1,7 @@
 import { isIP } from 'node:net';
 import { readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, posix, relative, resolve } from 'node:path';
 
 type Mode = 'template' | 'phase-a' | 'phase-b';
 
@@ -18,6 +18,11 @@ interface EdgePlan {
   serverUpstreamHost: string;
   serverUpstreamPort: number;
   adminAddress: string;
+  adminTransport: string;
+  adminSocketDirectory: string;
+  adminSocketDirectoryMode: string;
+  adminServiceUmask: string;
+  adminTcpListenerAllowed: boolean;
   publicProtocols: string[];
   automaticHttps: boolean;
   originMutationAllowed: boolean;
@@ -69,6 +74,7 @@ const DEFAULT_ENV = 'deploy/edge/caddy/edge.env.example';
 const DEFAULT_PLAN = 'deploy/edge/caddy/edge-plan.example.json';
 const DEFAULT_RELEASE = 'deploy/edge/caddy/caddy-validation-release.json';
 const DEFAULT_TEMPLATE = 'deploy/edge/caddy/Caddyfile.template';
+const DEFAULT_SYSTEMD_DROPIN = 'deploy/edge/caddy/systemd/caddy.service.d/10-burningspace-edge.conf';
 const EXPECTED_VERSION = '2.11.4';
 const EXPECTED_ARTIFACT_NAME = 'caddy_2.11.4_linux_amd64.tar.gz';
 const EXPECTED_SHA256 = '527fbf917c39189a1e3b31d34fa955601680b2d5c8055d2a87b8b9588dec7bb9';
@@ -77,6 +83,10 @@ const EXPECTED_ARTIFACT = `${EXPECTED_ARTIFACT_NAME}@sha256:${EXPECTED_SHA256}`;
 const ENVIRONMENT_ID = 'burningspace-staging-01';
 const CLIENT_PORT = 18_080;
 const SERVER_PORT = 2_567;
+const ADMIN_ADDRESS = 'unix//run/caddy/burningspace-admin.sock';
+const ADMIN_SOCKET_DIRECTORY = '/run/caddy';
+const ADMIN_SOCKET_PATH = '/run/caddy/burningspace-admin.sock';
+const ADMIN_RELOAD = 'ExecReload=/usr/bin/caddy reload --config /etc/caddy/Caddyfile --force --address unix//run/caddy/burningspace-admin.sock';
 const MAX_INPUT_BYTES = 1_048_576;
 
 const ENV_KEYS = [
@@ -99,6 +109,8 @@ const PLAN_KEYS = [
   'schemaVersion', 'environmentId', 'edgeImplementation', 'caddyValidationVersion',
   'caddyValidationArtifact', 'clientHostname', 'serverHostname', 'clientUpstreamHost',
   'clientUpstreamPort', 'serverUpstreamHost', 'serverUpstreamPort', 'adminAddress',
+  'adminTransport', 'adminSocketDirectory', 'adminSocketDirectoryMode',
+  'adminServiceUmask', 'adminTcpListenerAllowed',
   'publicProtocols', 'automaticHttps', 'originMutationAllowed', 'webSocketEnabled',
   'streamTimeout', 'streamCloseDelay', 'accessLogUriPolicy', 'accessLogMaxSize',
   'accessLogMaxFiles', 'accessLogRetention', 'edgeConfigId', 'previousEdgeConfigId',
@@ -286,12 +298,31 @@ function validateTemplate(template: string): void {
   if (/\bprotocols\b[^\r\n]*\bh3\b/iu.test(template)) fail('HTTP3', 'HTTP/3 is outside the reviewed initial surface.');
 }
 
+function validateSystemdDropIn(dropIn: string): void {
+  if (dropIn.length > 16_384) fail('SYSTEMD_DROPIN_SIZE', 'Caddy systemd drop-in exceeds the bounded size.');
+  const lines = dropIn.split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#'));
+  const expected = [
+    '[Service]',
+    'RuntimeDirectory=caddy',
+    'RuntimeDirectoryMode=0700',
+    'UMask=0077',
+    'ExecReload=',
+    ADMIN_RELOAD
+  ];
+  if (lines.length !== expected.length || lines.some((line, index) => line !== expected[index])) {
+    fail('SYSTEMD_DROPIN', 'Caddy systemd drop-in must define the exact private runtime directory, umask, and Unix-socket reload override.');
+  }
+}
+
 function validatePlan(
   env: Record<string, string>,
   rawPlan: unknown,
   mode: Mode,
   release: ValidationRelease,
-  template: string
+  template: string,
+  systemdDropIn: string
 ): EdgePlan {
   exactKeys(env, ENV_KEYS, 'ENV_FIELDS');
   const planObject = object(rawPlan, 'PLAN_SHAPE');
@@ -324,9 +355,28 @@ function validatePlan(
   if (
     integer(plan.serverUpstreamPort, 'SERVER_PORT') !== SERVER_PORT || parsePort(env.BURNINGSPACE_SERVER_BIND_PORT, 'SERVER_PORT') !== SERVER_PORT
   ) fail('SERVER_PORT', 'The selected host server upstream port must be 2567.');
-  if (plan.adminAddress !== '127.0.0.1:2019' || env.BURNINGSPACE_CADDY_ADMIN_ADDRESS !== '127.0.0.1:2019') {
-    fail('ADMIN_ADDRESS', 'The Caddy admin API must bind only to 127.0.0.1:2019.');
+  if (plan.adminTransport !== 'unix') fail('ADMIN_TRANSPORT', 'The Caddy admin API transport must be Unix socket only.');
+  const adminAddress = text(plan.adminAddress, 'ADMIN_ADDRESS');
+  if (!adminAddress.startsWith('unix/')) fail('ADMIN_ADDRESS', 'TCP and non-Unix Caddy admin addresses are forbidden.');
+  const socketPath = adminAddress.startsWith('unix/') ? adminAddress.slice('unix/'.length) : '';
+  if (!posix.isAbsolute(socketPath) || socketPath.split('/').includes('..')) {
+    fail('ADMIN_SOCKET_PATH', 'The Caddy admin socket must be one absolute traversal-free path under /run/caddy.');
   }
+  const normalizedSocketPath = posix.normalize(socketPath);
+  const fromRuntimeDirectory = posix.relative(ADMIN_SOCKET_DIRECTORY, normalizedSocketPath);
+  if (
+    plan.adminSocketDirectory !== ADMIN_SOCKET_DIRECTORY || fromRuntimeDirectory.startsWith('..') ||
+    posix.isAbsolute(fromRuntimeDirectory) || posix.dirname(normalizedSocketPath) !== ADMIN_SOCKET_DIRECTORY
+  ) {
+    fail('ADMIN_SOCKET_DIRECTORY', 'The Caddy admin socket directory must be exactly /run/caddy.');
+  }
+  if (
+    normalizedSocketPath !== ADMIN_SOCKET_PATH || adminAddress !== ADMIN_ADDRESS ||
+    env.BURNINGSPACE_CADDY_ADMIN_ADDRESS !== ADMIN_ADDRESS
+  ) fail('ADMIN_ADDRESS', 'The Caddy admin API must use the exact canonical Unix socket.');
+  if (plan.adminSocketDirectoryMode !== '0700') fail('ADMIN_SOCKET_MODE', 'The Caddy runtime directory mode must be exactly 0700.');
+  if (plan.adminServiceUmask !== '0077') fail('ADMIN_UMASK', 'The Caddy service umask must be exactly 0077.');
+  if (plan.adminTcpListenerAllowed !== false) fail('ADMIN_TCP', 'No TCP Caddy admin listener is allowed.');
   if (!Array.isArray(plan.publicProtocols) || plan.publicProtocols.join(',') !== 'h1,h2') {
     fail('PUBLIC_PROTOCOLS', 'Initial public protocols must be exactly h1 and h2.');
   }
@@ -374,6 +424,7 @@ function validatePlan(
   )) fail('PLACEHOLDER_BINDING', 'Real preparation modes reject documentation-only identifiers.');
 
   validateTemplate(template);
+  validateSystemdDropIn(systemdDropIn);
   return plan;
 }
 
@@ -438,8 +489,12 @@ function referencesOriginHeader(value: unknown): boolean {
 function inspectAdapted(raw: unknown, plan: EdgePlan): void {
   const root = object(raw, 'ADAPTED_SHAPE');
   const admin = object(root.admin, 'ADAPTED_ADMIN');
+  exactKeys(admin, ['listen', 'config'], 'ADAPTED_ADMIN_FIELDS');
   if (admin.listen !== plan.adminAddress || object(admin.config, 'ADAPTED_ADMIN').persist !== false) {
-    fail('ADAPTED_ADMIN', 'Adapted Caddy admin configuration is not loopback-only and non-persistent.');
+    fail('ADAPTED_ADMIN', 'Adapted Caddy admin configuration is not the exact Unix socket with persistence disabled.');
+  }
+  if (JSON.stringify(admin).includes(':2019') || /^(?:tcp\/|https?:\/\/)/u.test(String(admin.listen))) {
+    fail('ADAPTED_ADMIN_TCP', 'Adapted Caddy configuration retained a TCP admin listener.');
   }
   const apps = object(root.apps, 'ADAPTED_APPS');
   const http = object(apps.http, 'ADAPTED_HTTP');
@@ -555,8 +610,9 @@ function readInputs(
   planPath: string,
   releasePath: string,
   templatePath: string,
+  systemdDropInPath: string,
   mode: Mode
-): { env: Record<string, string>; plan: EdgePlan; release: ValidationRelease; template: string } {
+): { env: Record<string, string>; plan: EdgePlan; release: ValidationRelease; template: string; systemdDropIn: string } {
   let rawPlan: unknown;
   let rawRelease: unknown;
   try {
@@ -568,18 +624,20 @@ function readInputs(
   }
   const env = parseEnv(readBounded(envPath));
   const template = readBounded(templatePath);
+  const systemdDropIn = readBounded(systemdDropInPath);
   const release = validateRelease(rawRelease);
-  const plan = validatePlan(env, rawPlan, mode, release, template);
-  return { env, plan, release, template };
+  const plan = validatePlan(env, rawPlan, mode, release, template, systemdDropIn);
+  return { env, plan, release, template, systemdDropIn };
 }
 
-function fixture(mode: Mode): { env: Record<string, string>; plan: EdgePlan; release: ValidationRelease; template: string } {
-  const base = readInputs(DEFAULT_ENV, DEFAULT_PLAN, DEFAULT_RELEASE, DEFAULT_TEMPLATE, 'template');
+function fixture(mode: Mode): { env: Record<string, string>; plan: EdgePlan; release: ValidationRelease; template: string; systemdDropIn: string } {
+  const base = readInputs(DEFAULT_ENV, DEFAULT_PLAN, DEFAULT_RELEASE, DEFAULT_TEMPLATE, DEFAULT_SYSTEMD_DROPIN, 'template');
   const result = {
     env: { ...base.env },
     plan: structuredClone(base.plan),
     release: structuredClone(base.release),
-    template: base.template
+    template: base.template,
+    systemdDropIn: base.systemdDropIn
   };
   if (mode !== 'template') {
     result.plan.clientHostname = 'arena.ops002-review.test';
@@ -614,7 +672,7 @@ function expectFailure(
   mutate(value);
   try {
     validateRelease(value.release);
-    validatePlan(value.env, value.plan, mode, value.release, value.template);
+    validatePlan(value.env, value.plan, mode, value.release, value.template, value.systemdDropIn);
   } catch (error) {
     if (error instanceof EdgeValidationError && error.code === code) return;
     fail('SELF_TEST', `Self-test ${name} returned an unexpected safe failure.`);
@@ -625,10 +683,11 @@ function expectFailure(
 function runSelfTests(): number {
   let tests = 0;
   const pass = (operation: () => void): void => { operation(); tests += 1; };
+  const passNamed = (_name: string, operation: () => void): void => pass(operation);
   const reject = (...args: Parameters<typeof expectFailure>): void => { expectFailure(...args); tests += 1; };
-  pass(() => { const f = fixture('template'); validatePlan(f.env, f.plan, 'template', f.release, f.template); });
-  pass(() => { const f = fixture('phase-a'); validatePlan(f.env, f.plan, 'phase-a', f.release, f.template); });
-  pass(() => { const f = fixture('phase-b'); validatePlan(f.env, f.plan, 'phase-b', f.release, f.template); });
+  passNamed('valid-unix-admin-fixture', () => { const f = fixture('template'); validatePlan(f.env, f.plan, 'template', f.release, f.template, f.systemdDropIn); });
+  pass(() => { const f = fixture('phase-a'); validatePlan(f.env, f.plan, 'phase-a', f.release, f.template, f.systemdDropIn); });
+  pass(() => { const f = fixture('phase-b'); validatePlan(f.env, f.plan, 'phase-b', f.release, f.template, f.systemdDropIn); });
   reject('same-hostname', 'HOSTNAME_EQUAL', (f) => { f.plan.serverHostname = f.plan.clientHostname; f.env.BURNINGSPACE_PUBLIC_SERVER_HOSTNAME = f.plan.serverHostname; });
   reject('wildcard-hostname', 'CLIENT_HOSTNAME', (f) => { f.plan.clientHostname = '*.example.invalid'; f.env.BURNINGSPACE_PUBLIC_CLIENT_HOSTNAME = f.plan.clientHostname; });
   reject('ip-hostname', 'CLIENT_HOSTNAME', (f) => { f.plan.clientHostname = '192.0.2.1'; f.env.BURNINGSPACE_PUBLIC_CLIENT_HOSTNAME = f.plan.clientHostname; });
@@ -638,7 +697,36 @@ function runSelfTests(): number {
   reject('server-upstream', 'UPSTREAM_HOST', (f) => { f.plan.serverUpstreamHost = 'localhost'; });
   reject('client-port', 'CLIENT_PORT', (f) => { f.plan.clientUpstreamPort = 8080; });
   reject('server-port', 'SERVER_PORT', (f) => { f.plan.serverUpstreamPort = 8080; });
-  reject('public-admin', 'ADMIN_ADDRESS', (f) => { f.plan.adminAddress = '0.0.0.0:2019'; f.env.BURNINGSPACE_CADDY_ADMIN_ADDRESS = f.plan.adminAddress; });
+  reject('old-tcp-admin', 'ADMIN_ADDRESS', (f) => { f.plan.adminAddress = '127.0.0.1:2019'; f.env.BURNINGSPACE_CADDY_ADMIN_ADDRESS = f.plan.adminAddress; });
+  reject('localhost-tcp-admin', 'ADMIN_ADDRESS', (f) => { f.plan.adminAddress = 'localhost:2019'; f.env.BURNINGSPACE_CADDY_ADMIN_ADDRESS = f.plan.adminAddress; });
+  reject('wildcard-tcp-admin', 'ADMIN_ADDRESS', (f) => { f.plan.adminAddress = '0.0.0.0:2019'; f.env.BURNINGSPACE_CADDY_ADMIN_ADDRESS = f.plan.adminAddress; });
+  reject('public-tcp-admin', 'ADMIN_ADDRESS', (f) => { f.plan.adminAddress = '192.0.2.10:2019'; f.env.BURNINGSPACE_CADDY_ADMIN_ADDRESS = f.plan.adminAddress; });
+  reject('relative-admin-socket', 'ADMIN_SOCKET_PATH', (f) => { f.plan.adminAddress = 'unix/burningspace-admin.sock'; f.env.BURNINGSPACE_CADDY_ADMIN_ADDRESS = f.plan.adminAddress; });
+  reject('outside-runtime-admin-socket', 'ADMIN_SOCKET_DIRECTORY', (f) => { f.plan.adminAddress = 'unix//tmp/burningspace-admin.sock'; f.env.BURNINGSPACE_CADDY_ADMIN_ADDRESS = f.plan.adminAddress; });
+  reject('traversal-admin-socket', 'ADMIN_SOCKET_PATH', (f) => { f.plan.adminAddress = 'unix//run/caddy/../burningspace-admin.sock'; f.env.BURNINGSPACE_CADDY_ADMIN_ADDRESS = f.plan.adminAddress; });
+  reject('missing-admin-socket-path', 'ADMIN_SOCKET_PATH', (f) => { f.plan.adminAddress = 'unix/'; f.env.BURNINGSPACE_CADDY_ADMIN_ADDRESS = f.plan.adminAddress; });
+  reject('missing-runtime-directory', 'ADMIN_SOCKET_DIRECTORY', (f) => { f.plan.adminSocketDirectory = ''; });
+  reject('runtime-directory-mode-0755', 'ADMIN_SOCKET_MODE', (f) => { f.plan.adminSocketDirectoryMode = '0755'; });
+  reject('runtime-directory-mode-0777', 'ADMIN_SOCKET_MODE', (f) => { f.plan.adminSocketDirectoryMode = '0777'; });
+  reject('service-umask-0022', 'ADMIN_UMASK', (f) => { f.plan.adminServiceUmask = '0022'; });
+  reject('tcp-listener-enabled', 'ADMIN_TCP', (f) => { f.plan.adminTcpListenerAllowed = true; });
+  reject('persist-config-enabled', 'TEMPLATE_CONTRACT', (f) => { f.template = f.template.replace('persist_config off', 'persist_config on'); });
+  reject('reload-address-mismatch', 'SYSTEMD_DROPIN', (f) => { f.systemdDropIn = f.systemdDropIn.replace(ADMIN_ADDRESS, 'unix//run/caddy/other.sock'); });
+  reject('admin-disabled', 'TEMPLATE_PLACEHOLDER', (f) => { f.template = f.template.replace('admin {$BURNINGSPACE_CADDY_ADMIN_ADDRESS}', 'admin off'); });
+  passNamed('valid-systemd-drop-in', () => { validateSystemdDropIn(fixture('template').systemdDropIn); });
+  reject('malformed-systemd-drop-in', 'SYSTEMD_DROPIN', (f) => { f.systemdDropIn = f.systemdDropIn.replace('RuntimeDirectoryMode=0700', 'RuntimeDirectoryMode=0700x'); });
+  passNamed('admin-output-canary', () => {
+    const seeded = 'ops002-admin-canary-never-print';
+    const f = fixture('template');
+    f.plan.adminAddress = `unix//run/caddy/${seeded}.sock`;
+    f.env.BURNINGSPACE_CADDY_ADMIN_ADDRESS = f.plan.adminAddress;
+    let output = '';
+    try { validatePlan(f.env, f.plan, 'template', f.release, f.template, f.systemdDropIn); }
+    catch (error) { output = JSON.stringify(safeError(error)); }
+    if (!output || output.includes(seeded) || output.length > 800) {
+      fail('SELF_TEST', 'Sanitized admin-socket failure exposed seeded material or exceeded its bound.');
+    }
+  });
   reject('http3', 'PUBLIC_PROTOCOLS', (f) => { f.plan.publicProtocols.push('h3'); });
   reject('automatic-https', 'AUTOMATIC_HTTPS', (f) => { f.plan.automaticHttps = false; });
   reject('origin-rewrite', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up Origin https://arena.example.invalid\n'; });
@@ -670,7 +758,7 @@ function runSelfTests(): number {
     const f = fixture('template');
     f.env.UNEXPECTED_TOKEN = seeded;
     let output = '';
-    try { validatePlan(f.env, f.plan, 'template', f.release, f.template); } catch (error) { output = JSON.stringify(safeError(error)); }
+    try { validatePlan(f.env, f.plan, 'template', f.release, f.template, f.systemdDropIn); } catch (error) { output = JSON.stringify(safeError(error)); }
     if (output.includes(seeded) || output.length > 800) fail('SELF_TEST', 'Sanitized output exposed seeded material or exceeded its bound.');
   });
   return tests;
@@ -709,6 +797,7 @@ function main(): void {
     argument(args, '--plan', DEFAULT_PLAN),
     argument(args, '--release', DEFAULT_RELEASE),
     argument(args, '--caddyfile', DEFAULT_TEMPLATE),
+    argument(args, '--systemd-drop-in', DEFAULT_SYSTEMD_DROPIN),
     mode
   );
   if (operation === 'render') {

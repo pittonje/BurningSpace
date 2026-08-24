@@ -19,9 +19,12 @@ GO-packet field and must match the separately approved host-install plan.
 
 HTTP/1.1 and HTTP/2 are the only initial public protocols. HTTP/3 is disabled
 because UDP 443 is outside the reviewed firewall surface. The Caddy admin API
-is loopback-only at `127.0.0.1:2019`; persisted API configuration is disabled,
-so the versioned Caddyfile remains canonical. Debug and credential logging are
-disabled. Strict SNI/Host enforcement is enabled.
+uses only `unix//run/caddy/burningspace-admin.sock`; no TCP admin listener is
+allowed. The systemd service creates `/run/caddy` as `caddy:caddy` with mode
+`0700` and `UMask=0077`, so unrelated local users cannot traverse to the
+socket. Persisted API configuration is disabled, so the versioned Caddyfile
+remains canonical. Debug and credential logging are disabled. Strict SNI/Host
+enforcement is enabled.
 
 ## Files and ownership
 
@@ -31,6 +34,9 @@ disabled. Strict SNI/Host enforcement is enabled.
   authorization and rollback template.
 - `deploy/edge/caddy/caddy-validation-release.json` binds the official
   validation artifact and checksums.
+- `deploy/edge/caddy/systemd/caddy.service.d/10-burningspace-edge.conf` is the
+  canonical future service drop-in. It creates the private runtime directory
+  and replaces `ExecReload` with the exact Unix-socket reload command.
 - `/etc/caddy/Caddyfile` is the standard future rendered host configuration.
 - `/etc/caddy/burningspace.env` is the standard future root-owned, non-secret
   environment inventory consumed through a reviewed systemd drop-in. It must
@@ -39,11 +45,15 @@ disabled. Strict SNI/Host enforcement is enabled.
 - `/var/lib/caddy` remains Caddy's service-owned data/certificate state.
 - `/var/log/caddy/burningspace` is the service-owned bounded access-log
   directory.
+- `/run/caddy/burningspace-admin.sock` is the only allowed admin listener and
+  is ephemeral service runtime state, not a repository or persistent file.
 
 The rendered configuration should be `root:caddy` and non-world-readable; the
-data and log directories should be owned by the Caddy service account. Exact
-ownership and systemd-unit evidence must be recorded before GO. Repository
-preparation creates none of these host files.
+data and log directories should be owned by the Caddy service account. The
+standard Caddy unit must run as `caddy:caddy`, causing systemd's
+`RuntimeDirectory=caddy` to own `/run/caddy` for that service identity. Exact
+ownership, mode, socket, and systemd-unit evidence must be recorded before GO.
+Repository preparation creates none of these host files.
 
 ## Install boundary
 
@@ -53,6 +63,18 @@ do not use a third-party build or add modules. Before installation, bind the
 exact package version and source in the GO packet. Installing a package,
 enabling or starting the service, and opening TCP 80/443 are all external host
 mutations outside this repository task.
+
+After a later exact authorization, install the committed drop-in at
+`/etc/systemd/system/caddy.service.d/10-burningspace-edge.conf`, verify the
+composed `caddy.service` with `systemd-analyze verify caddy.service`, then run
+`systemctl daemon-reload` and an explicitly approved service restart. Before
+continuing, use `systemctl cat caddy.service` and `systemctl show caddy.service`
+to confirm the effective `RuntimeDirectory`, `RuntimeDirectoryMode`, `UMask`,
+service user/group, and replacement `ExecReload`. Confirm with `stat` that
+`/run/caddy` is `caddy:caddy` mode `0700` and the socket is service-owned;
+inspect live IPv4/IPv6 listeners with `ss`, and prove a distinct unprivileged
+user cannot connect to the socket. Do not infer these properties from the
+committed file alone.
 
 ## Validation
 
@@ -80,9 +102,15 @@ BURNINGSPACE_CADDY_BINARY=/verified/temporary/caddy \
 ```
 
 The Caddy binary must match the immutable release record. Linux Core verifies
-the archive checksum before extraction and execution. Temporary rendered and
-adapted configurations are not committed and must be removed after bounded
-validation. These commands do not contact DNS or ACME and do not bind 80/443.
+the archive checksum before extraction and execution, composes a safe temporary
+unit around the committed drop-in for `systemd-analyze verify`, and runs Caddy
+with an isolated mode-`0700` runtime directory. It proves socket creation and
+service-only mode, denial to a distinct unprivileged user, absence of TCP admin
+listeners including port `2019`, Unix-socket reload, coherent post-reload
+routing, and socket cleanup. Temporary rendered, adapted, unit, socket, and log
+artifacts are not committed and must be removed after bounded validation.
+These commands do not contact DNS or ACME, mutate a real service, or bind
+80/443.
 
 ## Routing
 
@@ -159,8 +187,17 @@ ACME endpoint.
 The future operator must render to a private staging path, verify the exact
 Caddy version and config ID, run format/adapt/validate plus semantic preflight,
 and compare the adapted-config hash before replacing the active configuration.
-Only then may the authorized systemd reload operation run. The admin API must
-remain loopback-only and the versioned file must remain canonical.
+Only then may the authorized systemd reload operation run as:
+
+```sh
+/usr/bin/caddy reload --config /etc/caddy/Caddyfile --force \
+  --address unix//run/caddy/burningspace-admin.sock
+```
+
+The admin API must remain Unix-socket-only, `/run/caddy` must remain
+`caddy:caddy` mode `0700`, no TCP admin listener may exist, and the versioned
+file must remain canonical. After service stop or restart, verify stale socket
+state is absent or safely replaced by the service.
 
 A reload can retain existing upgraded streams until the configured `5m`
 stream-close delay expires; streams still bound to the unloaded configuration
@@ -181,14 +218,20 @@ it before activation, reloads through the approved systemd path, and repeats
 all post-reload checks. It does not rebuild or switch BurningSpace images.
 Active WebSocket streams may close under the same bounded delay, and any
 server/image rollback separately resets the in-memory arena as already
-documented.
+documented. If rollback stops the service, confirm the admin socket is removed;
+never broaden directory permissions or substitute a TCP listener to recover
+from stale socket state. A later authorized restart must recreate the socket
+inside the same systemd-managed private directory.
 
 ## Abort conditions
 
 Abort or roll back for any stripped, rewritten, or synthesized Origin; broken
 WebSocket upgrade or bidirectional traffic; changed query; query/token/header
-canary in logs or runtime output; public admin API; HTTP/3; wrong hostname or
-upstream; unexpected public listener; invalid TLS; direct service publication;
+canary in logs or runtime output; TCP admin API; an admin socket reachable by
+unrelated local users; wrong runtime-directory ownership, mode, or umask;
+socket path differing from the approved binding; missing or ineffective
+systemd drop-in; reload requiring TCP administration; HTTP/3; wrong hostname
+or upstream; unexpected public listener; invalid TLS; direct service publication;
 unbounded logs or timeouts; stale config/version hashes; or unavailable
 rollback. Never recover by weakening SEC-007, exposing the service ports, or
 enabling a TLS-verification bypass.
@@ -196,9 +239,11 @@ enabling a TLS-verification bypass.
 ## Evidence
 
 Future non-secret evidence must bind the installed Caddy version and source,
-edge config IDs, rendered and adapted configuration hashes, exact public
-hostnames, loopback upstreams, admin binding, public protocols, automatic-HTTPS
-state, semantic inspection, runtime contract summary, log-safety canaries,
+effective systemd unit and drop-in hash, edge config IDs, rendered and adapted
+configuration hashes, exact public
+hostnames, loopback upstreams, Unix admin socket, runtime-directory ownership
+and mode, service umask, absence of TCP admin listeners, unrelated-user denial,
+public protocols, automatic-HTTPS state, semantic inspection, runtime contract summary, log-safety canaries,
 reload/rollback result, and exact reviewed repository head. Do not retain raw
 query-bearing URLs, secrets, credentials, private keys, complete environment
 dumps, or unbounded logs.

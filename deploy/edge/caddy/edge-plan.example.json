@@ -10,7 +10,12 @@
   "clientUpstreamPort": 18080,
   "serverUpstreamHost": "127.0.0.1",
   "serverUpstreamPort": 2567,
-  "adminAddress": "127.0.0.1:2019",
+  "adminAddress": "unix//run/caddy/burningspace-admin.sock",
+  "adminTransport": "unix",
+  "adminSocketDirectory": "/run/caddy",
+  "adminSocketDirectoryMode": "0700",
+  "adminServiceUmask": "0077",
+  "adminTcpListenerAllowed": false,
   "publicProtocols": [
     "h1",
     "h2"

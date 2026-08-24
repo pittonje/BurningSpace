@@ -82,6 +82,10 @@ The selected edge must:
 - provide a bounded timeout suitable for long-lived WebSockets;
 - route only to explicit loopback upstreams;
 - expose no direct Node/static-client service ports or administrative/dashboard ports;
+- expose Caddy administration only through the service-owned
+  `/run/caddy/burningspace-admin.sock` inside a systemd-managed `caddy:caddy`
+  mode-`0700` runtime directory with `UMask=0077`; no TCP admin listener is
+  allowed;
 - treat forwarded client IP only as operations metadata, never identity or gameplay authority.
 
 For external targets, TLS verification remains enabled. Do not recover from edge failures by weakening the exact Origin allowlist, using plaintext external transport, or exposing Compose ports publicly.
@@ -216,7 +220,9 @@ Only after explicit GO:
 2. Confirm credentials are available through secure channels and no value will enter repository output.
 3. Confirm maintenance and all shared-host remediation gates are complete,
    including the forum standstill and cleanup prohibition.
-4. Confirm the selected Caddy version, systemd ownership, current/previous
+4. Confirm the selected Caddy version, effective systemd drop-in and service
+   identity, `/run/caddy` ownership/mode, service umask, Unix admin socket and
+   reload path, absence of IPv4/IPv6 TCP admin listeners, current/previous
    config IDs, rendered/adapted hashes, DNS/TLS edge state, log safety, and
    service-port exposure against the approved inventory and Caddy runbook.
 5. Pull or otherwise retrieve the exact prebuilt, digest-pinned target images derived from the approved merged commit; never build from source on the shared host.
