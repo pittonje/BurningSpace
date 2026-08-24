@@ -94,6 +94,7 @@ jobs:
           archive="$RUNNER_TEMP/$artifact_name"
           checksums="$RUNNER_TEMP/caddy-checksums.txt"
           caddy_root="$RUNNER_TEMP/caddy-2.11.4"
+          caddy_logs="$RUNNER_TEMP/caddy-validation-logs"
           rendered="$RUNNER_TEMP/BurningSpace-Caddyfile"
           adapted="$RUNNER_TEMP/BurningSpace-Caddyfile.json"
 
@@ -126,8 +127,9 @@ jobs:
           test -x "$caddy"
           test "$("$caddy" version | awk '{print $1}')" = "v2.11.4"
 
+          mkdir -p "$caddy_logs"
           npx tsx apps/server/scripts/external-staging-edge-preflight.ts \
-            --render --output "$rendered"
+            --render --output "$rendered" --log-directory "$caddy_logs"
           format_diff="$("$caddy" fmt --diff "$rendered")"
           if printf '%s\n' "$format_diff" | grep -Eq '^[+-]'; then
             printf '%s\n' "$format_diff"

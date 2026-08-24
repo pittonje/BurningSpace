@@ -673,7 +673,15 @@ function main(): void {
     if (statSync(parent).isDirectory() === false || !isTemporaryPath(output)) {
       fail('OUTPUT_PATH', 'Rendered output must remain inside an approved temporary directory.');
     }
-    writeFileSync(output, render(inputs.template, inputs.env), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    const renderEnv = { ...inputs.env };
+    if (args.includes('--log-directory')) {
+      const logDirectory = realpathSync(resolve(argument(args, '--log-directory')));
+      if (!statSync(logDirectory).isDirectory() || !isTemporaryPath(logDirectory)) {
+        fail('LOG_DIRECTORY_OVERRIDE', 'Validation log override must be an existing temporary directory.');
+      }
+      renderEnv.BURNINGSPACE_CADDY_LOG_DIRECTORY = logDirectory.replaceAll('\\', '/');
+    }
+    writeFileSync(output, render(inputs.template, renderEnv), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
   }
   if (operation === 'inspect-adapted-config') {
     let adapted: unknown;
