@@ -146,6 +146,9 @@ jobs:
             'add|header_up +Origin https://mutated.example.invalid'
             'delete|header_up -Origin'
             'delete-all|header_up -*'
+            'delete-prefix-wildcard|header_up -Ori*'
+            'delete-suffix-wildcard|header_up -*gin'
+            'delete-substring-wildcard|header_up -*rig*'
             'replace|header_up Origin ^https:// https://mutated.example.invalid/'
           )
           for mutation in "${origin_mutation_tests[@]}"; do
@@ -170,7 +173,7 @@ jobs:
               exit 1
             fi
           done
-          printf '%s\n' '{"ok":true,"event":"caddy_origin_mutation_negatives_verified","tests":5}'
+          printf '%s\n' '{"ok":true,"event":"caddy_origin_mutation_negatives_verified","tests":8}'
 
           contract_result="$(BURNINGSPACE_CADDY_BINARY="$caddy" \
             npx tsx apps/server/scripts/external-staging-edge-contract-check.ts --self-test)"

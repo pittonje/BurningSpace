@@ -276,7 +276,9 @@ function validateTemplate(template: string): void {
   if ((template.match(/stream_close_delay \{\$BURNINGSPACE_CADDY_STREAM_CLOSE_DELAY\}/gu) ?? []).length !== 2) {
     fail('STREAM_CLOSE_DELAY', 'Both routes require the bounded reload close delay.');
   }
-  if (/\bheader_up\s+(?:[+\-?>]?Origin(?:\s|$)|-\*(?:\s|$))/imu.test(template)) fail('ORIGIN_MUTATION', 'Caddy must not mutate, synthesize, or remove Origin.');
+  for (const match of template.matchAll(/\bheader_up\s+([^\s]+)/giu)) {
+    if (caddyHeaderPatternTargetsOrigin(match[1]!)) fail('ORIGIN_MUTATION', 'Caddy must not mutate, synthesize, or remove Origin.');
+  }
   if (/^\s*(?:rewrite|uri)\s+/imu.test(template)) fail('URI_REWRITE', 'Caddy must not rewrite path or query data.');
   if (/\b(?:tls_insecure_skip_verify|trusted_proxies|tls\s+internal|debug|credentials)\b/iu.test(template)) {
     fail('FORBIDDEN_DIRECTIVE', 'Caddyfile contains a forbidden trust, TLS, debug, or credential directive.');
@@ -418,17 +420,19 @@ function adaptedAccessLogSafe(logger: Record<string, unknown>): boolean {
     adaptedLogFilterSafe(logger);
 }
 
+function caddyHeaderPatternTargetsOrigin(value: string): boolean {
+  const header = value.replace(/^[+\-?>]+/u, '').toLowerCase();
+  const escaped = header.split('*').map((part) => part.replace(/[\\^$.*+?()[\]{}|]/gu, '\\$&')).join('.*');
+  return new RegExp(`^${escaped}$`, 'u').test('origin');
+}
+
 function referencesOriginHeader(value: unknown): boolean {
-  if (typeof value === 'string') {
-    const header = value.replace(/^[+\-?>]+/u, '').toLowerCase();
-    return header === 'origin' || header === '*';
-  }
+  if (typeof value === 'string') return caddyHeaderPatternTargetsOrigin(value);
   if (Array.isArray(value)) return value.some(referencesOriginHeader);
   if (!value || typeof value !== 'object') return false;
-  return Object.entries(value).some(([key, entry]) => {
-    const header = key.replace(/^[+\-?>]+/u, '').toLowerCase();
-    return header === 'origin' || header === '*' || referencesOriginHeader(entry);
-  });
+  return Object.entries(value).some(([key, entry]) =>
+    caddyHeaderPatternTargetsOrigin(key) || referencesOriginHeader(entry)
+  );
 }
 
 function inspectAdapted(raw: unknown, plan: EdgePlan): void {
@@ -642,6 +646,9 @@ function runSelfTests(): number {
   reject('origin-delete', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up -Origin\n'; });
   reject('origin-add', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up +Origin https://arena.example.invalid\n'; });
   reject('origin-delete-all', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up -*\n'; });
+  reject('origin-delete-prefix-wildcard', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up -Ori*\n'; });
+  reject('origin-delete-suffix-wildcard', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up -*gin\n'; });
+  reject('origin-delete-substring-wildcard', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up -*rig*\n'; });
   reject('uri-rewrite', 'URI_REWRITE', (f) => { f.template += '\nrewrite * /rewritten\n'; });
   reject('websocket-disabled', 'WEBSOCKET', (f) => { f.plan.webSocketEnabled = false; });
   reject('missing-stream-timeout', 'TEMPLATE_PLACEHOLDER', (f) => { f.template = f.template.replaceAll('stream_timeout {$BURNINGSPACE_CADDY_STREAM_TIMEOUT}', ''); });
