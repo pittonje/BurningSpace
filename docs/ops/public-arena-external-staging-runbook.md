@@ -14,7 +14,8 @@ Phase B is controlled external execution. It may begin only after the Phase A im
 
 ## Required non-secret inventory
 
-- non-secret external environment identifier and `external-staging` class;
+- non-secret environment identifier and exact
+  `shared-existing-vps-with-isolated-compose-staging` class;
 - alpha/non-persistent label;
 - exact public client and server origins;
 - exact allowed browser Origins;
@@ -100,7 +101,7 @@ service limits, not Swarm-only deployment reservations:
 Both services attach only to the non-external project-scoped `burningspace`
 bridge network. Published ports remain exactly loopback-bound. Privileged
 mode, host networking, Docker-socket mounts, fixed global container names, and
-persistent named volumes remain forbidden.
+all service bind/persistent-volume mounts remain forbidden.
 
 `deploy/docker-compose.staging.build.yml` is a local/CI-only override. Core
 uses it to build both Dockerfiles off-host from the eventual shared VPS and to

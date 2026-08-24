@@ -141,4 +141,6 @@ result and never prints a reconnect token.
 3. Inspect the bounded server/client logs.
 4. Stop deployment if the exact Origin policy is wrong.
 5. Never recover by setting an Origin wildcard.
-6. Roll back to the previous approved commit if verification cannot pass.
+6. For a later authorized shared-host deployment, switch to the recorded
+   previous-approved server/client image digests without rebuilding if
+   verification cannot pass.

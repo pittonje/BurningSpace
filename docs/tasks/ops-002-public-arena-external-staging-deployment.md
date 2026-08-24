@@ -196,7 +196,8 @@ Phase B GO can be considered:
   network; and
 - loopback publication, read-only filesystems, `/tmp` tmpfs, non-privileged
   execution, no Docker socket, and no persistent gameplay-state volume remain
-  mandatory.
+  mandatory; because the approved services need no volumes, every service
+  bind or persistent-volume mount fails closed.
 
 The limits are provisional and must be validated against real staging
 behavior and host reserve. Repository hardening does not select a registry,

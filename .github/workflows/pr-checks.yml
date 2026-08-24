@@ -163,15 +163,8 @@ jobs:
             if (!Array.isArray(service.tmpfs) || !service.tmpfs.some((entry) => String(entry).startsWith('/tmp'))) {
               throw new Error('Every service must retain its /tmp tmpfs.');
             }
-            for (const mount of service.volumes || []) {
-              const source = typeof mount === 'string' ? mount : mount.source;
-              const target = typeof mount === 'string' ? mount : mount.target;
-              if (String(source).includes('docker.sock') || String(target).includes('docker.sock')) {
-                throw new Error('Docker socket mounts are forbidden.');
-              }
-              if (typeof mount === 'object' && mount.type === 'volume') {
-                throw new Error('Persistent named volumes are forbidden.');
-              }
+            if (service.volumes && service.volumes.length > 0) {
+              throw new Error('Service bind mounts and persistent volumes are forbidden.');
             }
           }
           const networks = model.networks || {};

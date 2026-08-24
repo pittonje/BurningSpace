@@ -243,17 +243,11 @@ function serviceNetworks(service: Record<string, unknown>): string[] {
 }
 
 function validateServiceVolumes(service: Record<string, unknown>): void {
-  const volumes = Array.isArray(service.volumes) ? service.volumes : [];
-  for (const rawMount of volumes) {
-    const mount = typeof rawMount === 'string' ? rawMount : requireObject(rawMount, 'COMPOSE_VOLUME');
-    const source = typeof mount === 'string' ? mount : String(mount.source ?? '');
-    const target = typeof mount === 'string' ? mount : String(mount.target ?? '');
-    if (source.includes('docker.sock') || target.includes('docker.sock')) {
-      fail('COMPOSE_DOCKER_SOCKET', 'Docker socket mounts are forbidden.');
-    }
-    if (typeof mount === 'object' && mount.type === 'volume') {
-      fail('COMPOSE_VOLUME', 'Persistent named volumes are forbidden.');
-    }
+  if (service.volumes !== undefined && !Array.isArray(service.volumes)) {
+    fail('COMPOSE_VOLUME', 'Service volumes must be a bounded list.');
+  }
+  if (Array.isArray(service.volumes) && service.volumes.length > 0) {
+    fail('COMPOSE_VOLUME', 'Real shared-host staging services must not mount host paths or persistent volumes.');
   }
 }
 
@@ -741,7 +735,22 @@ function runSelfTests(): number {
   expectComposeFailure('service-image-mismatch', (model) => {
     requireObject(requireObject(model.services, 'SELF_TEST').client, 'SELF_TEST').image = 'burningspace-client:latest';
   }, 'COMPOSE_IMAGE');
-  return 43;
+  expectComposeFailure('host-root-bind', (model) => {
+    requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST').volumes = [
+      { type: 'bind', source: '/', target: '/host', read_only: false }
+    ];
+  }, 'COMPOSE_VOLUME');
+  expectComposeFailure('persistent-state-bind', (model) => {
+    requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST').volumes = [
+      { type: 'bind', source: '/srv/burningspace-state', target: '/app/state', read_only: false }
+    ];
+  }, 'COMPOSE_VOLUME');
+  expectComposeFailure('docker-socket-bind', (model) => {
+    requireObject(requireObject(model.services, 'SELF_TEST').client, 'SELF_TEST').volumes = [
+      { type: 'bind', source: '/var/run/docker.sock', target: '/var/run/docker.sock', read_only: false }
+    ];
+  }, 'COMPOSE_VOLUME');
+  return 46;
 }
 
 function argumentValue(args: string[], name: string): string {
