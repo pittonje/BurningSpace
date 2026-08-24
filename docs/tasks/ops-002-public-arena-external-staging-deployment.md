@@ -83,8 +83,10 @@ becomes unready before drain. The existing smoke script validates real
 health/readiness, optional hostile-Origin denial, allowed join/profile, owned
 authoritative ship replication, movement, and intentional cleanup.
 
-No provider, hostname, address, credential, firewall product, TLS issuer, or
-edge implementation is selected by current repository authority.
+The provider and environment class are selected by the merged
+[Phase B environment decision](../ops/ops-002-phase-b-environment-decision.md).
+No hostname, address, credential, firewall product, TLS issuer, or edge
+implementation is selected by current repository authority.
 
 ## Hard architectural invariants
 
@@ -137,6 +139,12 @@ authorize Phase B.
 Phase B may begin only after:
 
 - Phase A implementation is reviewed and merged;
+- every mandatory repository, host, edge, DNS/TLS, rollback, and
+  external-validation condition in the Phase B
+  [environment decision](../ops/ops-002-phase-b-environment-decision.md) is
+  complete and evidenced, including the operational isolation boundary
+  required because the selected staging host is shared and not physically
+  isolated;
 - mandatory Core passes on the approved implementation/evidence head;
 - mandatory Claude QA produces a usable blocker-free substantive result, or a
   policy-compliant Product Architect infrastructure disposition is recorded;

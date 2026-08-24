@@ -9,7 +9,10 @@ can make an environment-specific GO decision.
 ## Fixed bindings
 
 - Environment ID: `burningspace-staging-01`
-- Environment class: `dedicated-isolated-single-host-vps`
+- Environment class: `shared-existing-vps-with-isolated-compose-staging`
+- Superseded environment class: `dedicated-isolated-single-host-vps`
+- Provider: `Contabo`
+- Physical isolation: `false`
 - Phase A merge: `33bff5009926bb5247acad5ebcf85ba8b7f626ce`
 - Phase A implementation head: `3522116d62d8fb93a4a4ca1756aec6818280f0bb`
 - Phase A evidence head: `d2322e24ac2ff0525d5b6332143098bb048d6262`
@@ -18,12 +21,35 @@ can make an environment-specific GO decision.
 - Deployment GO issued: `false`
 - Public production launch authorized: `false`
 
+## Known environment facts
+
+[The environment decision](ops-002-phase-b-environment-decision.md) is the
+single source of truth for the measured host evidence summarized here. These
+facts resolve host selection only; they satisfy no hardening, edge, DNS, TLS,
+rollback, or validation gate.
+
+- Environment selected: `YES`
+- Provider selected: `YES` — Contabo
+- Environment class selected: `YES`
+- Host capacity evidence: `AVAILABLE` — recorded in the environment decision
+- Public 80/443 availability: `VERIFIED FREE AFTER FORUM STOP`
+- Loopback pair: `SELECTED` — `127.0.0.1:2567` server and `127.0.0.1:8080`
+  client
+- Shared-host hardening complete: `NO`
+- Firewall review complete: `NO`
+- Edge configured: `NO`
+- DNS bound: `NO`
+- TLS ready: `NO`
+- Immutable target/rollback images: `NO`
+- External validation: `NO`
+- Deployment GO: `NO`
+
 ## Incomplete environment and execution bindings
 
-- Provider: `NOT PROVIDED`
 - Region: `NOT PROVIDED`
-- Host/environment asset identifier: `NOT PROVIDED`
-- Target public IP: `NOT PROVIDED`
+- Host/environment asset identifier: `NOT RECORDED IN CANONICAL
+  DOCUMENTATION`
+- Target public IP: `NOT RECORDED IN CANONICAL DOCUMENTATION`
 - Public client origin: `NOT PROVIDED`
 - Public server origin: `NOT PROVIDED`
 - Exact server allowed Origin: `NOT PROVIDED`
@@ -51,8 +77,14 @@ can make an environment-specific GO decision.
 
 - Phase A remains merged, Core-green, independently approved, and bound to the
   fixed heads above.
-- One dedicated isolated host is provisioned and verified against the
-  environment decision.
+- Every mandatory repository, host, edge, DNS/TLS, rollback, and
+  external-validation condition in
+  [the environment decision](ops-002-phase-b-environment-decision.md) is
+  complete and evidenced. Because the selected host is shared and not
+  physically isolated, the required operational isolation boundary — bounded
+  Compose project, container, and project-scoped network boundaries, explicit
+  loopback binds, explicit resource limits, and immutable release and rollback
+  bindings — is implemented and verified.
 - The exact environment, public origins, Origin allowlist, release bindings,
   edge configuration, rollback binding, resource limits, owners, and evidence
   destination are complete.
@@ -73,6 +105,11 @@ for:
 - The environment ID, public client/server origins, and edge configuration.
 - DNS and TLS status, loopback bindings, firewall exposure, and management
   separation.
+- The bounded Compose project, container, and project-scoped network
+  boundaries and the effective per-container CPU, RAM, and log-rotation
+  limits, plus confirmation that sufficient host reserve remains.
+- Confirmation that unrelated host workloads, including the preserved and
+  stopped forum, were not modified by BurningSpace deployment operations.
 - Original Origin preservation, hostile and absent Origin rejection, and
   WebSocket upgrade behavior.
 - Allowed gameplay, authoritative state and movement, reconnect continuity,
@@ -117,6 +154,7 @@ CI output, and evidence. This packet records readiness by category only.
 
 GO: `NOT ISSUED`
 
-Reason: No host has been provisioned and no exact environment, origins,
-rollback binding, credential readiness, or external validation evidence
-exists.
+Reason: Host selection is now complete, but shared-host and repository
+hardening, firewall review, edge ownership, DNS, TLS, immutable release and
+rollback bindings, and external validation evidence all remain outstanding.
+Selecting the environment is not a deployment authorization.
