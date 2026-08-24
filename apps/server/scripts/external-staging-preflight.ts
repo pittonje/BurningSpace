@@ -16,6 +16,10 @@ interface DeploymentPlan {
   serverBindPort: number;
   clientBindHost: string;
   clientBindPort: number;
+  targetServerImage: string;
+  targetClientImage: string;
+  previousServerImage: string;
+  previousClientImage: string;
   previousApprovedCommit: string;
   targetCommit: string;
   edgeConfigId: string;
@@ -28,6 +32,7 @@ interface DeploymentPlan {
 interface ValidationOptions {
   mode: Mode;
   checkRepository?: (previous: string, target: string, mode: Mode) => void;
+  composeModel?: unknown;
 }
 
 interface GitResult { status: number | null; stdout: string; }
@@ -47,6 +52,10 @@ const ENV_KEYS = new Set([
   'BURNINGSPACE_PUBLIC_SERVER_ORIGIN',
   'BURNINGSPACE_ALLOWED_ORIGINS',
   'VITE_BURNINGSPACE_SERVER_URL',
+  'BURNINGSPACE_SERVER_IMAGE',
+  'BURNINGSPACE_CLIENT_IMAGE',
+  'BURNINGSPACE_PREVIOUS_SERVER_IMAGE',
+  'BURNINGSPACE_PREVIOUS_CLIENT_IMAGE',
   'BURNINGSPACE_SERVER_BIND_PORT',
   'BURNINGSPACE_CLIENT_BIND_PORT',
   'BURNINGSPACE_RECONNECT_GRACE_SECONDS',
@@ -67,8 +76,9 @@ const ENV_KEYS = new Set([
 const PLAN_KEYS = new Set([
   'schemaVersion', 'environmentId', 'environmentClass', 'alphaNonPersistent',
   'publicClientOrigin', 'publicServerOrigin', 'allowedOrigins', 'serverBindHost',
-  'serverBindPort', 'clientBindHost', 'clientBindPort', 'previousApprovedCommit',
-  'targetCommit', 'edgeConfigId', 'rollbackMode', 'deploymentGoReference',
+  'serverBindPort', 'clientBindHost', 'clientBindPort', 'targetServerImage',
+  'targetClientImage', 'previousServerImage', 'previousClientImage',
+  'previousApprovedCommit', 'targetCommit', 'edgeConfigId', 'rollbackMode', 'deploymentGoReference',
   'externalExecutionAuthorized', 'publicProductionLaunchAuthorized'
 ]);
 
@@ -77,6 +87,14 @@ const PLACEHOLDER_COMMITS = new Set([
   '1111111111111111111111111111111111111111',
   '2222222222222222222222222222222222222222'
 ]);
+
+const PLACEHOLDER_IMAGE_DIGESTS = new Set(['1', '2', '3', '4'].map((value) => value.repeat(64)));
+const SERVER_CPUS = 1;
+const SERVER_MEMORY_BYTES = 1024 ** 3;
+const CLIENT_CPUS = 0.25;
+const CLIENT_MEMORY_BYTES = 256 * 1024 ** 2;
+const LOG_MAX_SIZE = '10m';
+const LOG_MAX_FILE = '3';
 
 function fail(code: string, message: string): never {
   throw new SafeValidationError(code, message);
@@ -190,6 +208,128 @@ function assertCommit(value: unknown, mode: Mode, code: string): string {
   return commit;
 }
 
+function assertImmutableImage(value: unknown, mode: Mode, code: string): string {
+  const image = requireString(value, code);
+  const match = /^(?<repository>[a-z0-9][a-z0-9._:/-]*)@sha256:(?<digest>[0-9a-f]{64})$/u.exec(image);
+  if (!match?.groups) {
+    fail(code, 'Image binding must be an immutable repository@sha256:<64 lowercase hex> reference.');
+  }
+  const repository = match.groups.repository;
+  const digest = match.groups.digest;
+  if (!repository || !digest) fail(code, 'Image binding is missing a repository or digest.');
+  const imageName = repository.slice(repository.lastIndexOf('/') + 1);
+  if (imageName.includes(':')) fail(code, 'Image binding must not include a mutable tag alongside its digest.');
+  if (
+    mode !== 'template' &&
+    (repository.includes('.example.invalid') || PLACEHOLDER_IMAGE_DIGESTS.has(digest))
+  ) {
+    fail('PLACEHOLDER_IMAGE', 'Real preparation modes reject placeholder image bindings.');
+  }
+  return image;
+}
+
+function requireObject(value: unknown, code: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    fail(code, 'A required Compose object is missing or invalid.');
+  }
+  return value as Record<string, unknown>;
+}
+
+function serviceNetworks(service: Record<string, unknown>): string[] {
+  const networks = service.networks;
+  if (Array.isArray(networks)) return networks.map(String);
+  if (networks && typeof networks === 'object') return Object.keys(networks as Record<string, unknown>);
+  return [];
+}
+
+function validateServiceVolumes(service: Record<string, unknown>): void {
+  const volumes = Array.isArray(service.volumes) ? service.volumes : [];
+  for (const rawMount of volumes) {
+    const mount = typeof rawMount === 'string' ? rawMount : requireObject(rawMount, 'COMPOSE_VOLUME');
+    const source = typeof mount === 'string' ? mount : String(mount.source ?? '');
+    const target = typeof mount === 'string' ? mount : String(mount.target ?? '');
+    if (source.includes('docker.sock') || target.includes('docker.sock')) {
+      fail('COMPOSE_DOCKER_SOCKET', 'Docker socket mounts are forbidden.');
+    }
+    if (typeof mount === 'object' && mount.type === 'volume') {
+      fail('COMPOSE_VOLUME', 'Persistent named volumes are forbidden.');
+    }
+  }
+}
+
+function validateComposeService(
+  name: 'server' | 'client',
+  service: Record<string, unknown>,
+  plan: DeploymentPlan
+): void {
+  if (Object.hasOwn(service, 'build')) fail('COMPOSE_SOURCE_BUILD', 'Real staging Compose must not contain a source build.');
+  if (service.privileged === true) fail('COMPOSE_PRIVILEGED', 'Privileged Compose services are forbidden.');
+  if (service.network_mode === 'host') fail('COMPOSE_HOST_NETWORK', 'Host networking is forbidden.');
+  if (service.container_name !== undefined) fail('COMPOSE_PROJECT', 'Fixed global container names are forbidden.');
+  if (service.read_only !== true) fail('COMPOSE_READ_ONLY', 'Every service must retain a read-only root filesystem.');
+  if (!Array.isArray(service.tmpfs) || !service.tmpfs.some((entry) => String(entry).startsWith('/tmp'))) {
+    fail('COMPOSE_TMPFS', 'Every service must retain its /tmp tmpfs.');
+  }
+  validateServiceVolumes(service);
+
+  const expectedImage = name === 'server' ? plan.targetServerImage : plan.targetClientImage;
+  if (service.image !== expectedImage) fail('COMPOSE_IMAGE', 'Rendered service image does not match the approved target image.');
+
+  const expectedCpus = name === 'server' ? SERVER_CPUS : CLIENT_CPUS;
+  if (Number(service.cpus) !== expectedCpus) fail('COMPOSE_CPU', 'A required service CPU limit is missing or incorrect.');
+  const expectedMemory = name === 'server' ? SERVER_MEMORY_BYTES : CLIENT_MEMORY_BYTES;
+  if (Number(service.mem_limit) !== expectedMemory) fail('COMPOSE_MEMORY', 'A required service memory limit is missing or incorrect.');
+
+  const logging = requireObject(service.logging, 'COMPOSE_LOGGING');
+  const options = requireObject(logging.options, 'COMPOSE_LOGGING');
+  if (logging.driver !== 'json-file') fail('COMPOSE_LOG_DRIVER', 'The bounded json-file logging driver is required.');
+  if (options['max-size'] !== LOG_MAX_SIZE) fail('COMPOSE_LOG_MAX_SIZE', 'The required Docker log max-size is missing.');
+  if (String(options['max-file']) !== LOG_MAX_FILE) fail('COMPOSE_LOG_MAX_FILE', 'The required Docker log max-file is missing.');
+
+  const networks = serviceNetworks(service);
+  if (networks.length !== 1 || networks[0] !== 'burningspace') {
+    fail('COMPOSE_NETWORK', 'Each service must use only the project-scoped BurningSpace network.');
+  }
+
+  const ports = Array.isArray(service.ports) ? service.ports : [];
+  if (ports.length !== 1) fail('COMPOSE_PORT', 'Each service must publish exactly one loopback port.');
+  const port = requireObject(ports[0], 'COMPOSE_PORT');
+  const expectedPublished = name === 'server' ? plan.serverBindPort : plan.clientBindPort;
+  const expectedTarget = name === 'server' ? 2567 : 8080;
+  if (
+    port.host_ip !== '127.0.0.1' || Number(port.published) !== expectedPublished ||
+    Number(port.target) !== expectedTarget
+  ) {
+    fail('COMPOSE_PORT', 'Service publication must match the exact approved loopback binding.');
+  }
+}
+
+function validateComposeModel(rawModel: unknown, plan: DeploymentPlan): void {
+  const model = requireObject(rawModel, 'COMPOSE_MODEL');
+  if (model.name !== 'burningspace-staging') fail('COMPOSE_PROJECT', 'Unexpected Compose project name.');
+  const services = requireObject(model.services, 'COMPOSE_SERVICES');
+  const serviceNames = Object.keys(services).sort();
+  if (serviceNames.length !== 2 || serviceNames[0] !== 'client' || serviceNames[1] !== 'server') {
+    fail('COMPOSE_SERVICES', 'Exactly the server and client Compose services are required.');
+  }
+  const networks = requireObject(model.networks, 'COMPOSE_NETWORK');
+  if (Object.keys(networks).length !== 1 || !Object.hasOwn(networks, 'burningspace')) {
+    fail('COMPOSE_NETWORK', 'Exactly one explicit project-scoped network is required.');
+  }
+  const network = requireObject(networks.burningspace, 'COMPOSE_NETWORK');
+  if (
+    network.external === true || network.name !== 'burningspace-staging_burningspace' ||
+    (network.driver !== undefined && network.driver !== 'bridge')
+  ) {
+    fail('COMPOSE_EXTERNAL_NETWORK', 'The staging network must be a non-external bridge network.');
+  }
+  if (model.volumes && Object.keys(requireObject(model.volumes, 'COMPOSE_VOLUME')).length > 0) {
+    fail('COMPOSE_VOLUME', 'Named volumes are forbidden.');
+  }
+  validateComposeService('server', requireObject(services.server, 'COMPOSE_SERVICES'), plan);
+  validateComposeService('client', requireObject(services.client, 'COMPOSE_SERVICES'), plan);
+}
+
 function runGit(args: string[]): GitResult {
   const result = spawnSync('git', args, { cwd: resolve('.'), encoding: 'utf8', windowsHide: true });
   return { status: result.status, stdout: result.stdout };
@@ -230,11 +370,14 @@ function validate(env: Record<string, string>, rawPlan: unknown, options: Valida
   const plan = planObject as unknown as DeploymentPlan;
 
   if (env.NODE_ENV !== 'production') fail('NODE_ENV', 'NODE_ENV must be production.');
-  if (plan.schemaVersion !== 1) fail('SCHEMA_VERSION', 'Unsupported deployment plan schema version.');
-  if (plan.environmentClass !== 'external-staging' || plan.alphaNonPersistent !== true) {
-    fail('ENVIRONMENT_CLASS', 'Environment must be external-staging and alpha/non-persistent.');
+  if (plan.schemaVersion !== 2) fail('SCHEMA_VERSION', 'Unsupported deployment plan schema version.');
+  if (plan.environmentClass !== 'shared-existing-vps-with-isolated-compose-staging' || plan.alphaNonPersistent !== true) {
+    fail('ENVIRONMENT_CLASS', 'Environment must be the selected shared staging class and alpha/non-persistent.');
   }
-  if (requireString(plan.environmentId, 'ENVIRONMENT_ID') !== env.BURNINGSPACE_EXTERNAL_ENVIRONMENT_ID) {
+  if (
+    requireString(plan.environmentId, 'ENVIRONMENT_ID') !== 'burningspace-staging-01' ||
+    plan.environmentId !== env.BURNINGSPACE_EXTERNAL_ENVIRONMENT_ID
+  ) {
     fail('PLAN_ENV_MISMATCH', 'Plan and environment identifiers do not agree.');
   }
 
@@ -281,6 +424,22 @@ function validate(env: Record<string, string>, rawPlan: unknown, options: Valida
       clientPort !== parsePort(env.BURNINGSPACE_CLIENT_BIND_PORT, 'CLIENT_PORT')) {
     fail('PLAN_ENV_PORT_MISMATCH', 'Plan and environment bind ports do not agree.');
   }
+
+  const targetServerImage = assertImmutableImage(plan.targetServerImage, options.mode, 'TARGET_SERVER_IMAGE');
+  const targetClientImage = assertImmutableImage(plan.targetClientImage, options.mode, 'TARGET_CLIENT_IMAGE');
+  const previousServerImage = assertImmutableImage(plan.previousServerImage, options.mode, 'PREVIOUS_SERVER_IMAGE');
+  const previousClientImage = assertImmutableImage(plan.previousClientImage, options.mode, 'PREVIOUS_CLIENT_IMAGE');
+  if (
+    targetServerImage !== assertImmutableImage(env.BURNINGSPACE_SERVER_IMAGE, options.mode, 'TARGET_SERVER_IMAGE') ||
+    targetClientImage !== assertImmutableImage(env.BURNINGSPACE_CLIENT_IMAGE, options.mode, 'TARGET_CLIENT_IMAGE') ||
+    previousServerImage !== assertImmutableImage(env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE, options.mode, 'PREVIOUS_SERVER_IMAGE') ||
+    previousClientImage !== assertImmutableImage(env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE, options.mode, 'PREVIOUS_CLIENT_IMAGE')
+  ) {
+    fail('PLAN_ENV_IMAGE_MISMATCH', 'Plan and environment image bindings do not agree.');
+  }
+  if (targetServerImage === previousServerImage || targetClientImage === previousClientImage) {
+    fail('EQUAL_IMAGES', 'Target and previous-approved images must differ for each service.');
+  }
   parseBoundedNumber(env.BURNINGSPACE_RECONNECT_GRACE_SECONDS, 1, 60, 'RECONNECT_LIMIT');
   parseBoundedNumber(env.BURNINGSPACE_SHUTDOWN_TIMEOUT_SECONDS, 1, 60, 'SHUTDOWN_LIMIT');
   parseBoundedNumber(env.BURNINGSPACE_PROFILE_RATE_BURST, 1, Number.MAX_SAFE_INTEGER, 'PROFILE_RATE');
@@ -323,6 +482,7 @@ function validate(env: Record<string, string>, rawPlan: unknown, options: Valida
   if (edgeConfigId !== env.BURNINGSPACE_EDGE_CONFIG_ID) fail('EDGE_MISMATCH', 'Plan and environment edge IDs do not agree.');
 
   if (options.mode !== 'template') (options.checkRepository ?? repositoryCheck)(previous, target, options.mode);
+  if (options.composeModel !== undefined) validateComposeModel(options.composeModel, plan);
 }
 
 function readInputs(envPath: string, planPath: string): { env: Record<string, string>; plan: unknown } {
@@ -351,8 +511,37 @@ function baseFixture(): { env: Record<string, string>; plan: DeploymentPlan } {
   return { env: { ...env }, plan: structuredClone(plan as DeploymentPlan) };
 }
 
+function baseComposeFixture(plan: DeploymentPlan): Record<string, unknown> {
+  const service = (
+    image: string,
+    cpus: number,
+    memLimit: number,
+    published: number,
+    target: number
+  ): Record<string, unknown> => ({
+    image,
+    cpus,
+    mem_limit: memLimit,
+    logging: { driver: 'json-file', options: { 'max-size': LOG_MAX_SIZE, 'max-file': LOG_MAX_FILE } },
+    ports: [{ host_ip: '127.0.0.1', published: String(published), target, protocol: 'tcp' }],
+    networks: { burningspace: null },
+    privileged: false,
+    read_only: true,
+    tmpfs: ['/tmp'],
+    volumes: []
+  });
+  return {
+    name: 'burningspace-staging',
+    services: {
+      server: service(plan.targetServerImage, SERVER_CPUS, SERVER_MEMORY_BYTES, plan.serverBindPort, 2567),
+      client: service(plan.targetClientImage, CLIENT_CPUS, CLIENT_MEMORY_BYTES, plan.clientBindPort, 8080)
+    },
+    networks: { burningspace: { name: 'burningspace-staging_burningspace', driver: 'bridge', external: false } }
+  };
+}
+
 function applyRealInventory(fixture: ReturnType<typeof baseFixture>): void {
-  fixture.plan.environmentId = 'ops002-staging-review';
+  fixture.plan.environmentId = 'burningspace-staging-01';
   fixture.env.BURNINGSPACE_EXTERNAL_ENVIRONMENT_ID = fixture.plan.environmentId;
   fixture.plan.publicClientOrigin = 'https://arena.ops002-review.example.org';
   fixture.env.BURNINGSPACE_PUBLIC_CLIENT_ORIGIN = fixture.plan.publicClientOrigin;
@@ -364,6 +553,14 @@ function applyRealInventory(fixture: ReturnType<typeof baseFixture>): void {
   fixture.env.BURNINGSPACE_EXTERNAL_SMOKE_HOSTILE_ORIGIN = 'https://hostile.ops002-review.example.org';
   fixture.plan.edgeConfigId = 'ops002-edge-review-v1';
   fixture.env.BURNINGSPACE_EDGE_CONFIG_ID = fixture.plan.edgeConfigId;
+  fixture.plan.targetServerImage = `registry.ops002-review.example.org/burningspace/server@sha256:${'a'.repeat(64)}`;
+  fixture.env.BURNINGSPACE_SERVER_IMAGE = fixture.plan.targetServerImage;
+  fixture.plan.targetClientImage = `registry.ops002-review.example.org/burningspace/client@sha256:${'b'.repeat(64)}`;
+  fixture.env.BURNINGSPACE_CLIENT_IMAGE = fixture.plan.targetClientImage;
+  fixture.plan.previousServerImage = `registry.ops002-review.example.org/burningspace/server@sha256:${'c'.repeat(64)}`;
+  fixture.env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE = fixture.plan.previousServerImage;
+  fixture.plan.previousClientImage = `registry.ops002-review.example.org/burningspace/client@sha256:${'d'.repeat(64)}`;
+  fixture.env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE = fixture.plan.previousClientImage;
 }
 
 function expectFailure(name: string, mutate: (fixture: ReturnType<typeof baseFixture>) => void, mode: Mode, code: string): void {
@@ -388,9 +585,27 @@ function expectSafeCode(name: string, operation: () => void, code: string): void
   fail('SELF_TEST', `Self-test ${name} did not fail closed.`);
 }
 
+function expectComposeFailure(
+  name: string,
+  mutate: (model: Record<string, unknown>) => void,
+  code: string
+): void {
+  const fixture = baseFixture();
+  const model = baseComposeFixture(fixture.plan);
+  mutate(model);
+  try {
+    validate(fixture.env, fixture.plan, { mode: 'template', composeModel: model });
+  } catch (error) {
+    if (error instanceof SafeValidationError && error.code === code) return;
+    fail('SELF_TEST', `Compose self-test ${name} failed with an unexpected safe error.`);
+  }
+  fail('SELF_TEST', `Compose self-test ${name} did not fail closed.`);
+}
+
 function runSelfTests(): number {
   const template = baseFixture();
   validate(template.env, template.plan, { mode: 'template' });
+  validate(template.env, template.plan, { mode: 'template', composeModel: baseComposeFixture(template.plan) });
   expectFailure('wildcard', (f) => { f.plan.allowedOrigins = ['*']; f.env.BURNINGSPACE_ALLOWED_ORIGINS = '*'; }, 'template', 'WILDCARD_ORIGIN');
   expectFailure('http-external', (f) => { f.plan.publicClientOrigin = 'http://arena.example.invalid'; f.env.BURNINGSPACE_PUBLIC_CLIENT_ORIGIN = f.plan.publicClientOrigin; f.plan.allowedOrigins = [f.plan.publicClientOrigin]; f.env.BURNINGSPACE_ALLOWED_ORIGINS = f.plan.publicClientOrigin; }, 'template', 'CLIENT_ORIGIN');
   expectFailure('path', (f) => { f.plan.publicClientOrigin += '/play'; }, 'template', 'CLIENT_ORIGIN');
@@ -400,6 +615,14 @@ function runSelfTests(): number {
   expectFailure('allowlist', (f) => { f.plan.allowedOrigins = ['https://other.example.invalid']; }, 'template', 'ALLOWLIST_MISMATCH');
   expectFailure('bind', (f) => { f.plan.serverBindHost = '0.0.0.0'; }, 'template', 'BIND_HOST');
   expectFailure('port', (f) => { f.plan.clientBindPort = 0; }, 'template', 'CLIENT_PORT');
+  expectFailure('missing-target-image', (f) => { f.plan.targetServerImage = ''; f.env.BURNINGSPACE_SERVER_IMAGE = ''; }, 'template', 'TARGET_SERVER_IMAGE');
+  expectFailure('mutable-target-image', (f) => { f.plan.targetServerImage = 'registry.example.invalid/burningspace/server:latest'; f.env.BURNINGSPACE_SERVER_IMAGE = f.plan.targetServerImage; }, 'template', 'TARGET_SERVER_IMAGE');
+  expectFailure('tagged-target-digest', (f) => { f.plan.targetServerImage = `registry.example.invalid/burningspace/server:latest@sha256:${'a'.repeat(64)}`; f.env.BURNINGSPACE_SERVER_IMAGE = f.plan.targetServerImage; }, 'template', 'TARGET_SERVER_IMAGE');
+  expectFailure('malformed-target-digest', (f) => { f.plan.targetClientImage = 'registry.example.invalid/burningspace/client@sha256:abc'; f.env.BURNINGSPACE_CLIENT_IMAGE = f.plan.targetClientImage; }, 'template', 'TARGET_CLIENT_IMAGE');
+  expectFailure('missing-rollback-image', (f) => { f.plan.previousServerImage = ''; f.env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE = ''; }, 'template', 'PREVIOUS_SERVER_IMAGE');
+  expectFailure('mutable-rollback-image', (f) => { f.plan.previousClientImage = 'registry.example.invalid/burningspace/client:previous'; f.env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE = f.plan.previousClientImage; }, 'template', 'PREVIOUS_CLIENT_IMAGE');
+  expectFailure('placeholder-image-real', (f) => { applyRealInventory(f); f.plan.targetServerImage = `registry.example.invalid/burningspace/server@sha256:${'1'.repeat(64)}`; f.env.BURNINGSPACE_SERVER_IMAGE = f.plan.targetServerImage; }, 'phase-a', 'PLACEHOLDER_IMAGE');
+  expectFailure('placeholder-image-phase-b', (f) => { applyRealInventory(f); f.plan.previousClientImage = `registry.example.invalid/burningspace/client@sha256:${'4'.repeat(64)}`; f.env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE = f.plan.previousClientImage; }, 'phase-b', 'PLACEHOLDER_IMAGE');
   expectFailure('production', (f) => { f.plan.publicProductionLaunchAuthorized = true; f.env.BURNINGSPACE_PUBLIC_PRODUCTION_LAUNCH_AUTHORIZED = 'true'; }, 'template', 'PRODUCTION_LAUNCH');
   expectFailure('phase-a-execution', (f) => { applyRealInventory(f); f.plan.externalExecutionAuthorized = true; f.env.BURNINGSPACE_EXTERNAL_EXECUTION_AUTHORIZED = 'true'; }, 'phase-a', 'PHASE_A_EXECUTION');
   expectFailure('phase-b-go', (f) => {
@@ -483,13 +706,61 @@ function runSelfTests(): number {
   }
   if (safeFailure.includes(seeded)) fail('SELF_TEST', 'Failure output exposed a seeded value.');
   if (safeFailure.length > 800) fail('SELF_TEST', 'Failure output exceeded the bounded limit.');
-  return 24;
+
+  expectComposeFailure('missing-cpu', (model) => {
+    delete requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST').cpus;
+  }, 'COMPOSE_CPU');
+  expectComposeFailure('missing-memory', (model) => {
+    delete requireObject(requireObject(model.services, 'SELF_TEST').client, 'SELF_TEST').mem_limit;
+  }, 'COMPOSE_MEMORY');
+  expectComposeFailure('missing-log-max-size', (model) => {
+    const server = requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST');
+    delete requireObject(requireObject(server.logging, 'SELF_TEST').options, 'SELF_TEST')['max-size'];
+  }, 'COMPOSE_LOG_MAX_SIZE');
+  expectComposeFailure('missing-log-max-file', (model) => {
+    const client = requireObject(requireObject(model.services, 'SELF_TEST').client, 'SELF_TEST');
+    delete requireObject(requireObject(client.logging, 'SELF_TEST').options, 'SELF_TEST')['max-file'];
+  }, 'COMPOSE_LOG_MAX_FILE');
+  expectComposeFailure('external-network', (model) => {
+    requireObject(requireObject(model.networks, 'SELF_TEST').burningspace, 'SELF_TEST').external = true;
+  }, 'COMPOSE_EXTERNAL_NETWORK');
+  expectComposeFailure('shared-fixed-network', (model) => {
+    requireObject(requireObject(model.networks, 'SELF_TEST').burningspace, 'SELF_TEST').name = 'shared-global-network';
+  }, 'COMPOSE_EXTERNAL_NETWORK');
+  expectComposeFailure('host-network', (model) => {
+    requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST').network_mode = 'host';
+  }, 'COMPOSE_HOST_NETWORK');
+  expectComposeFailure('public-bind', (model) => {
+    const server = requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST');
+    const ports = server.ports as unknown[];
+    requireObject(ports[0], 'SELF_TEST').host_ip = '0.0.0.0';
+  }, 'COMPOSE_PORT');
+  expectComposeFailure('source-build', (model) => {
+    requireObject(requireObject(model.services, 'SELF_TEST').server, 'SELF_TEST').build = { context: '..' };
+  }, 'COMPOSE_SOURCE_BUILD');
+  expectComposeFailure('service-image-mismatch', (model) => {
+    requireObject(requireObject(model.services, 'SELF_TEST').client, 'SELF_TEST').image = 'burningspace-client:latest';
+  }, 'COMPOSE_IMAGE');
+  return 43;
 }
 
 function argumentValue(args: string[], name: string): string {
   const index = args.indexOf(name);
   if (index < 0 || index + 1 >= args.length) fail('ARGUMENT', 'Required input path argument is missing.');
   return args[index + 1]!;
+}
+
+function readComposeStdin(): unknown {
+  try {
+    const contents = readFileSync(0, 'utf8');
+    if (contents.length === 0 || contents.length > 1_048_576) {
+      fail('COMPOSE_INPUT', 'Rendered Compose input is missing or exceeds the bounded size.');
+    }
+    return JSON.parse(contents) as unknown;
+  } catch (error) {
+    if (error instanceof SafeValidationError) throw error;
+    fail('COMPOSE_INPUT', 'Unable to read or parse rendered Compose JSON from standard input.');
+  }
 }
 
 function toSafeError(error: unknown): { code: string; message: string } {
@@ -507,13 +778,15 @@ function main(): void {
   }
   const selected = (['template', 'phase-a', 'phase-b'] as const).filter((mode) => args.includes(`--${mode}`));
   if (selected.length !== 1) fail('MODE', 'Select exactly one preflight mode.');
+  if (!args.includes('--compose-stdin')) fail('COMPOSE_REQUIRED', 'Rendered Compose JSON must be supplied through standard input.');
   const inputs = readInputs(argumentValue(args, '--env'), argumentValue(args, '--plan'));
   const mode = selected[0]!;
-  validate(inputs.env, inputs.plan, { mode });
+  validate(inputs.env, inputs.plan, { mode, composeModel: readComposeStdin() });
   console.log(JSON.stringify({
     ok: true,
     event: 'external_staging_preflight_completed',
     mode,
+    composePolicyValidated: true,
     externalExecutionAuthorized: mode === 'phase-b',
     publicProductionLaunchAuthorized: false,
     durationMs: Date.now() - startedAt

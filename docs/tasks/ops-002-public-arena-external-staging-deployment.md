@@ -175,6 +175,34 @@ rate-limit implementation require explicit Product Architect scope expansion.
 Dependencies and lockfile changes require separate justification and approval.
 Provider credentials and secrets are never authorized in Git.
 
+## Shared-host repository hardening packet
+
+The selected shared staging host requires this repository contract before any
+Phase B GO can be considered:
+
+- the real staging Compose file is image-only and rejects missing image
+  bindings;
+- target and previous-approved server/client images are independently bound
+  to immutable SHA-256 digests;
+- shared-host source builds and rollback rebuilds are forbidden;
+- a separate local/CI override retains deterministic off-host image builds and
+  container smoke;
+- the server is provisionally limited to `1.00 CPU` and `1 GiB` memory;
+- the static client is provisionally limited to `0.25 CPU` and `256 MiB`
+  memory;
+- both containers use bounded `json-file` logging with `max-size=10m` and
+  `max-file=3`;
+- both containers attach only to one non-external project-scoped bridge
+  network; and
+- loopback publication, read-only filesystems, `/tmp` tmpfs, non-privileged
+  execution, no Docker socket, and no persistent gameplay-state volume remain
+  mandatory.
+
+The limits are provisional and must be validated against real staging
+behavior and host reserve. Repository hardening does not select a registry,
+publish an image, contact the host, authorize external execution, or issue a
+deployment GO.
+
 ## Environment and secret model
 
 Phase A must define a value-free inventory covering:
