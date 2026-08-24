@@ -6,7 +6,7 @@ Track: `Public Arena Alpha launch track`
 
 ## Status
 
-`READY FOR IMPLEMENTATION`
+`ACTIVE — EDGE DESIGN / PREPARATION NEXT; DEPLOYMENT NOT AUTHORIZED`
 
 ## Risk
 
@@ -28,6 +28,13 @@ authorize external staging execution.
 - UX-001 is `MERGED / CLOSED` and provides truthful connection, failure, and
   reconnect presentation.
 - External Public Arena deployment has not been performed.
+- Shared-host repository hardening is `MERGED / COMPLETE` through PR #67 and
+  merge commit `21a4ce2fe796f655d20911d8a52a60c69eec432d`.
+- Read-only host-gate discovery is `COMPLETE`. Host remediation remains
+  required before deployment GO.
+- Edge design/preparation is the next authorized repository stage. No edge is
+  selected or configured, and this authority permits no external host
+  mutation.
 - The accepted decision count remains 35. OPS-002 creates no accepted game
   design, architecture, process, or CI decision.
 - The campaign roadmap and DOCARCH-004 paused state are unchanged.
@@ -67,6 +74,12 @@ Host bindings use `127.0.0.1` with
 `BURNINGSPACE_SERVER_BIND_PORT` and `BURNINGSPACE_CLIENT_BIND_PORT`. The
 server's internal `PORT` is `2567`; the client serves internally on `8080`.
 TLS and the external reverse proxy are deliberately outside Compose.
+
+For the selected `burningspace-staging-01` host, intended host publications
+are `BURNINGSPACE_SERVER_BIND_PORT=2567` and
+`BURNINGSPACE_CLIENT_BIND_PORT=18080`. Client port `18080` is an
+environment-specific override because a preserved stopped legacy container
+reserves host port `8080`; the generic Compose default remains unchanged.
 
 Production uses:
 
@@ -157,6 +170,27 @@ Phase B may begin only after:
 
 Phase B performs one controlled staging deployment and captures evidence. A
 successful Phase A merge alone is not deployment authorization.
+
+### Current edge-preparation authority
+
+The Product Architect authorizes a later bounded repository task to select an
+edge implementation and define versioned configuration, TLS ownership,
+HTTP-to-HTTPS behavior, client routing, server/WebSocket routing, exact Origin
+preservation, query-safe logging, bounded WebSocket timeout behavior, rollback
+configuration, health checks, and deployment validation.
+
+This does not authorize installing the edge on Contabo, binding public TCP
+80/443, requesting certificates, changing DNS, creating BurningSpace
+containers, publishing images, deploying the game, or publishing a
+production/public service. External mutation remains closed until separate
+Product Architect authorization.
+
+Before deployment GO, complete the root-level effective firewall review,
+restrict TCP 4000, restrict or verify effective TCP 9090 ingress, review and
+restrict as required TeamSpeak administrative/query TCP 10011/10022/10080,
+complete host maintenance before container creation, preserve the forum
+standstill and prune prohibition, and finish the edge, DNS, TLS, immutable
+release/rollback, and external-validation gates in the environment decision.
 
 ## Implementation scope boundary
 
@@ -311,6 +345,15 @@ gameplay semantics change. Architecture review is required only if the
 single-process/no-persistence topology changes. QA is satisfied through Core,
 mandatory Claude QA, and the specialist evidence route for this HIGH-risk
 boundary.
+
+The post-hardening host-reconciliation PR is separately classified `NORMAL
+RISK` because it is documentation/authority only. Its declared reviewer set is
+one required independent read-only Operations/Architecture reviewer, followed
+by Product Architect approval and human merge. Network, Security, QA,
+Gameplay, and Visual reviewers are skipped for that reconciliation because it
+changes no executable behavior, external infrastructure, security control,
+test acceptance, gameplay, or presentation. This bounded route does not apply
+to the later edge implementation or Phase B execution.
 
 Claude QA must provide a usable substantive implementation verdict. A wrapper
 failure may be dispositioned only by an explicit policy-compliant Product

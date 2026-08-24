@@ -37,6 +37,19 @@ Every reference must use `repository@sha256:<64 lowercase hex>` form. Mutable
 tags, omitted images, malformed digests, and documentation placeholders fail
 closed outside template validation.
 
+For `burningspace-staging-01`, the intended environment-specific loopback
+values are:
+
+```text
+BURNINGSPACE_SERVER_BIND_PORT=2567
+BURNINGSPACE_CLIENT_BIND_PORT=18080
+```
+
+The generic Compose client default remains `8080`. The `18080` override avoids
+a collision if the preserved stopped legacy landing container, whose Docker
+metadata reserves host port `8080`, is started out of band. Do not create or
+commit a real environment file containing host credentials or secrets.
+
 Keep a real plan beside a Git-ignored `deploy/.env.*` file. The committed examples use only `.example.invalid` values and explicitly set external execution and public-production launch authorization to false.
 
 ## Secret inventory by category only
@@ -110,6 +123,60 @@ shared-host deployment command. No registry is selected and this repository
 task does not publish images; a later authorized release process must publish
 the exact reviewed images and record their resulting digests before GO.
 
+## Shared-host remediation gates
+
+Repository hardening and read-only host discovery are complete. The following
+host actions remain required before deployment GO and are not authorized by
+this runbook or by edge design/preparation:
+
+- Complete root-level effective firewall review for IPv4 and IPv6, including
+  `ufw status verbose`, `nft list ruleset`, `iptables -S`, `ip6tables -S`, the
+  `DOCKER-USER` chain, and effective exposure for TCP 22, 4000, 9090, 10011,
+  10022, 10080, 30033, and UDP 9987. UFW default INPUT/FORWARD DROP is not by
+  itself a firewall PASS because Docker-published ports do not rely solely on
+  the UFW INPUT chain.
+- Restrict the public plaintext Dashy dashboard on TCP 4000. Acceptable future
+  dispositions are loopback rebinding behind an appropriately authenticated
+  administrative path or effective Docker-aware source filtering. The exact
+  mechanism requires separate authority.
+- Retain Cockpit on TCP 9090, but restrict or verify its effective ingress,
+  including root-level IPv4/IPv6 treatment and the operator access path.
+- Review and restrict as required the unrelated TeamSpeak administrative/query
+  TCP 10011, 10022, and 10080. BurningSpace operations do not own TeamSpeak;
+  UDP 9987 and required file transfer remain subject to host-owner needs.
+- Complete host maintenance before creating BurningSpace containers. The
+  audited pending set includes Docker Engine, Docker CLI, containerd, Docker
+  Compose plugin, and Docker Buildx, so the Docker daemon may restart.
+
+After host maintenance, reverify Docker health; the forum remains stopped with
+restart policy `no`; TCP 80/443 and both selected loopback ports remain free;
+unrelated services remain operational; and effective firewall state remains
+acceptable. Use exact individual container inspection as authority. Docker
+aggregate container counters have disagreed with individually inspected state
+on this host, so `docker info ContainersRunning` alone is not a stop/GO gate.
+
+## Preserved forum standstill and cleanup prohibition
+
+The preserved BurningForge forum container MUST NOT be started while the
+BurningSpace staging edge owns public TCP 80/443. Immediately before edge
+activation, and again after any host reboot, Docker daemon restart, or host
+maintenance, verify the forum is stopped, its restart policy is `no`, and TCP
+80 and 443 are free.
+
+While forum preservation is required, do not run or perform destructive
+cleanup equivalent to:
+
+- `docker container prune`;
+- `docker system prune`;
+- `docker system prune -a`;
+- removing the preserved forum container or required forum images; or
+- deleting its preserved host bind data.
+
+The container writable layer and images are recoverable state even though
+Docker disk accounting may classify them as reclaimable. Bounded
+BurningSpace-specific container/image cleanup is allowed only when it is
+conclusively unable to touch preserved forum assets.
+
 ## Deployment GO packet
 
 Before the Product Architect can issue GO, provide one non-secret packet containing:
@@ -134,12 +201,14 @@ Only after explicit GO:
 
 1. Revalidate the non-secret plan in `--phase-b` mode and bind the approved release and rollback release.
 2. Confirm credentials are available through secure channels and no value will enter repository output.
-3. Confirm DNS/TLS/edge configuration and service-port exposure against the approved inventory.
-4. Pull or otherwise retrieve the exact prebuilt, digest-pinned target images derived from the approved merged commit; never build from source on the shared host.
-5. Apply the provider-neutral edge configuration and one-server/one-client deployment through the approved operational mechanism.
-6. Run the complete external matrix below, including machine reconnect/session smoke and separate browser UX evidence.
-7. Abort or roll back on any failed required check; never report a partial smoke as success.
-8. Capture only bounded, redacted evidence.
+3. Confirm maintenance and all shared-host remediation gates are complete,
+   including the forum standstill and cleanup prohibition.
+4. Confirm DNS/TLS/edge configuration and service-port exposure against the approved inventory.
+5. Pull or otherwise retrieve the exact prebuilt, digest-pinned target images derived from the approved merged commit; never build from source on the shared host.
+6. Apply the provider-neutral edge configuration and one-server/one-client deployment through the approved operational mechanism.
+7. Run the complete external matrix below, including machine reconnect/session smoke and separate browser UX evidence.
+8. Abort or roll back on any failed required check; never report a partial smoke as success.
+9. Capture only bounded, redacted evidence.
 
 ## External validation matrix
 

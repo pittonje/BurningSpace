@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-24
-Updated by: Claude — OPS-002 Phase B shared staging authority transition
+Updated by: Codex — OPS-002 post-hardening host reconciliation
 
 ## Repository state
 
@@ -33,9 +33,12 @@ Updated by: Claude — OPS-002 Phase B shared staging authority transition
   through PR #62.
 - OPS-002 Phase A: `MERGED / COMPLETE` through PR #63 and normal merge commit
   `33bff5009926bb5247acad5ebcf85ba8b7f626ce`.
-- OPS-002 Phase B: environment selected; shared-host hardening preparation is
-  the next authorized step; live deployment is `NOT AUTHORIZED` and Phase B
-  live execution is `NOT STARTED`.
+- OPS-002 shared-host repository hardening: `MERGED / COMPLETE` through PR #67
+  and normal merge commit `21a4ce2fe796f655d20911d8a52a60c69eec432d`.
+- OPS-002 host-gate discovery: `COMPLETE`. Host remediation remains required
+  before deployment GO. Edge design/preparation is the next authorized
+  repository stage; external deployment remains `NOT AUTHORIZED`, deployment
+  GO is `NOT ISSUED`, and Phase B live execution is `NOT STARTED`.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 - Campaign systems remain deferred and the canonical campaign roadmap is
@@ -234,10 +237,15 @@ Updated by: Claude — OPS-002 Phase B shared staging authority transition
 - Physical isolation: `NO`. Kernel, CPU, RAM, disk, Docker daemon, public IP,
   host firewall, maintenance domain, and security failure domain remain
   shared with unrelated workloads.
-- Operational isolation: `REQUIRED / NOT YET IMPLEMENTED`.
+- Operational isolation repository contract: `MERGED / COMPLETE` through PR
+  #67. Host-side deployment and verification: `NOT STARTED`.
 - Hostnames: `NOT ASSIGNED`.
-- Shared-host hardening: `NOT COMPLETE`.
-- Firewall review: `NOT COMPLETE`.
+- Authority transition: `MERGED / COMPLETE`.
+- Shared-host repository hardening: `MERGED / COMPLETE`.
+- Host-gate discovery: `COMPLETE`.
+- Host remediation: `REQUIRED BEFORE DEPLOYMENT GO`.
+- Root firewall review: `REQUIRED BEFORE GO`.
+- Edge design/preparation: `NEXT AUTHORIZED PREPARATION STAGE`.
 - Edge, DNS, TLS, immutable target/rollback images, external validation:
   `NOT COMPLETE`.
 - GO packet: `DRAFT / INCOMPLETE`.
@@ -253,23 +261,31 @@ Updated by: Claude — OPS-002 Phase B shared staging authority transition
   out-of-band operational procedure, and no longer owns 80/443. Public 80/443
   is reserved conceptually for a future independently managed BurningSpace
   staging edge. The rejection is not superseded for public production.
-- Measured evidence after forum shutdown: 4 vCPU, approximately 6.9 GiB
-  available RAM, approximately 48 GiB free disk, root filesystem approximately
-  35% used, very low observed load, healthy Docker, and unrelated stable
-  services still operational. Loopback pair selected: `127.0.0.1:2567` server
-  and `127.0.0.1:8080` client.
+- Measured audit evidence after forum shutdown: Ubuntu 24.04.4 LTS, 4 vCPU,
+  approximately 7.8 GiB total RAM with approximately 6.9 GiB available,
+  approximately 48 GiB free disk, root filesystem approximately 35% used,
+  very low observed load, healthy Docker, and unrelated stable services still
+  operational. This is a point-in-time capacity observation, not guaranteed
+  capacity. The selected-host loopback pair is `127.0.0.1:2567` server and
+  `127.0.0.1:18080` client; `18080` is an environment-specific override of the
+  valid generic `8080` default because a preserved legacy container reserves
+  host port `8080` in its Docker metadata.
 - No public address, SSH target, SSH fingerprint, container identifier, or
   unrelated-service private identifier is recorded in canonical documentation.
 - The forum and all other unrelated host workloads remain outside BurningSpace
   ownership and must not be modified by BurningSpace deployment operations.
-- Host selection is `APPROVED` and shared-host hardening preparation is
-  `AUTHORIZED`. Repository hardening implementation is authorized once this
-  authority change merges. Selecting the environment authorizes no external
-  access, credential collection, or deployment.
-- The upcoming shared-host hardening implementation is `HIGH RISK` and
-  requires Core CI and tests, independent Operations/Security review,
-  independent Network/Runtime review where network behavior is affected,
-  mandatory Claude QA, Product Architect approval, and human merge.
+- Host selection is `APPROVED`; repository hardening is `MERGED / COMPLETE`.
+  The next authorized stage is repository-only edge design/preparation.
+  Selecting or preparing the edge authorizes no external access, credential
+  collection, installation, public binding, DNS/TLS change, container
+  creation, image publication, or deployment.
+- Remaining pre-GO gates include root-level effective firewall review;
+  restriction of the public plaintext dashboard on TCP 4000; restriction or
+  effective-ingress verification for Cockpit on TCP 9090; review/restriction
+  of TeamSpeak administrative/query TCP 10011, 10022, and 10080; host
+  maintenance before BurningSpace containers are created; edge, DNS, TLS,
+  immutable release/rollback, and external validation completion; and the
+  forum standstill and preservation controls in the external staging runbook.
 
 ## Review and merge gate
 
@@ -284,28 +300,37 @@ OPS-002 Phase A review, final evidence-head Core, evidence-head Claude QA,
 required independent reviews, Product Architect approval, and merge are
 complete.
 
-The one-time autonomous merge authorizations used for PR #60, PR #62, PR #63,
-and this reconciliation pull request are exhausted. None of them authorizes
-any later runtime task, any future implementation PR, OPS-002 Phase B, or any
-external execution. Future OPS-002 work remains human-merge-only unless a
-later exact Product Architect authorization states otherwise.
+OPS-002 shared-host repository hardening is merged and complete through PR
+#67. The host-gate audit is complete. This post-hardening reconciliation is a
+`NORMAL RISK`, docs-only change requiring documentation validation, one
+independent read-only Operations/Architecture review, Product Architect
+approval, and human merge. Network, Security, QA, Gameplay, and Visual review
+are not applicable because it changes no executable behavior, infrastructure,
+security implementation, acceptance test, gameplay, or presentation surface.
+
+The one-time autonomous merge authorizations used for PR #60, PR #62, and PR
+#63 are exhausted. PR #67 entered `main` through a normal human merge. None of
+those actions authorizes any later runtime task, any future implementation PR,
+OPS-002 Phase B, or any external execution. This reconciliation and future
+OPS-002 work remain human-merge-only unless a later exact Product Architect
+authorization states otherwise.
 
 ## Next safe action
 
-Implement bounded shared-host repository hardening for the selected
-`burningspace-staging-01` Contabo environment: explicit per-container CPU and
-RAM limits for the server and client, bounded Docker log rotation, immutable
-target and rollback image references, an off-host or CI image build with no
-source-context staging build on the shared host, and an explicit
-project-scoped Docker network. That implementation is `HIGH RISK` and remains
-human-merge-only after Core CI, independent Operations/Security review,
-independent Network/Runtime review where network behavior is affected,
-mandatory Claude QA, and Product Architect approval.
+Prepare a bounded repository edge design for the selected
+`burningspace-staging-01` Contabo environment. A later edge task may select the
+implementation and define versioned configuration, TLS ownership,
+HTTP-to-HTTPS behavior, client and server/WebSocket routing, exact Origin
+preservation, query-safe logging, bounded WebSocket timeouts, rollback, health
+checks, and deployment validation. It may not install an edge, bind public
+80/443, request certificates, change DNS, deploy game containers, or publish a
+public service.
 
-Host and root-level firewall review, edge ownership, DNS, TLS, rollback
-binding, and external validation remain outstanding and must be completed
-before the non-secret GO packet can be returned for an environment-specific
-Product Architect GO decision.
+Host maintenance, root-level effective firewall review, public/admin port
+remediation, edge ownership, DNS, TLS, immutable release and rollback binding,
+and external validation remain outstanding and must be completed before the
+non-secret GO packet can be returned for an environment-specific Product
+Architect GO decision.
 
 Phase B live execution remains unstarted and external deployment remains
 unauthorized. No hostname is assigned, no credential is requested or stored,
