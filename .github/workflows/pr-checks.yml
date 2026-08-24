@@ -69,10 +69,15 @@ jobs:
         run: |
           npx tsx apps/server/scripts/external-staging-preflight.ts --self-test
           npx tsx apps/server/scripts/external-staging-smoke.ts --self-test
-          npx tsx apps/server/scripts/external-staging-preflight.ts \
-            --template \
-            --env deploy/external-staging.env.example \
-            --plan deploy/external-staging-plan.example.json
+          docker compose \
+            --env-file deploy/external-staging.env.example \
+            -f deploy/docker-compose.staging.yml \
+            config --format json | \
+            npx tsx apps/server/scripts/external-staging-preflight.ts \
+              --template \
+              --env deploy/external-staging.env.example \
+              --plan deploy/external-staging-plan.example.json \
+              --compose-stdin
 
       - name: Scan Phase A files for high-signal secret material
         shell: bash
@@ -82,6 +87,8 @@ jobs:
           const files = [
             'deploy/external-staging.env.example',
             'deploy/external-staging-plan.example.json',
+            'deploy/docker-compose.staging.yml',
+            'deploy/docker-compose.staging.build.yml',
             'apps/server/scripts/external-staging-preflight.ts',
             'apps/server/scripts/external-staging-smoke.ts',
             'apps/server/scripts/tsconfig.external-staging.json',
@@ -116,6 +123,7 @@ jobs:
               -p "$project" \
               --env-file deploy/staging.env.example \
               -f deploy/docker-compose.staging.yml \
+              -f deploy/docker-compose.staging.build.yml \
               "$@"
           }
           cleanup() {
@@ -128,11 +136,26 @@ jobs:
           node - "$RUNNER_TEMP/burningspace-compose.json" <<'NODE'
           const { readFileSync } = require('node:fs');
           const model = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-          const services = Object.values(model.services || {});
-          if (services.length !== 2) throw new Error('Expected exactly two Compose services.');
-          for (const service of services) {
+          const services = model.services || {};
+          if (Object.keys(services).sort().join(',') !== 'client,server') {
+            throw new Error('Expected exactly the client and server Compose services.');
+          }
+          const expected = {
+            server: { cpus: 1, memory: 1073741824 },
+            client: { cpus: 0.25, memory: 268435456 }
+          };
+          for (const [name, service] of Object.entries(services)) {
             for (const port of service.ports || []) {
               if (port.host_ip !== '127.0.0.1') throw new Error('Every published port must bind exactly 127.0.0.1.');
+            }
+            if (Number(service.cpus) !== expected[name].cpus) throw new Error(`${name} CPU limit is incorrect.`);
+            if (Number(service.mem_limit) !== expected[name].memory) throw new Error(`${name} memory limit is incorrect.`);
+            if (service.logging?.driver !== 'json-file' || service.logging?.options?.['max-size'] !== '10m' ||
+                String(service.logging?.options?.['max-file']) !== '3') {
+              throw new Error(`${name} Docker log bounds are incorrect.`);
+            }
+            if (Object.keys(service.networks || {}).join(',') !== 'burningspace') {
+              throw new Error(`${name} must use only the project-scoped BurningSpace network.`);
             }
             if (service.privileged === true) throw new Error('Privileged Compose service is forbidden.');
             if (service.network_mode === 'host') throw new Error('Host networking is forbidden.');
@@ -140,19 +163,18 @@ jobs:
             if (!Array.isArray(service.tmpfs) || !service.tmpfs.some((entry) => String(entry).startsWith('/tmp'))) {
               throw new Error('Every service must retain its /tmp tmpfs.');
             }
-            for (const mount of service.volumes || []) {
-              const source = typeof mount === 'string' ? mount : mount.source;
-              const target = typeof mount === 'string' ? mount : mount.target;
-              if (String(source).includes('docker.sock') || String(target).includes('docker.sock')) {
-                throw new Error('Docker socket mounts are forbidden.');
-              }
-              if (typeof mount === 'object' && mount.type === 'volume') {
-                throw new Error('Persistent named volumes are forbidden.');
-              }
+            if (service.volumes && service.volumes.length > 0) {
+              throw new Error('Service bind mounts and persistent volumes are forbidden.');
             }
           }
+          const networks = model.networks || {};
+          if (Object.keys(networks).join(',') !== 'burningspace' || networks.burningspace.external === true ||
+              networks.burningspace.name !== `${model.name}_burningspace` ||
+              (networks.burningspace.driver && networks.burningspace.driver !== 'bridge')) {
+            throw new Error('Expected one non-external project-scoped bridge network.');
+          }
           if (model.volumes && Object.keys(model.volumes).length > 0) throw new Error('Named volumes are forbidden.');
-          console.log(JSON.stringify({ ok: true, event: 'compose_exposure_validated', services: services.length }));
+          console.log(JSON.stringify({ ok: true, event: 'compose_hardening_validated', services: Object.keys(services).length }));
           NODE
           compose build server client
           compose up -d server client

@@ -1,0 +1,14 @@
+# Local and CI build override only. Real shared-host staging must use the
+# image-only base file with externally supplied immutable digest references.
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/server.Dockerfile
+
+  client:
+    build:
+      context: ..
+      dockerfile: deploy/client.Dockerfile
+      args:
+        VITE_BURNINGSPACE_SERVER_URL: ${VITE_BURNINGSPACE_SERVER_URL:?set VITE_BURNINGSPACE_SERVER_URL}

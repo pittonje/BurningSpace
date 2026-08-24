@@ -13,7 +13,7 @@ This is not the campaign MVP.
 - Linux VPS with Docker Engine and the Docker Compose plugin;
 - DNS names for the public client and server origins;
 - a TLS reverse proxy installed outside this Compose project;
-- repository access for the approved deployment commit.
+- access to approved digest-pinned images for any real shared-host deployment.
 
 ## Required environment
 
@@ -23,6 +23,11 @@ replace every example value with the staging values:
 ```sh
 cp deploy/staging.env.example deploy/.env.staging
 ```
+
+`deploy/staging.env.example` and its mutable local image tags are only for the
+local/CI build override. A real shared-host inventory instead starts from
+`deploy/external-staging.env.example`, supplies four approved immutable target
+and previous image references, and passes the external staging preflight.
 
 `BURNINGSPACE_ALLOWED_ORIGINS` is the exact comma-separated browser-origin
 allowlist. `VITE_BURNINGSPACE_SERVER_URL` is the public HTTPS server origin
@@ -37,9 +42,9 @@ addresses in the example file or repository.
 ## Build and local validation
 
 ```sh
-docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml config
-docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml build
-docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml up -d
+docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml -f deploy/docker-compose.staging.build.yml config
+docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml -f deploy/docker-compose.staging.build.yml build
+docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml -f deploy/docker-compose.staging.build.yml up -d
 curl --fail http://127.0.0.1:2567/health
 curl --fail http://127.0.0.1:2567/ready
 curl --fail http://127.0.0.1:8080/
@@ -49,8 +54,8 @@ set +a
 BURNINGSPACE_SMOKE_SERVER_URL=http://127.0.0.1:${BURNINGSPACE_SERVER_BIND_PORT:-2567} \
   BURNINGSPACE_SMOKE_ORIGIN="$BURNINGSPACE_ALLOWED_ORIGINS" \
   npx tsx apps/server/scripts/public-arena-smoke.ts
-docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml stop
-docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml down --remove-orphans
+docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml -f deploy/docker-compose.staging.build.yml stop
+docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml -f deploy/docker-compose.staging.build.yml down --remove-orphans
 ```
 
 If the allowlist contains more than one origin, set
@@ -70,21 +75,19 @@ operations logs only and are never identity or gameplay authority.
 Do not expose the Node port publicly, rewrite Origin, proxy gameplay through
 the client container, or weaken the exact allowlist to `*`.
 
-## Deployment
+## Shared-host deployment boundary
 
-```sh
-git fetch origin --prune
-git checkout <approved-staging-commit>
-docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml build
-docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml up -d
-docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml ps
-docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml logs --tail=200 server client
-```
+The real shared-host path uses only `deploy/docker-compose.staging.yml`, an
+approved real environment inventory, and prebuilt digest-pinned images. It
+must never include `docker-compose.staging.build.yml`, a repository checkout,
+or `docker compose build`. The complete authorization, preflight, pull/up,
+validation, and rollback sequence lives in the
+[external staging runbook](public-arena-external-staging-runbook.md).
 
-Run the health, readiness, client, and smoke checks above after every update.
-For rollback, check out the previous approved commit, rebuild both images, run
-`up -d`, and repeat all verification. A rollback or restart resets the active
-arena because state is in memory.
+Real deployment remains unauthorized until an exact environment-specific GO.
+When later authorized, rollback switches to the recorded previous-approved
+server/client image digests without rebuilding. A rollback or restart resets
+the active arena because state is in memory.
 
 ## Health and readiness
 
@@ -138,4 +141,6 @@ result and never prints a reconnect token.
 3. Inspect the bounded server/client logs.
 4. Stop deployment if the exact Origin policy is wrong.
 5. Never recover by setting an Origin wildcard.
-6. Roll back to the previous approved commit if verification cannot pass.
+6. For a later authorized shared-host deployment, switch to the recorded
+   previous-approved server/client image digests without rebuilding if
+   verification cannot pass.

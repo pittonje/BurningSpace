@@ -4,7 +4,7 @@
 
 This runbook separates OPS-002 repository preparation from any later controlled external execution. The Public Arena remains alpha and non-persistent: one in-memory authoritative server process and one static-client container, with no accounts, persistence, horizontal scaling, production SLA, or public-production launch. A server restart or rollback resets active rooms and world state.
 
-The existing [local/container staging runbook](public-arena-staging-runbook.md) remains the source for the bounded Compose lifecycle. This document adds the provider-neutral external edge, authorization, validation, and rollback contract. It does not select a provider and does not authorize deployment.
+The existing [local/container staging runbook](public-arena-staging-runbook.md) remains the source for the bounded local Compose lifecycle. This document adds the shared-host staging, external edge, authorization, validation, and rollback contract. The selected provider and environment are recorded in the Phase B environment decision; that selection does not authorize deployment.
 
 ## Authorization boundary
 
@@ -14,7 +14,8 @@ Phase B is controlled external execution. It may begin only after the Phase A im
 
 ## Required non-secret inventory
 
-- non-secret external environment identifier and `external-staging` class;
+- non-secret environment identifier and exact
+  `shared-existing-vps-with-isolated-compose-staging` class;
 - alpha/non-persistent label;
 - exact public client and server origins;
 - exact allowed browser Origins;
@@ -24,6 +25,17 @@ Phase B is controlled external execution. It may begin only after the Phase A im
 - edge configuration identifier/version;
 - rollback mode;
 - Product Architect deployment GO reference.
+
+The release inventory must also bind four immutable OCI references:
+
+- target server image;
+- target client image;
+- previous-approved server image; and
+- previous-approved client image.
+
+Every reference must use `repository@sha256:<64 lowercase hex>` form. Mutable
+tags, omitted images, malformed digests, and documentation placeholders fail
+closed outside template validation.
 
 Keep a real plan beside a Git-ignored `deploy/.env.*` file. The committed examples use only `.example.invalid` values and explicitly set external execution and public-production launch authorization to false.
 
@@ -64,13 +76,39 @@ These commands operate only on committed examples, repository state, or loopback
 ```sh
 npx tsc -p apps/server/scripts/tsconfig.external-staging.json --noEmit
 npx tsx apps/server/scripts/external-staging-preflight.ts --self-test
-npx tsx apps/server/scripts/external-staging-preflight.ts --template --env deploy/external-staging.env.example --plan deploy/external-staging-plan.example.json
-docker compose --env-file deploy/staging.env.example -f deploy/docker-compose.staging.yml config --format json
+docker compose --env-file deploy/external-staging.env.example -f deploy/docker-compose.staging.yml config --format json | npx tsx apps/server/scripts/external-staging-preflight.ts --template --env deploy/external-staging.env.example --plan deploy/external-staging-plan.example.json --compose-stdin
+docker compose --env-file deploy/staging.env.example -f deploy/docker-compose.staging.yml -f deploy/docker-compose.staging.build.yml config --format json
 ```
 
 A real Phase A plan uses full local commit SHAs, keeps `externalExecutionAuthorized=false`, and is validated with `--phase-a`. Do not run `--phase-b` without the later environment-specific authorization packet. None of these commands deploys or contacts `.example.invalid`.
 
 For the Core loopback smoke only, both targets must be loopback and `BURNINGSPACE_EXTERNAL_SMOKE_ALLOW_LOOPBACK_HTTP=true` must be explicit. That override cannot enable HTTP for a non-loopback target.
+
+## Shared-host Compose and image boundary
+
+`deploy/docker-compose.staging.yml` is the only real shared-host staging
+Compose model. It is image-only: both images are externally supplied immutable
+digest references, and the file has no source-context `build` entry. The
+shared VPS must never build either staging image from a repository checkout.
+
+The provisional low-traffic limits are enforced with ordinary Docker Compose
+service limits, not Swarm-only deployment reservations:
+
+- server: `1.00` CPU and `1 GiB` memory;
+- client: `0.25` CPU and `256 MiB` memory;
+- both services: `json-file` logging with `max-size=10m` and `max-file=3`.
+
+Both services attach only to the non-external project-scoped `burningspace`
+bridge network. Published ports remain exactly loopback-bound. Privileged
+mode, host networking, Docker-socket mounts, fixed global container names, and
+all service bind/persistent-volume mounts remain forbidden.
+
+`deploy/docker-compose.staging.build.yml` is a local/CI-only override. Core
+uses it to build both Dockerfiles off-host from the eventual shared VPS and to
+run deterministic loopback container smoke. It is not part of the real
+shared-host deployment command. No registry is selected and this repository
+task does not publish images; a later authorized release process must publish
+the exact reviewed images and record their resulting digests before GO.
 
 ## Deployment GO packet
 
@@ -97,7 +135,7 @@ Only after explicit GO:
 1. Revalidate the non-secret plan in `--phase-b` mode and bind the approved release and rollback release.
 2. Confirm credentials are available through secure channels and no value will enter repository output.
 3. Confirm DNS/TLS/edge configuration and service-port exposure against the approved inventory.
-4. Build or select images derived from the exact approved merged commit.
+4. Pull or otherwise retrieve the exact prebuilt, digest-pinned target images derived from the approved merged commit; never build from source on the shared host.
 5. Apply the provider-neutral edge configuration and one-server/one-client deployment through the approved operational mechanism.
 6. Run the complete external matrix below, including machine reconnect/session smoke and separate browser UX evidence.
 7. Abort or roll back on any failed required check; never report a partial smoke as success.
@@ -128,7 +166,7 @@ Machine smoke proves network/session continuity; it does not visually prove Phas
 
 ## Rollback
 
-Before change, bind the previous release, target release, and environment/edge configuration version. Preserve a reproducible configuration or approved backup outside Git and confirm the rollback owner and operation. On rollback, restore the previous approved release and matching environment/edge configuration, expecting all active rooms/world state to reset. Then rerun health, readiness, client/static asset, Origin, raw WebSocket, allowed gameplay, reconnect, shutdown, log-redaction, and exposure checks. Record bounded release IDs, timestamps, outcomes, and the expected reset; never record secrets.
+Before change, bind the previous server/client image digests, target server/client image digests, and environment/edge configuration version. Preserve a reproducible configuration or approved backup outside Git and confirm the rollback owner and operation. Rollback switches to the exact previous-approved image digests and never rebuilds an image. On rollback, restore the matching environment/edge configuration, expecting all active rooms/world state to reset. Then rerun health, readiness, client/static asset, Origin, raw WebSocket, allowed gameplay, reconnect, shutdown, log-redaction, and exposure checks. Record bounded release IDs, timestamps, outcomes, and the expected reset; never record secrets.
 
 ## Abort conditions
 

@@ -53,11 +53,15 @@ rollback, or validation gate.
 - Public client origin: `NOT PROVIDED`
 - Public server origin: `NOT PROVIDED`
 - Exact server allowed Origin: `NOT PROVIDED`
-- Target commit/image: `NOT PROVIDED`
-- Previous approved commit/image: `NOT PROVIDED`
+- Target commit: `NOT PROVIDED`
+- Target server image digest: `NOT PROVIDED`
+- Target client image digest: `NOT PROVIDED`
+- Previous approved commit: `NOT PROVIDED`
+- Previous server image digest: `NOT PROVIDED`
+- Previous client image digest: `NOT PROVIDED`
 - Edge configuration identifier: `NOT PROVIDED`
 - Rollback mode: `NOT PROVIDED`
-- Resource limits: `NOT PROVIDED`
+- Resource-limit validation against the real host: `NOT PERFORMED`
 - Management-access owner: `NOT PROVIDED`
 - Abort owner: `NOT PROVIDED`
 - Credentials-ready confirmation without values: `NOT VERIFIED`
@@ -72,6 +76,30 @@ rollback, or validation gate.
 - Network/Runtime review binding: `NOT PROVIDED`
 - Mandatory Claude QA binding: `NOT PROVIDED`
 - Product Architect GO reference: `NOT PROVIDED`
+
+## Repository hardening contract
+
+The unmerged shared-host hardening implementation defines this provisional
+controlled-staging contract:
+
+- authoritative server maximum: `1.00 CPU`, `1 GiB RAM`;
+- static client maximum: `0.25 CPU`, `256 MiB RAM`;
+- both containers: Docker `json-file`, `max-size=10m`, `max-file=3`;
+- one non-external project-scoped `burningspace` bridge network;
+- host publications remain exactly `127.0.0.1:2567` and
+  `127.0.0.1:8080` unless a later approved inventory selects other loopback
+  ports;
+- the real staging Compose path contains immutable image references and no
+  source-context build;
+- local/CI source builds use a separate override and are not a shared-host
+  deployment path;
+- target and previous-approved server/client images must each be recorded as
+  `repository@sha256:<64 lowercase hex>`; and
+- rollback switches to the recorded previous-approved digests without a
+  rebuild.
+
+These limits remain `PROVISIONAL — MUST BE VALIDATED DURING STAGING`. No
+registry is selected and no image is published by repository hardening.
 
 ## GO prerequisites
 
@@ -88,6 +116,9 @@ rollback, or validation gate.
 - The exact environment, public origins, Origin allowlist, release bindings,
   edge configuration, rollback binding, resource limits, owners, and evidence
   destination are complete.
+- The target and previous-approved server/client image references are all
+  supplied, digest-pinned, non-placeholder, and derived from approved
+  off-host builds.
 - Credential, DNS, TLS, firewall, log-redaction, and rollback readiness are
   confirmed without recording secret values.
 - Operations/Security and Network/Runtime evidence approves the exact target.
