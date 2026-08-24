@@ -141,6 +141,37 @@ jobs:
           npx tsx apps/server/scripts/external-staging-edge-preflight.ts \
             --inspect-adapted-config --adapted-config "$adapted"
 
+          origin_mutation_tests=(
+            'set|header_up Origin https://mutated.example.invalid'
+            'add|header_up +Origin https://mutated.example.invalid'
+            'delete|header_up -Origin'
+            'delete-all|header_up -*'
+            'replace|header_up Origin ^https:// https://mutated.example.invalid/'
+          )
+          for mutation in "${origin_mutation_tests[@]}"; do
+            name="${mutation%%|*}"
+            directive="${mutation#*|}"
+            mutated="$RUNNER_TEMP/origin-$name.Caddyfile"
+            mutated_adapted="$RUNNER_TEMP/origin-$name.json"
+            awk -v directive="$directive" '
+              !inserted && /reverse_proxy 127\.0\.0\.1:18080 \{/ {
+                print
+                print "\t\t" directive
+                inserted = 1
+                next
+              }
+              { print }
+              END { if (!inserted) exit 3 }
+            ' "$rendered" >"$mutated"
+            "$caddy" adapt --config "$mutated" --adapter caddyfile >"$mutated_adapted"
+            if npx tsx apps/server/scripts/external-staging-edge-preflight.ts \
+              --inspect-adapted-config --adapted-config "$mutated_adapted"; then
+              echo "Adapted Origin $name mutation was not rejected." >&2
+              exit 1
+            fi
+          done
+          printf '%s\n' '{"ok":true,"event":"caddy_origin_mutation_negatives_verified","tests":5}'
+
           contract_result="$(BURNINGSPACE_CADDY_BINARY="$caddy" \
             npx tsx apps/server/scripts/external-staging-edge-contract-check.ts --self-test)"
           printf '%s\n' "$contract_result"
@@ -148,7 +179,7 @@ jobs:
           const result = JSON.parse(process.env.CONTRACT_RESULT || '{}');
           const checks = result.checks || {};
           if (!result.ok || result.runtimeExecuted !== true || result.caddyVersion !== '2.11.4' ||
-              Object.keys(checks).length !== 17 || Object.values(checks).some((value) => value !== true)) {
+              Object.keys(checks).length !== 18 || Object.values(checks).some((value) => value !== true)) {
             throw new Error('Caddy runtime contract did not execute every required assertion.');
           }
           console.log(JSON.stringify({

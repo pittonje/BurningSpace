@@ -259,7 +259,14 @@ function validateTemplate(template: string): void {
     'request>headers>Cookie delete'
   ];
   for (const entry of required) if (!template.includes(entry)) fail('TEMPLATE_CONTRACT', 'Caddyfile is missing a required edge directive.');
-  if ((template.match(/request>uri delete/gu) ?? []).length !== 2) fail('LOG_URI_POLICY', 'Both access logs must delete the complete request URI.');
+  for (const field of [
+    'request>uri delete', 'request>headers>Authorization delete',
+    'request>headers>Proxy-Authorization delete', 'request>headers>Cookie delete'
+  ]) {
+    if ((template.match(new RegExp(field, 'gu')) ?? []).length !== 3) {
+      fail('LOG_URI_POLICY', 'Runtime and both access loggers must delete query-bearing and credential fields.');
+    }
+  }
   if ((template.match(/roll_size 10MiB/gu) ?? []).length !== 2 || (template.match(/roll_keep 3/gu) ?? []).length !== 2) {
     fail('LOG_ROTATION', 'Both access logs require bounded rolling.');
   }
@@ -269,7 +276,7 @@ function validateTemplate(template: string): void {
   if ((template.match(/stream_close_delay \{\$BURNINGSPACE_CADDY_STREAM_CLOSE_DELAY\}/gu) ?? []).length !== 2) {
     fail('STREAM_CLOSE_DELAY', 'Both routes require the bounded reload close delay.');
   }
-  if (/\bheader_up\s+Origin\b/iu.test(template)) fail('ORIGIN_MUTATION', 'Caddy must not mutate, synthesize, or remove Origin.');
+  if (/\bheader_up\s+(?:[+\-?>]?Origin(?:\s|$)|-\*(?:\s|$))/imu.test(template)) fail('ORIGIN_MUTATION', 'Caddy must not mutate, synthesize, or remove Origin.');
   if (/^\s*(?:rewrite|uri)\s+/imu.test(template)) fail('URI_REWRITE', 'Caddy must not rewrite path or query data.');
   if (/\b(?:tls_insecure_skip_verify|trusted_proxies|tls\s+internal|debug|credentials)\b/iu.test(template)) {
     fail('FORBIDDEN_DIRECTIVE', 'Caddyfile contains a forbidden trust, TLS, debug, or credential directive.');
@@ -392,19 +399,36 @@ function durationNanoseconds(value: unknown, code: string): number {
   fail(code, 'Adapted configuration contains an invalid duration representation.');
 }
 
-function adaptedLogSafe(logger: Record<string, unknown>): boolean {
-  const writer = object(logger.writer, 'ADAPTED_LOG_WRITER');
+function adaptedLogFilterSafe(logger: Record<string, unknown>): boolean {
   const encoder = object(logger.encoder, 'ADAPTED_LOG_ENCODER');
   const fields = object(encoder.fields, 'ADAPTED_LOG_FIELDS');
   const deleted = (name: string): boolean => {
     const filter = object(fields[name], 'ADAPTED_LOG_FIELDS');
     return filter.filter === 'delete';
   };
-  return writer.output === 'file' && typeof writer.filename === 'string' &&
-    writer.roll_size_mb === 10 && writer.roll_keep === 3 && writer.roll_keep_days === 3 &&
-    encoder.format === 'filter' && object(encoder.wrap, 'ADAPTED_LOG_ENCODER').format === 'json' &&
+  return encoder.format === 'filter' && object(encoder.wrap, 'ADAPTED_LOG_ENCODER').format === 'json' &&
     deleted('request>uri') && deleted('request>headers>Authorization') &&
     deleted('request>headers>Proxy-Authorization') && deleted('request>headers>Cookie');
+}
+
+function adaptedAccessLogSafe(logger: Record<string, unknown>): boolean {
+  const writer = object(logger.writer, 'ADAPTED_LOG_WRITER');
+  return writer.output === 'file' && typeof writer.filename === 'string' &&
+    writer.roll_size_mb === 10 && writer.roll_keep === 3 && writer.roll_keep_days === 3 &&
+    adaptedLogFilterSafe(logger);
+}
+
+function referencesOriginHeader(value: unknown): boolean {
+  if (typeof value === 'string') {
+    const header = value.replace(/^[+\-?>]+/u, '').toLowerCase();
+    return header === 'origin' || header === '*';
+  }
+  if (Array.isArray(value)) return value.some(referencesOriginHeader);
+  if (!value || typeof value !== 'object') return false;
+  return Object.entries(value).some(([key, entry]) => {
+    const header = key.replace(/^[+\-?>]+/u, '').toLowerCase();
+    return header === 'origin' || header === '*' || referencesOriginHeader(entry);
+  });
 }
 
 function inspectAdapted(raw: unknown, plan: EdgePlan): void {
@@ -464,14 +488,20 @@ function inspectAdapted(raw: unknown, plan: EdgePlan): void {
   let originMutation = false;
   walk(http, (record) => {
     if (typeof record.handler === 'string') handlers.push(record.handler);
-    if (record.handler === 'reverse_proxy') proxies.push(record);
+    if (record.handler === 'reverse_proxy') {
+      proxies.push(record);
+      if (record.headers !== undefined) {
+        const headers = object(record.headers, 'ADAPTED_PROXY_HEADERS');
+        if (headers.request !== undefined && referencesOriginHeader(headers.request)) originMutation = true;
+      }
+    }
     if (record.handler === 'rewrite') fail('ADAPTED_REWRITE', 'Adapted configuration contains a URI rewrite handler.');
     if (record.handler === 'headers') {
       const request = record.request;
       if (JSON.stringify(request ?? {}).toLowerCase().includes('origin')) originMutation = true;
     }
   });
-  if (originMutation || JSON.stringify(proxies).toLowerCase().includes('header_up')) {
+  if (originMutation) {
     fail('ADAPTED_ORIGIN', 'Adapted configuration mutates the upstream Origin header.');
   }
   if (handlers.some((handler) => !['subroute', 'reverse_proxy'].includes(handler))) {
@@ -500,10 +530,14 @@ function inspectAdapted(raw: unknown, plan: EdgePlan): void {
 
   const logging = object(root.logging, 'ADAPTED_LOGGING');
   const logs = object(logging.logs, 'ADAPTED_LOGGING');
+  const defaultLogger = object(logs.default, 'ADAPTED_LOGGING');
+  if (!adaptedLogFilterSafe(defaultLogger)) {
+    fail('ADAPTED_RUNTIME_LOGGING', 'Adapted runtime/error logging can expose query-bearing or credential fields.');
+  }
   const loggerValues = Object.values(logs)
     .map((entry) => object(entry, 'ADAPTED_LOGGING'))
     .filter((logger) => object(logger.writer ?? {}, 'ADAPTED_LOGGING').output === 'file');
-  if (loggerValues.length !== 2 || !loggerValues.every(adaptedLogSafe)) {
+  if (loggerValues.length !== 2 || !loggerValues.every(adaptedAccessLogSafe)) {
     fail('ADAPTED_LOGGING', 'Adapted access logs are not URI-safe, credential-safe, and bounded.');
   }
   const serialized = JSON.stringify(raw).toLowerCase();
@@ -605,6 +639,9 @@ function runSelfTests(): number {
   reject('automatic-https', 'AUTOMATIC_HTTPS', (f) => { f.plan.automaticHttps = false; });
   reject('origin-rewrite', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up Origin https://arena.example.invalid\n'; });
   reject('origin-synthesis', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up Origin {http.request.host}\n'; });
+  reject('origin-delete', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up -Origin\n'; });
+  reject('origin-add', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up +Origin https://arena.example.invalid\n'; });
+  reject('origin-delete-all', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up -*\n'; });
   reject('uri-rewrite', 'URI_REWRITE', (f) => { f.template += '\nrewrite * /rewritten\n'; });
   reject('websocket-disabled', 'WEBSOCKET', (f) => { f.plan.webSocketEnabled = false; });
   reject('missing-stream-timeout', 'TEMPLATE_PLACEHOLDER', (f) => { f.template = f.template.replaceAll('stream_timeout {$BURNINGSPACE_CADDY_STREAM_TIMEOUT}', ''); });

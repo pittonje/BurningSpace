@@ -133,13 +133,16 @@ UX-001 semantics.
 
 Client and server sites write separate JSON access logs. The complete request
 URI field is deleted on both sites, so no query name or value—including a
-reconnect token—can be retained. Authorization, Proxy-Authorization, and
-Cookie header fields are deleted explicitly. Request bodies are not logged.
+reconnect token—can be retained. The default runtime/error logger applies the
+same field filter so failed upstream requests cannot expose their URI on
+standard error. Authorization, Proxy-Authorization, and Cookie header fields
+are deleted explicitly from all three loggers. Request bodies are not logged.
 
 Each file rolls at `10 MiB`, retains at most `3` files, and retains rolled data
 for at most `72h`. Contract smoke sends seeded query, reconnect-token,
-Authorization, and Cookie canaries and requires all Caddy access logs and
-runtime output to omit them. Any canary appearance is an abort condition.
+Authorization, and Cookie canaries across successful and unavailable-upstream
+paths and requires all Caddy access logs and runtime output to omit them. Any
+canary appearance is an abort condition.
 
 ## TLS
 

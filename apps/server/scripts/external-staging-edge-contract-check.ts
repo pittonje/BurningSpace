@@ -27,6 +27,7 @@ const TOKEN_CANARY = 'ops002-reconnect-canary-4f1d2a';
 const CLIENT_QUERY_CANARY = 'ops002-client-query-canary-9c7b3e';
 const AUTH_CANARY = 'Bearer ops002-authorization-canary-7b2d';
 const COOKIE_CANARY = 'ops002-cookie-canary-5e8a';
+const ERROR_QUERY_CANARY = 'ops002-error-query-canary-73da';
 
 function fail(code: string, message: string): never { throw new ContractError(code, message); }
 
@@ -169,6 +170,17 @@ function testCaddyfile(values: {
 \tpersist_config off
 \tauto_https off
 \tgrace_period 2s
+\tlog default {
+\t\tformat filter {
+\t\t\twrap json
+\t\t\tfields {
+\t\t\t\trequest>uri delete
+\t\t\t\trequest>headers>Authorization delete
+\t\t\t\trequest>headers>Proxy-Authorization delete
+\t\t\t\trequest>headers>Cookie delete
+\t\t\t}
+\t\t}
+\t}
 \tservers {
 \t\tprotocols h1 h2
 \t\tstrict_sni_host on
@@ -205,6 +217,18 @@ function boundedRequest(port: number, path: string, headers: Record<string, stri
       });
     });
     request.setTimeout(TIMEOUT_MS, () => request.destroy(new ContractError('HTTP_TIMEOUT', 'Proxy request timed out.')));
+    request.on('error', rejectRequest);
+    request.end();
+  });
+}
+
+function boundedStatusRequest(port: number, path: string, headers: Record<string, string> = {}): Promise<number> {
+  return new Promise((resolveRequest, rejectRequest) => {
+    const request = httpRequest({ host: '127.0.0.1', port, path, method: 'GET', headers }, (response) => {
+      response.resume();
+      response.on('end', () => resolveRequest(response.statusCode ?? 0));
+    });
+    request.setTimeout(TIMEOUT_MS, () => request.destroy(new ContractError('HTTP_TIMEOUT', 'Proxy failure request timed out.')));
     request.on('error', rejectRequest);
     request.end();
   });
@@ -352,7 +376,8 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
     });
     const absentOrigin = await boundedRequest(ports.serverPort, '/absent', { Host: 'arena-api.example.invalid' });
     const websocket = await websocketRoundTrip(ports.serverPort);
-    const wsSeen = seen.find((entry) => entry.url.includes(TOKEN_CANARY) && entry.url.startsWith('/battle?'));
+    const expectedWebSocketQuery = `/battle?reconnectionToken=${TOKEN_CANARY}&other=unchanged`;
+    const wsSeen = seen.find((entry) => entry.url === expectedWebSocketQuery);
     if (!wsSeen) fail('QUERY_PASS', 'WebSocket query did not reach the server upstream unchanged.');
     if (client.kind !== 'client' || exactOrigin.kind !== 'server') fail('ROUTING', 'Client/server edge routing crossed upstreams.');
     if (exactOrigin.origin !== 'https://arena.example.invalid' || hostileOrigin.origin !== 'https://hostile.example.invalid' || absentOrigin.origin !== undefined) {
@@ -364,6 +389,16 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
     if (websocket.response !== 'echo:ping') fail('WS_TRAFFIC', 'Bidirectional WebSocket traffic did not pass through Caddy.');
     await assertAdminNotPublic(ports.adminPort);
 
+    await closeServer(serverUpstream);
+    serverUpstream = undefined;
+    const failureStatus = await boundedStatusRequest(
+      ports.serverPort,
+      `/battle?reconnectionToken=${ERROR_QUERY_CANARY}`,
+      { Host: 'arena-api.example.invalid', Authorization: AUTH_CANARY, Cookie: `session=${COOKIE_CANARY}` }
+    );
+    if (failureStatus !== 502) fail('ERROR_PATH', 'Unavailable upstream did not exercise the expected Caddy error path.');
+    await delay(100);
+
     const reloadValidation = spawnSync(exactBinary, ['validate', '--config', configPath, '--adapter', 'caddyfile'], { encoding: 'utf8', windowsHide: true });
     if (reloadValidation.status !== 0) fail('RELOAD_VALIDATE', 'Reload-time validation failed without external services.');
     await stopProcess(caddy);
@@ -372,7 +407,7 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
     const clientLog = readFileSync(join(work, 'client-access.log'), 'utf8');
     const serverLog = readFileSync(join(work, 'server-access.log'), 'utf8');
     const allRuntimeOutput = `${clientLog}\n${serverLog}\n${stdout}\n${stderr}`;
-    for (const canary of [TOKEN_CANARY, CLIENT_QUERY_CANARY, AUTH_CANARY, COOKIE_CANARY]) {
+    for (const canary of [TOKEN_CANARY, CLIENT_QUERY_CANARY, ERROR_QUERY_CANARY, AUTH_CANARY, COOKIE_CANARY]) {
       if (allRuntimeOutput.includes(canary)) fail('LOG_LEAK', 'A seeded query or credential canary appeared in edge output.');
     }
     for (const line of serverLog.trim().split(/\r?\n/u).filter(Boolean)) {
@@ -385,7 +420,7 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
       absentOrigin: true, hostCoherent: true, forwardedProtoCoherent: true, webSocketUpgrade: true,
       bidirectionalWebSocket: true, queryPassThrough: true, tokenLogSafe: true,
       authorizationLogSafe: true, cookieLogSafe: true, routeSeparation: true,
-      adminNotPublic: true, reloadValidationOffline: true, cleanupBounded: true
+      adminNotPublic: true, errorLogSafe: true, reloadValidationOffline: true, cleanupBounded: true
     };
   } finally {
     await stopProcess(caddy);
@@ -415,7 +450,7 @@ async function main(): Promise<void> {
   }
   const checks = await runRuntime(binary);
   console.log(JSON.stringify({
-    ok: true, event: 'external_staging_edge_contract_self_tested', tests: 19,
+    ok: true, event: 'external_staging_edge_contract_self_tested', tests: 20,
     runtimeExecuted: true, caddyVersion: '2.11.4', checks
   }));
 }

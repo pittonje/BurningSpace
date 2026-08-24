@@ -88,7 +88,7 @@ For external targets, TLS verification remains enabled. Do not recover from edge
 
 ## Access-log safety
 
-Colyseus may carry a reconnect bearer token in a WebSocket query string. The effective edge/access-log format must not retain request query strings for WebSocket routes, and logs/evidence must not contain reconnect tokens. Verify the actual effective logging behavior of the selected edge; no single provider-specific directive is assumed sufficient. Application lifecycle logs must remain bounded and omit Origin lists, headers, tokens, and gameplay state.
+Colyseus may carry a reconnect bearer token in a WebSocket query string. The effective edge access and runtime/error-log formats must not retain request query strings for WebSocket routes, including failed-upstream paths, and logs/evidence must not contain reconnect tokens. Verify the actual effective logging behavior of the selected edge; no single provider-specific directive is assumed sufficient. Application lifecycle logs must remain bounded and omit Origin lists, headers, tokens, and gameplay state.
 
 ## Phase A commands
 
