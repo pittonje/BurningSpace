@@ -12,6 +12,13 @@ can make an environment-specific GO decision.
 - Environment class: `shared-existing-vps-with-isolated-compose-staging`
 - Superseded environment class: `dedicated-isolated-single-host-vps`
 - Provider: `Contabo`
+- Canonical release registry: `GHCR`
+- Server image repository: `ghcr.io/pittonje/burningspace-server`
+- Client image repository: `ghcr.io/pittonje/burningspace-client`
+- Target commit: `c1daa96aefce961ec6b595af058b8f105ac98800`
+- First-deployment rollback mode: `bootstrap-no-previous-release`
+- First target edge configuration ID: `burningspace-staging-01-edge-v1`
+- First-deployment previous release and edge bindings: `STRUCTURALLY ABSENT`
 - Physical isolation: `false`
 - Phase A merge: `33bff5009926bb5247acad5ebcf85ba8b7f626ce`
 - Phase A implementation head: `3522116d62d8fb93a4a4ca1756aec6818280f0bb`
@@ -88,18 +95,17 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Public client origin: `NOT PROVIDED`
 - Public server origin: `NOT PROVIDED`
 - Exact server allowed Origin: `NOT PROVIDED`
-- Target commit: `NOT PROVIDED`
 - Target server image digest: `NOT PROVIDED`
 - Target client image digest: `NOT PROVIDED`
-- Previous approved commit: `NOT PROVIDED`
-- Previous server image digest: `NOT PROVIDED`
-- Previous client image digest: `NOT PROVIDED`
-- Edge configuration identifier: `NOT SELECTED FOR REAL ENVIRONMENT`
-- Previous edge configuration identifier: `NOT SELECTED`
+- Previous approved commit: `ABSENT — bootstrap-no-previous-release`
+- Previous server image digest: `ABSENT — bootstrap-no-previous-release`
+- Previous client image digest: `ABSENT — bootstrap-no-previous-release`
+- Edge configuration identifier: `burningspace-staging-01-edge-v1`
+- Previous edge configuration identifier: `ABSENT — bootstrap-no-previous-release`
 - Installed Caddy version/source: `NOT VERIFIED`
 - Effective Caddy systemd unit/drop-in, runtime-directory ownership/mode, Unix
   socket ownership/mode, and absence of TCP admin listeners: `NOT VERIFIED`
-- Rollback mode: `NOT PROVIDED`
+- Rollback mode: `bootstrap-no-previous-release`
 - Effective resource-limit validation on deployed containers: `NOT PERFORMED`
 - Management-access owner: `NOT PROVIDED`
 - Abort owner: `NOT PROVIDED`
@@ -133,14 +139,17 @@ PR #67 merged the controlled-staging repository contract:
   source-context build;
 - local/CI source builds use a separate override and are not a shared-host
   deployment path;
-- target and previous-approved server/client images must each be recorded as
-  `repository@sha256:<64 lowercase hex>`; and
-- rollback switches to the recorded previous-approved digests without a
-  rebuild.
+- target server/client images must each be recorded as
+  `repository@sha256:<64 lowercase hex>`;
+- first deployment uses `bootstrap-no-previous-release` with all previous
+  image/commit/edge fields structurally absent; and
+- subsequent deployments use `previous-approved-release`, require distinct
+  immutable previous-approved images/commit/edge configuration, and switch to
+  those exact digests without a rebuild.
 
 These repository limits remain `SUITABLE / MUST BE VERIFIED WHEN DEPLOYED`.
-Host capacity is not guaranteed. No registry is selected and no image was
-published by repository hardening.
+Host capacity is not guaranteed. GHCR is the selected registry authority, but
+no image was published by repository hardening or this packet.
 
 ## GO prerequisites
 
@@ -155,8 +164,9 @@ published by repository hardening.
   loopback binds, explicit resource limits, and immutable release and rollback
   bindings — is implemented and verified.
 - Host maintenance is complete before any BurningSpace container is created,
-  and the post-maintenance forum, port, Docker, unrelated-service, and
-  firewall checks pass.
+  the separately Product-Architect-authorized reboot is complete, and the new
+  boot ID plus post-reboot forum, port, Docker, unrelated-service, failed-unit,
+  reboot-required-state, and firewall checks pass.
 - Root-level effective IPv4/IPv6 firewall evidence is complete, including
   Docker-aware forwarding and `DOCKER-USER` treatment. TCP 4000 is restricted;
   TCP 9090 ingress is restricted or effectively verified; and TeamSpeak
@@ -171,9 +181,10 @@ published by repository hardening.
   `/run/caddy/burningspace-admin.sock` for administration, denies an unrelated
   local user, and reloads successfully through that socket with no TCP admin
   listener before or after reload.
-- The target and previous-approved server/client image references are all
-  supplied, digest-pinned, non-placeholder, and derived from approved
-  off-host builds.
+- The target server/client image references are supplied, digest-pinned,
+  non-placeholder, and derived from approved off-host builds. Previous-release
+  references are structurally absent for bootstrap or strictly supplied for a
+  later `previous-approved-release` deployment.
 - Credential, DNS, TLS, firewall, log-redaction, and rollback readiness are
   confirmed without recording secret values.
 - Operations/Security and Network/Runtime evidence approves the exact target.
@@ -230,12 +241,15 @@ used to continue toward public launch.
 
 ## Rollback binding
 
-Rollback remains incomplete until the previous approved release, target
-release, environment and edge configuration version, rollback mode, rollback
-owner, reproducible configuration or approved backup, expected room reset,
-and post-rollback validation are all bound. Rollback must restore the previous
-approved release and repeat the required health, readiness, client, Origin,
-WebSocket, gameplay, reconnect, shutdown, redaction, and exposure checks.
+Rollback remains incomplete until the target release, environment, edge
+configuration, exact rollback mode, rollback owner, reproducible configuration
+or approved backup, expected room reset, and post-rollback validation are all
+bound. For this first deployment, `bootstrap-no-previous-release` restores
+`PRE_BURNINGSPACE_DEPLOYMENT_STATE` by removing only the BurningSpace Compose
+project and edge configuration and proving its backend/public listeners are
+gone while preserving unrelated services and the stopped forum. Later
+deployments remain strict `previous-approved-release` rollbacks with all
+previous approved release and edge bindings mandatory.
 
 ## Secret handling
 

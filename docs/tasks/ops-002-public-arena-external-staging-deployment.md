@@ -284,16 +284,26 @@ Phase B evidence must cover at minimum:
 17. restart is documented as room-resetting;
 18. logs contain expected bounded lifecycle events;
 19. client-facing responses contain no stack traces or secrets; and
-20. rollback restores the previous approved release.
+20. rollback either restores the previous approved release or, for the first
+    successful staging deployment only, restores the pre-BurningSpace state.
 
 A failed smoke must never be reported as a successful deployment.
 
 ## Rollback and abort policy
 
-A rollback plan is required before any external change. It records the
-previous approved image/commit, target image/commit, external configuration
-version, reproducible configuration or backup, rollback procedure,
-post-rollback validation, expected room reset, and log/evidence capture.
+A rollback plan is required before any external change. The first successful
+external staging deployment uses exactly `bootstrap-no-previous-release` and
+must structurally omit previous server/client images, previous approved commit,
+and previous edge configuration. Its rollback restores
+`PRE_BURNINGSPACE_DEPLOYMENT_STATE` by removing only the BurningSpace staging
+Compose project and Caddy edge configuration, proving BurningSpace listeners
+are gone, and preserving unrelated services and the stopped forum. Every later
+deployment uses exactly `previous-approved-release` and retains the strict
+immutable previous-image, previous-commit, previous-edge, ancestry, and
+inequality requirements. Both modes record the target image/commit, external
+configuration version, reproducible configuration or backup, rollback
+procedure, post-rollback validation, expected room reset, and log/evidence
+capture.
 
 Abort conditions include invalid TLS; stripped or rewritten Origin; hostile
 Origin acceptance; direct container-port exposure; secret leakage; readiness
@@ -301,8 +311,8 @@ remaining false after startup; broken WebSocket upgrade; duplicate reconnect
 ownership/session; stale Core or reviewer evidence; unavailable rollback; or
 discovery of an unexpected persistence requirement.
 
-On abort, do not continue toward public launch. Restore the previous approved
-staging state when safe, preserve evidence, and report the exact failure.
+On abort, do not continue toward public launch. Execute the explicitly bound
+rollback mode when safe, preserve evidence, and report the exact failure.
 
 ## Required implementation evidence
 
@@ -327,6 +337,13 @@ sensitive environment dumps.
 ## Review routing and sequencing
 
 Future implementation risk is `HIGH`.
+
+For the bounded first-deployment rollback implementation, Security and QA are
+required because executable deployment validation and release-readiness
+invariants change. Architecture and Network are recommended for the rollback
+boundary and edge/runtime interaction. Gameplay and Visual are not applicable:
+no gameplay, protocol, UI, or asset behavior changes. Independent Claude review
+follows the implementation diff as directed by the Product Architect.
 
 Mandatory route:
 

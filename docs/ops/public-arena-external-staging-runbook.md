@@ -20,22 +20,30 @@ Phase B is controlled external execution. It may begin only after the Phase A im
 - exact public client and server origins;
 - exact allowed browser Origins;
 - client build endpoint;
-- target approved commit/image and previous approved commit/image;
+- target approved commit/images and the selected rollback mode;
 - loopback server and client bind ports;
 - edge configuration identifier/version;
 - rollback mode;
 - Product Architect deployment GO reference.
 
-The release inventory must also bind four immutable OCI references:
+The release inventory always binds two immutable target OCI references:
 
 - target server image;
-- target client image;
-- previous-approved server image; and
-- previous-approved client image.
+- target client image.
 
 Every reference must use `repository@sha256:<64 lowercase hex>` form. Mutable
 tags, omitted images, malformed digests, and documentation placeholders fail
 closed outside template validation.
+
+For the first successful external staging deployment, rollback mode is exactly
+`bootstrap-no-previous-release`. In that mode, `previousServerImage`,
+`previousClientImage`, `previousApprovedCommit`, and `previousEdgeConfigId`
+must be structurally absent from the real plan and environment inventories.
+Empty strings, sentinels, dummy digests, documentation hostnames, and copies of
+the target bindings are forbidden substitutes. For every later deployment,
+rollback mode is exactly `previous-approved-release` and the two immutable
+previous-approved images, previous-approved commit, and previous edge config ID
+remain mandatory, distinct, and subject to the existing ancestry checks.
 
 For `burningspace-staging-01`, the intended environment-specific loopback
 values are:
@@ -134,7 +142,9 @@ all service bind/persistent-volume mounts remain forbidden.
 `deploy/docker-compose.staging.build.yml` is a local/CI-only override. Core
 uses it to build both Dockerfiles off-host from the eventual shared VPS and to
 run deterministic loopback container smoke. It is not part of the real
-shared-host deployment command. No registry is selected and this repository
+shared-host deployment command. GHCR is the selected release registry, with
+`ghcr.io/pittonje/burningspace-server` and
+`ghcr.io/pittonje/burningspace-client` as the canonical repositories. This
 task does not publish images; a later authorized release process must publish
 the exact reviewed images and record their resulting digests before GO.
 
@@ -170,6 +180,15 @@ acceptable. Use exact individual container inspection as authority. Docker
 aggregate container counters have disagreed with individually inspected state
 on this host, so `docker info ContainersRunning` alone is not a stop/GO gate.
 
+The required Phase B order is: completed host maintenance; then one controlled,
+separately Product-Architect-authorized reboot; then shared-host baseline
+revalidation; then image and edge deployment. This runbook does not authorize
+or perform that reboot. After the reboot and before deployment, record the new
+boot ID and verify: the forum is stopped with restart policy `no`; TCP 80/443,
+2567, and 18080 are free; Dashy and Cockpit are loopback-only; TeamSpeak has
+only its expected listeners; failed systemd units have been checked; and the
+current reboot-required state has been checked and recorded.
+
 ## Preserved forum standstill and cleanup prohibition
 
 The preserved BurningForge forum container MUST NOT be started while the
@@ -197,11 +216,12 @@ conclusively unable to touch preserved forum assets.
 Before the Product Architect can issue GO, provide one non-secret packet containing:
 
 - target environment identifier;
-- target and previous approved commit/image bindings;
+- target commit/image bindings and the exact rollback mode;
 - exact client/server origins and allowlist;
 - edge configuration ID;
-- previous edge configuration ID, exact Caddy version/source, and rendered and
-  adapted configuration hashes;
+- the bootstrap absence of a previous edge configuration, or the strict
+  previous edge configuration ID for a later deployment, plus exact Caddy
+  version/source and rendered and adapted configuration hashes;
 - exact final Core run and reviewed head;
 - Operations/Security and Network/Runtime verdict bindings;
 - mandatory Claude QA result and reviewed head;
@@ -216,14 +236,17 @@ GO must name the environment and target release explicitly. It cannot be inferre
 
 Only after explicit GO:
 
-1. Revalidate the non-secret plan in `--phase-b` mode and bind the approved release and rollback release.
+1. Revalidate the non-secret plan in `--phase-b` mode and bind the approved
+   target release plus exactly one rollback mode. The first deployment uses
+   `bootstrap-no-previous-release`; later deployments use
+   `previous-approved-release`.
 2. Confirm credentials are available through secure channels and no value will enter repository output.
 3. Confirm maintenance and all shared-host remediation gates are complete,
    including the forum standstill and cleanup prohibition.
 4. Confirm the selected Caddy version, effective systemd drop-in and service
    identity, `/run/caddy` ownership/mode, service umask, Unix admin socket and
-   reload path, absence of IPv4/IPv6 TCP admin listeners, current/previous
-   config IDs, rendered/adapted hashes, DNS/TLS edge state, log safety, and
+    reload path, absence of IPv4/IPv6 TCP admin listeners, rollback-mode-correct
+    current/previous config IDs, rendered/adapted hashes, DNS/TLS edge state, log safety, and
    service-port exposure against the approved inventory and Caddy runbook.
 5. Pull or otherwise retrieve the exact prebuilt, digest-pinned target images derived from the approved merged commit; never build from source on the shared host.
 6. Apply the provider-neutral edge configuration and one-server/one-client deployment through the approved operational mechanism.
@@ -248,7 +271,9 @@ Required external evidence must bind each result to the exact environment, relea
 - the existing Colyseus reconnect-token call succeeds, retains the same session/room and coherent ship state, and creates no duplicate participant/player/ship;
 - graceful drain makes readiness false, shutdown is bounded, lifecycle logs are present, and restart is recorded as room-resetting;
 - effective logs contain no query-bearing reconnect token, credentials, stack trace, or sensitive environment dump;
-- rollback restores the previous approved release and all post-rollback health/readiness/smoke checks pass.
+- rollback either restores the previous approved release or, for the first
+  deployment only, restores `PRE_BURNINGSPACE_DEPLOYMENT_STATE`; all applicable
+  post-rollback health/readiness/exposure checks pass.
 
 ## Browser UX evidence
 
@@ -256,13 +281,32 @@ Machine smoke proves network/session continuity; it does not visually prove Phas
 
 ## Rollback
 
-Before change, bind the previous server/client image digests, target server/client image digests, and environment/edge configuration version. Preserve a reproducible configuration or approved backup outside Git and confirm the rollback owner and operation. Rollback switches to the exact previous-approved image digests and never rebuilds an image. On rollback, restore the matching environment/edge configuration, expecting all active rooms/world state to reset. Then rerun health, readiness, client/static asset, Origin, raw WebSocket, allowed gameplay, reconnect, shutdown, log-redaction, and exposure checks. Record bounded release IDs, timestamps, outcomes, and the expected reset; never record secrets.
+For the first successful external staging deployment, bind
+`bootstrap-no-previous-release`, the target image digests, target commit,
+environment, target edge ID, reproducible configuration, and rollback owner.
+Rollback restores `PRE_BURNINGSPACE_DEPLOYMENT_STATE`: stop and remove only the
+`burningspace-staging` Compose project; deactivate and remove only the
+BurningSpace Caddy edge configuration; verify no BurningSpace backend listeners
+remain; and verify BurningSpace no longer owns public TCP 80/443. Preserve
+Dashy, Cockpit, TeamSpeak, and the forum installation. The forum remains stopped
+with restart policy `no`. Never run Docker/container/system prune or unrelated
+cleanup.
+
+For every later deployment, bind `previous-approved-release`, distinct target
+and previous-approved server/client image digests, distinct approved commits,
+and distinct current/previous edge IDs. Rollback switches to the exact previous
+digests without rebuilding, restores the matching environment and edge
+configuration, and retains all existing ancestry, health, readiness, client,
+Origin, WebSocket, gameplay, reconnect, shutdown, redaction, and exposure
+checks. Either mode may reset all active rooms and world state. Record bounded
+release IDs, timestamps, outcomes, and the expected reset; never record secrets.
 
 ## Abort conditions
 
 Abort Phase B for invalid TLS; wrong DNS; stripped/rewritten Origin; hostile or absent Origin acceptance; wildcard allowlist; broken WebSocket upgrade; direct service/admin port exposure; plaintext external target; disabled TLS verification; secret, reconnect-token, query-string, or environment leakage; readiness remaining false; client endpoint mismatch; duplicate reconnect ownership/session/ship; stale Core/reviewer/QA binding; unavailable or unbound rollback; failed shutdown; unexpected persistence requirement; or any difference between the approved plan and effective environment.
 
-After abort, do not continue toward public launch. Restore the previous approved staging release when safe, preserve redacted evidence, and report the exact bounded failure.
+After abort, do not continue toward public launch. Execute the selected rollback
+mode when safe, preserve redacted evidence, and report the exact bounded failure.
 
 ## Evidence and redaction
 

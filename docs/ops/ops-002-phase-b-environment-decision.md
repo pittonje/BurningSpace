@@ -17,6 +17,12 @@ preserved historical audit conclusion are recorded below.
 - Environment purpose: `controlled low-traffic BurningSpace external staging
   only`
 - Provider: `Contabo`
+- Canonical release registry: `GHCR`
+- Server image repository: `ghcr.io/pittonje/burningspace-server`
+- Client image repository: `ghcr.io/pittonje/burningspace-client`
+- Target commit: `c1daa96aefce961ec6b595af058b8f105ac98800`
+- First-deployment rollback mode: `bootstrap-no-previous-release`
+- First target edge configuration ID: `burningspace-staging-01-edge-v1`
 - Provider account: `NOT RECORDED IN CANONICAL DOCUMENTATION`
 - Host: `SELECTED — existing shared VPS`
 - Physical isolation: `NO`
@@ -210,14 +216,15 @@ Merged controls:
 
 - explicit server/client CPU and RAM limits;
 - bounded Docker log rotation;
-- digest-only immutable target and rollback image-reference validation;
+- mode-aware immutable target and previous-approved image-reference validation;
 - off-host or CI image build with no source-context staging build on this
   shared host; and
 - an explicit project-scoped Docker network.
 
-The actual target and previous-approved image digests remain unselected and
-unpublished; those environment-specific values remain an open release/rollback
-gate rather than unfinished repository hardening.
+The actual target image digests remain unselected and unpublished. For the
+first deployment, previous-approved image and commit bindings are intentionally
+absent under `bootstrap-no-previous-release`; for every later deployment they
+remain mandatory under `previous-approved-release`.
 
 ### Host hardening
 
@@ -248,8 +255,13 @@ Required before GO:
   restart the Docker daemon;
 - confirmation of sufficient host reserve after resource-limit selection.
 
-After maintenance, reverify Docker health; exact individual forum container
-state and restart policy; TCP 80/443 and selected loopback-port availability;
+The required order is completed host maintenance, then one controlled reboot
+with separate Product Architect authorization, then shared-host baseline
+revalidation, then image and edge deployment. This decision does not authorize
+or execute the reboot. After reboot, record the new boot ID and reverify Docker
+health; exact individual forum state and restart policy `no`; TCP 80/443, 2567,
+and 18080 availability; Dashy and Cockpit loopback-only bindings; expected
+TeamSpeak listeners; failed systemd units; the current reboot-required state;
 unrelated-service operation; and effective firewall state. Exact individual
 container inspection is authoritative on this host because Docker aggregate
 container counters have disagreed with individually inspected state; do not
@@ -296,8 +308,16 @@ Required before GO:
 Required before GO:
 
 - an immutable target release binding;
-- an immutable previous-approved release binding;
-- an edge configuration rollback binding;
+- exactly one explicit rollback mode:
+  - first deployment: `bootstrap-no-previous-release`, with previous server
+    image, previous client image, previous approved commit, and previous edge
+    config ID structurally absent; rollback restores
+    `PRE_BURNINGSPACE_DEPLOYMENT_STATE` by removing only BurningSpace staging
+    Compose and edge state while preserving unrelated services and the stopped
+    forum;
+  - every later deployment: `previous-approved-release`, with immutable,
+    distinct previous-approved server/client images, previous approved commit,
+    and previous edge configuration required under the existing strict checks;
 - a named rollback procedure;
 - post-rollback validation.
 
@@ -375,7 +395,8 @@ the following non-secret prerequisites must be complete:
   conditions above are complete and evidenced.
 - Public client and server origins and the exact server allowed `Origin` are
   assigned.
-- Target and previous approved image bindings are recorded.
+- Target image bindings and the exact rollback-mode-appropriate previous-state
+  bindings or structural absences are recorded.
 - Edge configuration, rollback mode, owners, and resource limits are recorded.
 - Credential readiness is confirmed without recording credential values.
 - Log-redaction, rollback-readiness, external-smoke, review, and evidence

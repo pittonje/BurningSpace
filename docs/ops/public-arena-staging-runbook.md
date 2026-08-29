@@ -85,9 +85,11 @@ validation, and rollback sequence lives in the
 [external staging runbook](public-arena-external-staging-runbook.md).
 
 Real deployment remains unauthorized until an exact environment-specific GO.
-When later authorized, rollback switches to the recorded previous-approved
-server/client image digests without rebuilding. A rollback or restart resets
-the active arena because state is in memory.
+When later authorized, rollback follows the exact mode bound by the external
+staging plan: first deployment restores the pre-BurningSpace state; subsequent
+deployments switch to recorded previous-approved server/client image digests
+without rebuilding. A rollback or restart resets the active arena because
+state is in memory.
 
 ## Health and readiness
 
@@ -141,6 +143,5 @@ result and never prints a reconnect token.
 3. Inspect the bounded server/client logs.
 4. Stop deployment if the exact Origin policy is wrong.
 5. Never recover by setting an Origin wildcard.
-6. For a later authorized shared-host deployment, switch to the recorded
-   previous-approved server/client image digests without rebuilding if
-   verification cannot pass.
+6. For a later authorized shared-host deployment, execute the exact rollback
+   mode bound by the external staging plan if verification cannot pass.

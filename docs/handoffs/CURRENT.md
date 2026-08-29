@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-08-24
-Updated by: Codex — OPS-002 Caddy edge post-merge reconciliation
+Last updated: 2026-08-30
+Updated by: Codex — OPS-002 first-deployment bootstrap rollback implementation
 
 ## Repository state
 
@@ -271,7 +271,7 @@ Updated by: Codex — OPS-002 Caddy edge post-merge reconciliation
 - Host installation: `NOT PERFORMED / NOT AUTHORIZED`.
 - DNS: `NOT CONFIGURED`.
 - TLS: `NOT CONFIGURED`.
-- Images: `NOT PUBLISHED / NOT SELECTED`.
+- Images: `NOT PUBLISHED / REGISTRY SELECTED (GHCR) / DIGESTS NOT YET BOUND`.
 - External validation: `NOT STARTED`.
 - Deployment: `NOT AUTHORIZED / NOT STARTED`.
 - Deployment `GO`: `NOT ISSUED`.
@@ -410,12 +410,41 @@ implementation PR, OPS-002 Phase B, or any external execution. Future OPS-002
 work remains human-merge-only unless a later exact Product Architect
 authorization states otherwise.
 
+## OPS-002 first-deployment bootstrap rollback implementation
+
+- Status: `IMPLEMENTED / TARGETED SELF-TESTS PASS / AWAITING CLAUDE REVIEW`.
+- Branch: `ops/ops-002-first-deployment-bootstrap-rollback`.
+- Base: `c1daa96aefce961ec6b595af058b8f105ac98800` from exact local
+  `origin/main`.
+- Product Architect bindings: GHCR repositories
+  `ghcr.io/pittonje/burningspace-server` and
+  `ghcr.io/pittonje/burningspace-client`; target commit
+  `c1daa96aefce961ec6b595af058b8f105ac98800`; first edge ID
+  `burningspace-staging-01-edge-v1`.
+- Rollback modes: first deployment uses exactly
+  `bootstrap-no-previous-release` with previous image, commit, and edge fields
+  structurally absent; later deployments retain strict
+  `previous-approved-release` requirements.
+- Bootstrap rollback restores `PRE_BURNINGSPACE_DEPLOYMENT_STATE` and may touch
+  only the BurningSpace staging Compose project and BurningSpace Caddy edge
+  configuration. Unrelated services and the stopped forum remain preserved;
+  prune and unrelated cleanup remain forbidden.
+- Reboot ordering is documented as completed maintenance, separately
+  Product-Architect-authorized reboot, shared-host baseline revalidation, then
+  image/edge deployment. No reboot, host contact, image publication, DNS, or
+  deployment occurred.
+- Focused validation passed: external staging preflight `56/56`; edge preflight
+  `64/64`.
+- Reviewer declaration: Security and QA required; Architecture and Network
+  recommended; Gameplay and Visual not applicable. Independent Claude targeted
+  review is the next gate.
+- Protected stash `6dd950c5829db8a88150d3b08217277e17274187` remains present and untouched.
+
 ## Next safe action
 
-Prepare a separately authorized host-maintenance and
-root-firewall/public-service-remediation gate before any Caddy installation or
-BurningSpace container creation. Do not start host execution in this
-reconciliation gate.
+Run the requested independent Claude targeted review against the exact
+bootstrap-rollback diff. Do not merge or deploy from this implementation
+checkpoint.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.
