@@ -692,7 +692,12 @@ function runSelfTests(): number {
     f.env.BURNINGSPACE_TARGET_COMMIT = head;
   }, 'phase-b', 'GO_REQUIRED');
   expectValidationFailure('placeholder-real', (f) => applyRealInventory(f), 'phase-a', 'PREVIOUS_COMMIT');
-  expectValidationFailure('equal-commits', (f) => { f.plan.targetCommit = f.plan.previousApprovedCommit; f.env.BURNINGSPACE_TARGET_COMMIT = f.plan.targetCommit; }, 'template', 'EQUAL_COMMITS');
+  expectValidationFailure('equal-commits', (f) => {
+    const previous = f.plan.previousApprovedCommit;
+    if (previous === undefined) fail('SELF_TEST', 'Strict rollback fixture is missing its previous commit.');
+    f.plan.targetCommit = previous;
+    f.env.BURNINGSPACE_TARGET_COMMIT = previous;
+  }, 'template', 'EQUAL_COMMITS');
   expectValidationFailure('secret-key', (f) => { f.env.DEPLOY_PASSWORD = 'seeded-fake-secret-never-echo'; }, 'template', 'UNEXPECTED_ENV_KEY');
   expectValidationFailure('private-key', (f) => { f.plan.edgeConfigId = '-----BEGIN PRIVATE KEY-----'; }, 'template', 'SECRET_VALUE');
 
