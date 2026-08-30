@@ -412,8 +412,9 @@ authorization states otherwise.
 
 ## OPS-002 first-deployment bootstrap rollback implementation
 
-- Status: `IMPLEMENTED / TARGETED SELF-TESTS PASS / AWAITING CLAUDE REVIEW`.
+- Status: `IMPLEMENTED / TARGETED SELF-TESTS PASS / CORE PASS / FINAL CLAUDE APPROVE / READY FOR PRODUCT ARCHITECT MERGE DISPOSITION`.
 - Branch: `ops/ops-002-first-deployment-bootstrap-rollback`.
+- Implementation HEAD: `ea216e3be1f6f98776bd66b00162c70f3ca5c501`.
 - Base: `c1daa96aefce961ec6b595af058b8f105ac98800` from exact local
   `origin/main`.
 - Product Architect bindings: GHCR repositories
@@ -434,17 +435,17 @@ authorization states otherwise.
   image/edge deployment. No reboot, host contact, image publication, DNS, or
   deployment occurred.
 - Focused validation passed: external staging preflight `56/56`; edge preflight
-  `64/64`.
+  `64/64`. Core Pull Request Checks run `33277932406`: `PASS`.
 - Reviewer declaration: Security and QA required; Architecture and Network
-  recommended; Gameplay and Visual not applicable. Independent Claude targeted
-  review is the next gate.
+  recommended; Gameplay and Visual not applicable. Independent Claude
+  targeted/final review: `APPROVE`, with `0 BLOCKER / 0 HIGH / 0 MEDIUM`.
+- PR #71: `READY FOR PRODUCT ARCHITECT MERGE DISPOSITION`.
 - Protected stash `6dd950c5829db8a88150d3b08217277e17274187` remains present and untouched.
 
 ## Next safe action
 
-Run the requested independent Claude targeted review against the exact
-bootstrap-rollback diff. Do not merge or deploy from this implementation
-checkpoint.
+Apply the Product Architect merge disposition for PR #71 only after the final
+docs-only reconciliation has passed Core. Do not deploy from this checkpoint.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.
