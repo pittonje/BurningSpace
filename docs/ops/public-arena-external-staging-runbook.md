@@ -77,9 +77,119 @@ The future execution owner must provide these categories through secure external
 - SSH or deployment access;
 - DNS-provider access;
 - TLS/private-key material;
-- reverse-proxy or provider credentials.
+- reverse-proxy or provider credentials; and
+- container-registry pull credentials: for private GHCR access, a GitHub
+  personal access token (classic) with `read:packages` only.
 
 Do not add credential slots to copyable example environment files.
+
+## Private GHCR pull authority
+
+The Product Architect has decided that both
+`ghcr.io/pittonje/burningspace-server` and
+`ghcr.io/pittonje/burningspace-client` remain private. This is canonical
+policy, not provider-state evidence. Before deployment GO, both package states
+must still be confirmed read-only as private. If either package is observed as
+public, stop with `PACKAGE_ALREADY_PUBLIC_PROVIDER_CONSTRAINT`; do not mutate
+its visibility.
+
+Private pull authority uses a fresh, short-lived GitHub personal access token
+(classic) owned by an operator who can read both packages. Its only scope is
+`read:packages`. `write:packages`, `delete:packages`, `repo`, `workflow`,
+`admin:*`, and `gist` are forbidden. Do not reuse local `gh` authentication or
+use `GITHUB_TOKEN` on the VPS. No token has been created by this decision, and
+no persistent registry credential is permitted on the host.
+
+For each release, the operator enters the token directly in the interactive
+SSH session. Do not forward or paste it through a PowerShell command. The
+token must not appear in argv, shell history, environment exports, evidence,
+inventory, or repository content. Do not run the credential block with shell
+tracing/xtrace enabled, and do not capture a full terminal or session
+transcript containing credential handling. Bounded evidence may record command
+outcomes only. Use the following reviewed ephemeral pattern after the
+separately authorized reboot and baseline revalidation:
+
+```sh
+umask 077
+
+DOCKER_CONFIG="$(mktemp -d /run/burningspace-deploy.XXXXXXXX)"
+export DOCKER_CONFIG
+
+cleanup() {
+  docker logout ghcr.io >/dev/null 2>&1 || true
+  rm -rf "$DOCKER_CONFIG"
+}
+
+trap cleanup EXIT INT TERM
+
+set +x
+read -rs GHCR_PAT
+printf '%s' "$GHCR_PAT" |
+  docker login ghcr.io -u pittonje --password-stdin
+unset GHCR_PAT
+```
+
+Before GO, use the authenticated session only for read-only provider-state and
+manifest checks. Confirm both packages are private, then resolve both exact
+immutable manifests without pulling image layers. The two variables below
+must contain the exact immutable `repository@sha256:<digest>` references
+already approved in the current per-release GO packet and real inventory;
+mutable tags are forbidden:
+
+```sh
+docker buildx imagetools inspect "$BURNINGSPACE_SERVER_IMAGE"
+docker buildx imagetools inspect "$BURNINGSPACE_CLIENT_IMAGE"
+```
+
+Run `docker logout ghcr.io`, remove the temporary `DOCKER_CONFIG`, and retain
+only bounded evidence that authentication, both manifest resolutions, logout,
+and cleanup succeeded. Never record the token. Pre-GO registry checks must not
+pull image layers or cause runtime mutation.
+
+Only after an explicit deployment GO may the operator create a new ephemeral
+session and pull exactly the approved digests:
+
+```sh
+docker pull "$BURNINGSPACE_SERVER_IMAGE"
+docker pull "$BURNINGSPACE_CLIENT_IMAGE"
+docker image inspect --format '{{json .RepoDigests}}' "$BURNINGSPACE_SERVER_IMAGE"
+docker image inspect --format '{{json .RepoDigests}}' "$BURNINGSPACE_CLIENT_IMAGE"
+cleanup
+trap - EXIT INT TERM
+unset DOCKER_CONFIG
+```
+
+Require each inspected local `RepoDigests` set to contain its exact approved
+digest. The explicit `cleanup` logs out and removes the temporary
+`DOCKER_CONFIG`; disabling the trap and unsetting the now-invalid path occur
+only after cleanup succeeds. Complete this before starting containers. The
+required sequence is:
+
+```text
+AUTHENTICATED EXACT-DIGEST PULL
+→ LOCAL DIGEST VERIFICATION
+→ LOGOUT
+→ CREDENTIAL DESTRUCTION
+→ CONTAINER START
+```
+
+Container startup uses the real shared-host Compose path and must not contact
+the registry:
+
+```sh
+docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml up -d --pull never
+```
+
+Do not run `docker compose pull` after logout or credential destruction. Do
+not replace the exact digest references with `latest`, another mutable tag, or
+another digest. Compose startup must not require registry authentication.
+
+Once the exact images are in the local Docker image store, running containers
+and ordinary restart or reboot recovery do not require GHCR credentials. PAT
+expiry or revocation does not affect already-local images. Authentication is
+required again only for a future explicit pull, such as a later release or
+recovery after the local image has been removed. Revoke the short-lived PAT
+after the required pull and local-digest verification succeed.
 
 ## Provider-neutral edge contract
 
@@ -247,6 +357,10 @@ Before the Product Architect can issue GO, provide one non-secret packet contain
 - exact final Core run and reviewed head;
 - Operations/Security and Network/Runtime verdict bindings;
 - mandatory Claude QA result and reviewed head;
+- read-only confirmation that both GHCR packages are private;
+- availability of the approved ephemeral PAT-class authority without its
+  value, successful authentication, both exact pre-GO manifest resolutions,
+  and logout/temporary-config cleanup evidence;
 - rollback readiness and expected room reset;
 - exact external smoke command with values supplied outside evidence;
 - named abort owner;
@@ -270,8 +384,14 @@ Only after explicit GO:
     reload path, absence of IPv4/IPv6 TCP admin listeners, rollback-mode-correct
     current/previous config IDs, rendered/adapted hashes, DNS/TLS edge state, log safety, and
    service-port exposure against the approved inventory and Caddy runbook.
-5. Pull or otherwise retrieve the exact prebuilt, digest-pinned target images derived from the approved merged commit; never build from source on the shared host.
-6. Apply the provider-neutral edge configuration and one-server/one-client deployment through the approved operational mechanism.
+5. Authenticate through the ephemeral private-GHCR procedure, pull the exact
+   prebuilt digest-pinned target images with explicit `docker pull`, verify
+   their local `RepoDigests`, then log out and destroy the temporary
+   `DOCKER_CONFIG`; never build from source on the shared host.
+6. Start the one-server/one-client deployment with the exact real Compose
+   arguments and `--pull never`, then apply the provider-neutral edge
+   configuration through the approved operational mechanism. Do not run
+   `docker compose pull` after credential destruction.
 7. Run the complete external matrix below, including machine reconnect/session smoke and separate browser UX evidence.
 8. Abort or roll back on any failed required check; never report a partial smoke as success.
 9. Capture only bounded, redacted evidence.
