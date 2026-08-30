@@ -208,14 +208,26 @@ query-log canary, and admin-exposure checks.
 
 ## Rollback
 
-Before any future activation, record distinct current and previous edge config
-IDs, the exact versioned sources, rendered-config hashes, adapted-config
-hashes, and rollback owner. Preserve the prior rendered configuration in the
-approved root-owned rollback location outside Git.
+Before the first activation, record rollback mode
+`bootstrap-no-previous-release`, target edge ID
+`burningspace-staging-01-edge-v1`, the exact versioned sources,
+rendered/adapted configuration hashes, and rollback owner. No
+`previousEdgeConfigId` exists in this mode; that field must be structurally
+absent from the real edge plan and environment inventory. Bootstrap rollback
+deactivates and removes only the BurningSpace edge configuration, validates
+that BurningSpace no longer owns public TCP 80/443, and preserves the Caddy
+service and unrelated host services unless a separately authorized host plan
+says otherwise.
 
-Rollback renders or restores only the bound previous configuration, validates
-it before activation, reloads through the approved systemd path, and repeats
-all post-reload checks. It does not rebuild or switch BurningSpace images.
+For every later activation, use `previous-approved-release` and record distinct
+current and previous edge config IDs, exact versioned sources,
+rendered-configuration hashes, adapted-configuration hashes, and rollback
+owner. Preserve the prior rendered configuration in the approved root-owned
+rollback location outside Git. Strict rollback renders or restores only that
+bound previous configuration, validates it before activation, reloads through
+the approved systemd path, and repeats all post-reload checks. Neither mode
+rebuilds or switches BurningSpace images.
+
 Active WebSocket streams may close under the same bounded delay, and any
 server/image rollback separately resets the in-memory arena as already
 documented. If rollback stops the service, confirm the admin socket is removed;

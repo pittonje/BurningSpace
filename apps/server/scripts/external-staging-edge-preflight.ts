@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, posix, relative, resolve } from 'node:path';
 
 type Mode = 'template' | 'phase-a' | 'phase-b';
+type RollbackMode = 'previous-approved-release' | 'bootstrap-no-previous-release';
 
 interface EdgePlan {
   schemaVersion: number;
@@ -34,7 +35,8 @@ interface EdgePlan {
   accessLogMaxFiles: number;
   accessLogRetention: string;
   edgeConfigId: string;
-  previousEdgeConfigId: string;
+  previousEdgeConfigId?: string;
+  rollbackMode: RollbackMode;
   deploymentGoReference: string;
   hostInstallationAuthorized: boolean;
   dnsConfigured: boolean;
@@ -102,6 +104,7 @@ const ENV_KEYS = [
   'BURNINGSPACE_CADDY_VERSION_BASELINE',
   'BURNINGSPACE_EDGE_CONFIG_ID',
   'BURNINGSPACE_PREVIOUS_EDGE_CONFIG_ID',
+  'BURNINGSPACE_ROLLBACK_MODE',
   'BURNINGSPACE_DEPLOYMENT_GO_REFERENCE'
 ] as const;
 
@@ -113,7 +116,7 @@ const PLAN_KEYS = [
   'adminServiceUmask', 'adminTcpListenerAllowed',
   'publicProtocols', 'automaticHttps', 'originMutationAllowed', 'webSocketEnabled',
   'streamTimeout', 'streamCloseDelay', 'accessLogUriPolicy', 'accessLogMaxSize',
-  'accessLogMaxFiles', 'accessLogRetention', 'edgeConfigId', 'previousEdgeConfigId',
+  'accessLogMaxFiles', 'accessLogRetention', 'edgeConfigId', 'previousEdgeConfigId', 'rollbackMode',
   'deploymentGoReference', 'hostInstallationAuthorized', 'dnsConfigured', 'tlsReady',
   'externalExecutionAuthorized', 'publicProductionLaunchAuthorized'
 ] as const;
@@ -324,13 +327,26 @@ function validatePlan(
   template: string,
   systemdDropIn: string
 ): EdgePlan {
-  exactKeys(env, ENV_KEYS, 'ENV_FIELDS');
   const planObject = object(rawPlan, 'PLAN_SHAPE');
-  exactKeys(planObject, PLAN_KEYS, 'PLAN_FIELDS');
+  const rollbackMode = text(planObject.rollbackMode, 'ROLLBACK_MODE');
+  if (rollbackMode !== 'previous-approved-release' && rollbackMode !== 'bootstrap-no-previous-release') {
+    fail('ROLLBACK_MODE', 'The edge rollback mode is unsupported.');
+  }
+  if (env.BURNINGSPACE_ROLLBACK_MODE !== rollbackMode) {
+    fail('ROLLBACK_MODE_MISMATCH', 'Plan and environment rollback modes do not match.');
+  }
+  const expectedEnvKeys = rollbackMode === 'bootstrap-no-previous-release'
+    ? ENV_KEYS.filter((key) => key !== 'BURNINGSPACE_PREVIOUS_EDGE_CONFIG_ID')
+    : ENV_KEYS;
+  const expectedPlanKeys = rollbackMode === 'bootstrap-no-previous-release'
+    ? PLAN_KEYS.filter((key) => key !== 'previousEdgeConfigId')
+    : PLAN_KEYS;
+  exactKeys(env, expectedEnvKeys, 'ENV_FIELDS');
+  exactKeys(planObject, expectedPlanKeys, 'PLAN_FIELDS');
   assertNoSecretShape([...Object.values(env), ...Object.values(planObject)]);
   const plan = planObject as unknown as EdgePlan;
 
-  if (plan.schemaVersion !== 1 || plan.environmentId !== ENVIRONMENT_ID || env.BURNINGSPACE_EDGE_ENVIRONMENT_ID !== ENVIRONMENT_ID) {
+  if (plan.schemaVersion !== 2 || plan.environmentId !== ENVIRONMENT_ID || env.BURNINGSPACE_EDGE_ENVIRONMENT_ID !== ENVIRONMENT_ID) {
     fail('ENVIRONMENT_ID', 'The edge inventory must bind the selected staging environment.');
   }
   if (plan.edgeImplementation !== 'caddy-host-systemd') fail('EDGE_IMPLEMENTATION', 'The selected edge is a host-managed Caddy systemd service.');
@@ -399,11 +415,15 @@ function validatePlan(
   }
 
   const edgeId = text(plan.edgeConfigId, 'EDGE_CONFIG_ID');
-  const previousId = text(plan.previousEdgeConfigId, 'PREVIOUS_EDGE_CONFIG_ID');
-  if (edgeId === previousId) fail('EDGE_CONFIG_EQUAL', 'Current and previous edge configuration IDs must differ.');
-  if (edgeId !== env.BURNINGSPACE_EDGE_CONFIG_ID || previousId !== env.BURNINGSPACE_PREVIOUS_EDGE_CONFIG_ID) {
-    fail('EDGE_CONFIG_MISMATCH', 'Plan and environment edge configuration IDs do not match.');
+  let previousId: string | undefined;
+  if (rollbackMode === 'previous-approved-release') {
+    previousId = text(plan.previousEdgeConfigId, 'PREVIOUS_EDGE_CONFIG_ID');
+    if (edgeId === previousId) fail('EDGE_CONFIG_EQUAL', 'Current and previous edge configuration IDs must differ.');
+    if (previousId !== env.BURNINGSPACE_PREVIOUS_EDGE_CONFIG_ID) {
+      fail('EDGE_CONFIG_MISMATCH', 'Plan and environment edge configuration IDs do not match.');
+    }
   }
+  if (edgeId !== env.BURNINGSPACE_EDGE_CONFIG_ID) fail('EDGE_CONFIG_MISMATCH', 'Plan and environment edge configuration IDs do not match.');
   const go = text(plan.deploymentGoReference, 'GO_REFERENCE');
   if (go !== env.BURNINGSPACE_DEPLOYMENT_GO_REFERENCE) fail('GO_MISMATCH', 'Plan and environment GO references do not match.');
   if (plan.publicProductionLaunchAuthorized !== false) fail('PUBLIC_PRODUCTION', 'Public production launch authorization must remain false.');
@@ -420,7 +440,7 @@ function validatePlan(
     if (go === 'NOT-AUTHORIZED' || go.endsWith('.example.invalid')) fail('GO_REQUIRED', 'Phase B requires an exact non-placeholder deployment GO reference.');
   }
   if (mode !== 'template' && (
-    edgeId.endsWith('.example.invalid') || previousId.endsWith('.example.invalid') || go.endsWith('.example.invalid')
+    edgeId.endsWith('.example.invalid') || previousId?.endsWith('.example.invalid') || go.endsWith('.example.invalid')
   )) fail('PLACEHOLDER_BINDING', 'Real preparation modes reject documentation-only identifiers.');
 
   validateTemplate(template);
@@ -662,6 +682,13 @@ function fixture(mode: Mode): { env: Record<string, string>; plan: EdgePlan; rel
   return result;
 }
 
+function applyBootstrapRollback(value: ReturnType<typeof fixture>): void {
+  value.plan.rollbackMode = 'bootstrap-no-previous-release';
+  value.env.BURNINGSPACE_ROLLBACK_MODE = value.plan.rollbackMode;
+  delete value.plan.previousEdgeConfigId;
+  delete value.env.BURNINGSPACE_PREVIOUS_EDGE_CONFIG_ID;
+}
+
 function expectFailure(
   name: string,
   code: string,
@@ -688,6 +715,29 @@ function runSelfTests(): number {
   passNamed('valid-unix-admin-fixture', () => { const f = fixture('template'); validatePlan(f.env, f.plan, 'template', f.release, f.template, f.systemdDropIn); });
   pass(() => { const f = fixture('phase-a'); validatePlan(f.env, f.plan, 'phase-a', f.release, f.template, f.systemdDropIn); });
   pass(() => { const f = fixture('phase-b'); validatePlan(f.env, f.plan, 'phase-b', f.release, f.template, f.systemdDropIn); });
+  passNamed('valid-bootstrap-without-previous-edge', () => {
+    const f = fixture('phase-b');
+    applyBootstrapRollback(f);
+    validatePlan(f.env, f.plan, 'phase-b', f.release, f.template, f.systemdDropIn);
+  });
+  reject('bootstrap-previous-edge-plan', 'PLAN_FIELDS', (f) => {
+    applyBootstrapRollback(f);
+    f.plan.previousEdgeConfigId = 'fictional-previous-edge';
+  }, 'phase-b');
+  reject('bootstrap-previous-edge-env', 'ENV_FIELDS', (f) => {
+    applyBootstrapRollback(f);
+    f.env.BURNINGSPACE_PREVIOUS_EDGE_CONFIG_ID = 'fictional-previous-edge';
+  }, 'phase-b');
+  reject('previous-release-missing-previous-edge', 'PLAN_FIELDS', (f) => {
+    delete f.plan.previousEdgeConfigId;
+  });
+  reject('unknown-rollback-mode', 'ROLLBACK_MODE', (f) => {
+    (f.plan as unknown as Record<string, unknown>).rollbackMode = 'unsupported-rollback-mode';
+  });
+  reject('strict-mode-does-not-infer-edge-bootstrap', 'ENV_FIELDS', (f) => {
+    delete f.plan.previousEdgeConfigId;
+    delete f.env.BURNINGSPACE_PREVIOUS_EDGE_CONFIG_ID;
+  }, 'phase-b');
   reject('same-hostname', 'HOSTNAME_EQUAL', (f) => { f.plan.serverHostname = f.plan.clientHostname; f.env.BURNINGSPACE_PUBLIC_SERVER_HOSTNAME = f.plan.serverHostname; });
   reject('wildcard-hostname', 'CLIENT_HOSTNAME', (f) => { f.plan.clientHostname = '*.example.invalid'; f.env.BURNINGSPACE_PUBLIC_CLIENT_HOSTNAME = f.plan.clientHostname; });
   reject('ip-hostname', 'CLIENT_HOSTNAME', (f) => { f.plan.clientHostname = '192.0.2.1'; f.env.BURNINGSPACE_PUBLIC_CLIENT_HOSTNAME = f.plan.clientHostname; });

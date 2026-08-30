@@ -3,6 +3,7 @@ import { relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 type Mode = 'template' | 'phase-a' | 'phase-b';
+type RollbackMode = 'previous-approved-release' | 'bootstrap-no-previous-release';
 
 interface DeploymentPlan {
   schemaVersion: number;
@@ -18,12 +19,12 @@ interface DeploymentPlan {
   clientBindPort: number;
   targetServerImage: string;
   targetClientImage: string;
-  previousServerImage: string;
-  previousClientImage: string;
-  previousApprovedCommit: string;
+  previousServerImage?: string;
+  previousClientImage?: string;
+  previousApprovedCommit?: string;
   targetCommit: string;
   edgeConfigId: string;
-  rollbackMode: string;
+  rollbackMode: RollbackMode;
   deploymentGoReference: string;
   externalExecutionAuthorized: boolean;
   publicProductionLaunchAuthorized: boolean;
@@ -31,7 +32,7 @@ interface DeploymentPlan {
 
 interface ValidationOptions {
   mode: Mode;
-  checkRepository?: (previous: string, target: string, mode: Mode) => void;
+  checkRepository?: (previous: string | undefined, target: string, mode: Mode) => void;
   composeModel?: unknown;
 }
 
@@ -89,6 +90,12 @@ const PLACEHOLDER_COMMITS = new Set([
 ]);
 
 const PLACEHOLDER_IMAGE_DIGESTS = new Set(['1', '2', '3', '4'].map((value) => value.repeat(64)));
+const PREVIOUS_PLAN_KEYS = ['previousServerImage', 'previousClientImage', 'previousApprovedCommit'] as const;
+const PREVIOUS_ENV_KEYS = [
+  'BURNINGSPACE_PREVIOUS_SERVER_IMAGE',
+  'BURNINGSPACE_PREVIOUS_CLIENT_IMAGE',
+  'BURNINGSPACE_PREVIOUS_APPROVED_COMMIT'
+] as const;
 const SERVER_CPUS = 1;
 const SERVER_MEMORY_BYTES = 1024 ** 3;
 const CLIENT_CPUS = 0.25;
@@ -329,8 +336,9 @@ function runGit(args: string[]): GitResult {
   return { status: result.status, stdout: result.stdout };
 }
 
-function repositoryCheck(previous: string, target: string, mode: Mode, git: GitRunner = runGit): void {
-  for (const commit of [previous, target]) {
+function repositoryCheck(previous: string | undefined, target: string, mode: Mode, git: GitRunner = runGit): void {
+  const commits = previous === undefined ? [target] : [previous, target];
+  for (const commit of commits) {
     const exists = git(['cat-file', '-e', `${commit}^{commit}`]);
     if (exists.status !== 0) fail('COMMIT_NOT_LOCAL', 'A bound commit does not exist in the local repository.');
     const reachable = git(['branch', '--all', '--contains', commit]);
@@ -344,7 +352,7 @@ function repositoryCheck(previous: string, target: string, mode: Mode, git: GitR
     if (checkedOut.status !== 0 || checkedOut.stdout.trim() !== target) {
       fail('TARGET_NOT_CHECKED_OUT', 'Phase B target must equal the exact checked-out commit.');
     }
-    for (const commit of [previous, target]) {
+    for (const commit of commits) {
       if (git(['merge-base', '--is-ancestor', commit, 'origin/main']).status !== 0) {
         fail('TARGET_NOT_APPROVED', 'Phase B commits must be reachable from trusted origin/main history.');
       }
@@ -358,8 +366,21 @@ function validate(env: Record<string, string>, rawPlan: unknown, options: Valida
   }
   const planObject = rawPlan as Record<string, unknown>;
   assertSafeInventory(env, planObject);
+  const rollbackMode = requireString(planObject.rollbackMode, 'ROLLBACK_MODE');
+  if (rollbackMode !== 'previous-approved-release' && rollbackMode !== 'bootstrap-no-previous-release') {
+    fail('ROLLBACK_MODE', 'Rollback mode is unsupported.');
+  }
   for (const key of PLAN_KEYS) {
+    if (rollbackMode === 'bootstrap-no-previous-release' && PREVIOUS_PLAN_KEYS.includes(key as typeof PREVIOUS_PLAN_KEYS[number])) {
+      continue;
+    }
     if (!Object.hasOwn(planObject, key)) fail('PLAN_FIELD', 'Deployment plan is missing a required field.');
+  }
+  if (rollbackMode === 'bootstrap-no-previous-release') {
+    if (PREVIOUS_PLAN_KEYS.some((key) => Object.hasOwn(planObject, key)) ||
+        PREVIOUS_ENV_KEYS.some((key) => Object.hasOwn(env, key))) {
+      fail('BOOTSTRAP_PREVIOUS_ARTIFACT', 'Bootstrap rollback requires previous release artifacts to be structurally absent.');
+    }
   }
   const plan = planObject as unknown as DeploymentPlan;
 
@@ -421,18 +442,24 @@ function validate(env: Record<string, string>, rawPlan: unknown, options: Valida
 
   const targetServerImage = assertImmutableImage(plan.targetServerImage, options.mode, 'TARGET_SERVER_IMAGE');
   const targetClientImage = assertImmutableImage(plan.targetClientImage, options.mode, 'TARGET_CLIENT_IMAGE');
-  const previousServerImage = assertImmutableImage(plan.previousServerImage, options.mode, 'PREVIOUS_SERVER_IMAGE');
-  const previousClientImage = assertImmutableImage(plan.previousClientImage, options.mode, 'PREVIOUS_CLIENT_IMAGE');
   if (
     targetServerImage !== assertImmutableImage(env.BURNINGSPACE_SERVER_IMAGE, options.mode, 'TARGET_SERVER_IMAGE') ||
-    targetClientImage !== assertImmutableImage(env.BURNINGSPACE_CLIENT_IMAGE, options.mode, 'TARGET_CLIENT_IMAGE') ||
-    previousServerImage !== assertImmutableImage(env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE, options.mode, 'PREVIOUS_SERVER_IMAGE') ||
-    previousClientImage !== assertImmutableImage(env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE, options.mode, 'PREVIOUS_CLIENT_IMAGE')
+    targetClientImage !== assertImmutableImage(env.BURNINGSPACE_CLIENT_IMAGE, options.mode, 'TARGET_CLIENT_IMAGE')
   ) {
     fail('PLAN_ENV_IMAGE_MISMATCH', 'Plan and environment image bindings do not agree.');
   }
-  if (targetServerImage === previousServerImage || targetClientImage === previousClientImage) {
-    fail('EQUAL_IMAGES', 'Target and previous-approved images must differ for each service.');
+  if (rollbackMode === 'previous-approved-release') {
+    const previousServerImage = assertImmutableImage(plan.previousServerImage, options.mode, 'PREVIOUS_SERVER_IMAGE');
+    const previousClientImage = assertImmutableImage(plan.previousClientImage, options.mode, 'PREVIOUS_CLIENT_IMAGE');
+    if (
+      previousServerImage !== assertImmutableImage(env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE, options.mode, 'PREVIOUS_SERVER_IMAGE') ||
+      previousClientImage !== assertImmutableImage(env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE, options.mode, 'PREVIOUS_CLIENT_IMAGE')
+    ) {
+      fail('PLAN_ENV_IMAGE_MISMATCH', 'Plan and environment image bindings do not agree.');
+    }
+    if (targetServerImage === previousServerImage || targetClientImage === previousClientImage) {
+      fail('EQUAL_IMAGES', 'Target and previous-approved images must differ for each service.');
+    }
   }
   parseBoundedNumber(env.BURNINGSPACE_RECONNECT_GRACE_SECONDS, 1, 60, 'RECONNECT_LIMIT');
   parseBoundedNumber(env.BURNINGSPACE_SHUTDOWN_TIMEOUT_SECONDS, 1, 60, 'SHUTDOWN_LIMIT');
@@ -459,14 +486,18 @@ function validate(env: Record<string, string>, rawPlan: unknown, options: Valida
     fail('TEMPLATE_EXECUTION', 'Committed templates cannot authorize external execution.');
   }
 
-  const previous = assertCommit(plan.previousApprovedCommit, options.mode, 'PREVIOUS_COMMIT');
+  let previous: string | undefined;
+  if (rollbackMode === 'previous-approved-release') {
+    previous = assertCommit(plan.previousApprovedCommit, options.mode, 'PREVIOUS_COMMIT');
+    if (previous !== env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT) {
+      fail('PLAN_ENV_COMMIT_MISMATCH', 'Plan and environment commit bindings do not agree.');
+    }
+  }
   const target = assertCommit(plan.targetCommit, options.mode, 'TARGET_COMMIT');
-  if (previous !== env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT || target !== env.BURNINGSPACE_TARGET_COMMIT) {
+  if (target !== env.BURNINGSPACE_TARGET_COMMIT) {
     fail('PLAN_ENV_COMMIT_MISMATCH', 'Plan and environment commit bindings do not agree.');
   }
   if (previous === target) fail('EQUAL_COMMITS', 'Previous and target commits must differ.');
-  requireString(plan.rollbackMode, 'ROLLBACK_MODE');
-  if (plan.rollbackMode !== 'previous-approved-release') fail('ROLLBACK_MODE', 'Rollback mode is unsupported.');
 
   const go = requireString(plan.deploymentGoReference, 'GO_REFERENCE');
   if (go !== env.BURNINGSPACE_DEPLOYMENT_GO_REFERENCE) fail('GO_MISMATCH', 'Plan and environment GO references do not agree.');
@@ -555,6 +586,16 @@ function applyRealInventory(fixture: ReturnType<typeof baseFixture>): void {
   fixture.env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE = fixture.plan.previousServerImage;
   fixture.plan.previousClientImage = `registry.ops002-review.example.org/burningspace/client@sha256:${'d'.repeat(64)}`;
   fixture.env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE = fixture.plan.previousClientImage;
+}
+
+function applyBootstrapRollback(fixture: ReturnType<typeof baseFixture>): void {
+  fixture.plan.rollbackMode = 'bootstrap-no-previous-release';
+  delete fixture.plan.previousServerImage;
+  delete fixture.plan.previousClientImage;
+  delete fixture.plan.previousApprovedCommit;
+  delete fixture.env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE;
+  delete fixture.env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE;
+  delete fixture.env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT;
 }
 
 function expectFailure(name: string, mutate: (fixture: ReturnType<typeof baseFixture>) => void, mode: Mode, code: string): void {
@@ -651,12 +692,71 @@ function runSelfTests(): number {
     f.env.BURNINGSPACE_TARGET_COMMIT = head;
   }, 'phase-b', 'GO_REQUIRED');
   expectValidationFailure('placeholder-real', (f) => applyRealInventory(f), 'phase-a', 'PREVIOUS_COMMIT');
-  expectValidationFailure('equal-commits', (f) => { f.plan.targetCommit = f.plan.previousApprovedCommit; f.env.BURNINGSPACE_TARGET_COMMIT = f.plan.targetCommit; }, 'template', 'EQUAL_COMMITS');
+  expectValidationFailure('equal-commits', (f) => {
+    const previous = f.plan.previousApprovedCommit;
+    if (previous === undefined) fail('SELF_TEST', 'Strict rollback fixture is missing its previous commit.');
+    f.plan.targetCommit = previous;
+    f.env.BURNINGSPACE_TARGET_COMMIT = previous;
+  }, 'template', 'EQUAL_COMMITS');
   expectValidationFailure('secret-key', (f) => { f.env.DEPLOY_PASSWORD = 'seeded-fake-secret-never-echo'; }, 'template', 'UNEXPECTED_ENV_KEY');
   expectValidationFailure('private-key', (f) => { f.plan.edgeConfigId = '-----BEGIN PRIVATE KEY-----'; }, 'template', 'SECRET_VALUE');
 
   const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', windowsHide: true }).stdout.trim();
   const parent = spawnSync('git', ['rev-parse', 'HEAD^'], { encoding: 'utf8', windowsHide: true }).stdout.trim();
+  const bootstrap = baseFixture();
+  applyRealInventory(bootstrap);
+  applyBootstrapRollback(bootstrap);
+  bootstrap.plan.targetCommit = head;
+  bootstrap.env.BURNINGSPACE_TARGET_COMMIT = head;
+  bootstrap.plan.externalExecutionAuthorized = true;
+  bootstrap.env.BURNINGSPACE_EXTERNAL_EXECUTION_AUTHORIZED = 'true';
+  bootstrap.plan.deploymentGoReference = 'PA-GO-OPS002-BOOTSTRAP-REVIEW';
+  bootstrap.env.BURNINGSPACE_DEPLOYMENT_GO_REFERENCE = bootstrap.plan.deploymentGoReference;
+  expectValidationSuccess(() => validate(bootstrap.env, bootstrap.plan, {
+    mode: 'phase-b',
+    checkRepository: (boundPrevious, boundTarget, mode) => {
+      if (boundPrevious !== undefined) fail('SELF_TEST', 'Bootstrap rollback bound a previous approved commit.');
+      repositoryCheck(boundPrevious, boundTarget, mode, (args) => {
+        if (args[0] === 'rev-parse') return { status: 0, stdout: `${head}\n` };
+        return { status: 0, stdout: 'trusted-branch\n' };
+      });
+    }
+  }));
+  expectValidationFailure('bootstrap-previous-server-image', (f) => {
+    applyBootstrapRollback(f);
+    f.plan.previousServerImage = `registry.example.invalid/burningspace/server@sha256:${'c'.repeat(64)}`;
+  }, 'template', 'BOOTSTRAP_PREVIOUS_ARTIFACT');
+  expectValidationFailure('bootstrap-previous-client-image', (f) => {
+    applyBootstrapRollback(f);
+    f.plan.previousClientImage = `registry.example.invalid/burningspace/client@sha256:${'d'.repeat(64)}`;
+  }, 'template', 'BOOTSTRAP_PREVIOUS_ARTIFACT');
+  expectValidationFailure('bootstrap-previous-commit', (f) => {
+    applyBootstrapRollback(f);
+    f.plan.previousApprovedCommit = parent;
+  }, 'template', 'BOOTSTRAP_PREVIOUS_ARTIFACT');
+  expectValidationFailure('bootstrap-dummy-previous-digest', (f) => {
+    applyBootstrapRollback(f);
+    f.env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE = `registry.example.invalid/burningspace/server@sha256:${'3'.repeat(64)}`;
+  }, 'template', 'BOOTSTRAP_PREVIOUS_ARTIFACT');
+  expectValidationFailure('previous-release-missing-previous-image', (f) => {
+    delete f.plan.previousServerImage;
+    delete f.env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE;
+  }, 'template', 'PLAN_FIELD');
+  expectValidationFailure('previous-release-missing-previous-commit', (f) => {
+    delete f.plan.previousApprovedCommit;
+    delete f.env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT;
+  }, 'template', 'PLAN_FIELD');
+  expectValidationFailure('unknown-rollback-mode', (f) => {
+    (f.plan as unknown as Record<string, unknown>).rollbackMode = 'unsupported-rollback-mode';
+  }, 'template', 'ROLLBACK_MODE');
+  expectValidationFailure('strict-mode-does-not-infer-bootstrap', (f) => {
+    delete f.plan.previousServerImage;
+    delete f.plan.previousClientImage;
+    delete f.plan.previousApprovedCommit;
+    delete f.env.BURNINGSPACE_PREVIOUS_SERVER_IMAGE;
+    delete f.env.BURNINGSPACE_PREVIOUS_CLIENT_IMAGE;
+    delete f.env.BURNINGSPACE_PREVIOUS_APPROVED_COMMIT;
+  }, 'template', 'PLAN_FIELD');
   const real = baseFixture();
   applyRealInventory(real);
   real.plan.previousApprovedCommit = parent;

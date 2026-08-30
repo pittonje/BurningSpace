@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "environmentId": "burningspace-staging-01",
   "edgeImplementation": "caddy-host-systemd",
   "caddyValidationVersion": "2.11.4",
@@ -31,6 +31,7 @@
   "accessLogRetention": "72h",
   "edgeConfigId": "edge-config-next.example.invalid",
   "previousEdgeConfigId": "edge-config-previous.example.invalid",
+  "rollbackMode": "previous-approved-release",
   "deploymentGoReference": "NOT-AUTHORIZED",
   "hostInstallationAuthorized": false,
   "dnsConfigured": false,
