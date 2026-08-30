@@ -70,6 +70,24 @@ committed `.example.*` files remain template/example authority only. The real
 application plan's concrete `targetCommit` comes from the successful approved
 publication workflow's `GITHUB_SHA`; it is not a static policy-document SHA.
 
+When a release candidate or package namespace is retired, any existing real
+inventory bound to it is automatically invalidated for future deployment. The
+current contents of all four real release-inventory paths belong to the
+retired first release candidate. They are `INVALIDATED FOR DEPLOYMENT /
+HISTORICAL RETIRED-CANDIDATE INPUT ONLY / MUST NOT BE USED FOR PHASE B`. The
+files are not considered corrupted; their release binding was superseded when
+that candidate's public package namespaces were retired.
+
+Do not create a replacement real inventory until the namespace-recovery change
+is merged, the replacement publication succeeds, its exact workflow run,
+`GITHUB_SHA`, and both immutable manifest digests are captured, and both
+replacement packages are manually confirmed private through read-only provider
+inspection. Then archive the retired inventory outside the repository with its
+file hashes and an explicit retired-candidate marker, replace the application
+inventory, verify and rebind the edge inventory, and rerun release-specific
+Phase A for the replacement candidate. Only one real inventory variant may be
+active under `deploy/`; never retain multiple candidate variants there.
+
 ## Secret inventory by category only
 
 The future execution owner must provide these categories through secure external channels when applicable; values never belong in Git, PR text, CI logs, evidence, or this runbook:
@@ -86,12 +104,22 @@ Do not add credential slots to copyable example environment files.
 ## Private GHCR pull authority
 
 The Product Architect has decided that both
+`ghcr.io/pittonje/burningspace-staging-server` and
+`ghcr.io/pittonje/burningspace-staging-client` must be private. This is
+canonical policy, not provider-state evidence. The replacement packages have
+not yet been published and may not exist. Immediately after their first
+publication, the Product Architect must manually verify both provider states
+as private before accepting the replacement candidate for release-specific
+Phase A. If either package is observed public, stop with
+`PACKAGE_ALREADY_PUBLIC_PROVIDER_CONSTRAINT`; do not mutate or delete it.
+
+The first-publication namespaces
 `ghcr.io/pittonje/burningspace-server` and
-`ghcr.io/pittonje/burningspace-client` remain private. This is canonical
-policy, not provider-state evidence. Before deployment GO, both package states
-must still be confirmed read-only as private. If either package is observed as
-public, stop with `PACKAGE_ALREADY_PUBLIC_PROVIDER_CONSTRAINT`; do not mutate
-its visibility.
+`ghcr.io/pittonje/burningspace-client` were manually observed public. They are
+`PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY` and must never be used as an
+authorized deployment target. Workflow run `33310151475` remains historical
+publication evidence; this retirement does not authorize deletion, renaming,
+or a visibility change.
 
 Private pull authority uses a fresh, short-lived GitHub personal access token
 (classic) owned by an operator who can read both packages. Its only scope is
@@ -263,22 +291,25 @@ all service bind/persistent-volume mounts remain forbidden.
 uses it to build both Dockerfiles off-host from the eventual shared VPS and to
 run deterministic loopback container smoke. It is not part of the real
 shared-host deployment command. GHCR is the selected release registry, with
-`ghcr.io/pittonje/burningspace-server` and
-`ghcr.io/pittonje/burningspace-client` as the canonical repositories. The
-manual-only `OPS-002 Publish Staging Images` GitHub Actions workflow is the
-approved staging publication mechanism. It runs on `main`, uses the
+`ghcr.io/pittonje/burningspace-staging-server` and
+`ghcr.io/pittonje/burningspace-staging-client` as the canonical repositories.
+The manual-only `OPS-002 Publish Staging Images` GitHub Actions workflow is
+the approved staging publication mechanism. It runs on `main`, uses the
 repository-scoped `GITHUB_TOKEN` with `contents: read` and `packages: write`,
 and publishes commit-tagged `linux/amd64` images without `latest`. The first
 release candidate was published successfully by run `33310151475` from exact
-`GITHUB_SHA` `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`; its immutable manifest
-digests are bound in the GO packet. The workflow did not change package
-visibility, and publication does not authorize deployment.
+`GITHUB_SHA` `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`, but its namespaces were
+manually observed public and the candidate is retired from deployment
+authority. Its immutable manifest digests remain historical evidence in the
+GO packet. The workflow did not change package visibility, and publication
+does not authorize deployment.
 
 For every release, the operator must dispatch the reviewed staging-image
 publication workflow, record its exact `GITHUB_SHA` and immutable manifest
-digests in the GO packet, and decide GHCR package visibility separately before
-deployment GO. If the packages remain private, the exact host pull authority
-must be defined and evidenced before deployment GO.
+digests in the GO packet, and manually verify both canonical package states as
+private immediately after publication. Do not begin release-specific Phase A
+until that provider verification passes. The exact host pull authority must be
+defined and evidenced before deployment GO.
 
 ## Shared-host remediation gates
 

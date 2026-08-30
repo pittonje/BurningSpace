@@ -29,8 +29,8 @@ jobs:
           set -euo pipefail
 
           readonly registry="ghcr.io"
-          readonly server_repository="ghcr.io/pittonje/burningspace-server"
-          readonly client_repository="ghcr.io/pittonje/burningspace-client"
+          readonly server_repository="ghcr.io/pittonje/burningspace-staging-server"
+          readonly client_repository="ghcr.io/pittonje/burningspace-staging-client"
           readonly vite_server_url="https://game-server.burningforge.dev"
           readonly platform="linux/amd64"
           readonly release_tag="sha-${GITHUB_SHA}"
@@ -60,7 +60,7 @@ jobs:
               echo "- Target commit: \`${GITHUB_SHA}\`"
               echo "- Server published: \`${server_published}\`"
               echo "- Client published: \`${client_published}\`"
-              echo '- Package visibility was not changed; operator decision remains pending.'
+              echo '- Package visibility was not changed; PRIVATE policy requires provider verification after publication.'
             } >>"$GITHUB_STEP_SUMMARY"
             exit "$status"
           }
@@ -167,5 +167,5 @@ jobs:
             jq . "$release_evidence"
             echo '```'
             echo
-            echo 'Package visibility was not changed; operator decision remains pending.'
+            echo 'Package visibility was not changed; PRIVATE policy requires provider verification after publication.'
           } >>"$GITHUB_STEP_SUMMARY"
