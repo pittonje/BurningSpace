@@ -72,22 +72,23 @@ publication workflow's `GITHUB_SHA`; it is not a static policy-document SHA.
 
 When a release candidate or package namespace is retired, any existing real
 inventory bound to it is automatically invalidated for future deployment. The
-current contents of all four real release-inventory paths belong to the
-retired first release candidate. They are `INVALIDATED FOR DEPLOYMENT /
-HISTORICAL RETIRED-CANDIDATE INPUT ONLY / MUST NOT BE USED FOR PHASE B`. The
-files are not considered corrupted; their release binding was superseded when
-that candidate's public package namespaces were retired.
+retired generation 1 inventory was copied byte-for-byte to
+`D:\Temp\burningspace-ops002-retired-inventory-20260830T233138Z` with an
+explicit retired marker and SHA-256 manifest before replacement. Its
+`SHA256SUMS.txt` SHA-256 is
+`0275a1d578842bc47a0de317b88b037aaaabbeb250017dc94057ee10722dd116`.
 
-Do not create final real inventory until the namespace/linkage recovery is
-merged, private bootstrap Gate 1 passes, Manage Actions access is configured,
-the canonical publication succeeds, its exact workflow run, `GITHUB_SHA`, and
-both immutable manifest digests are captured, and private Gate 2 passes for
-both packages. Then archive the retired generation 1 inventory outside the
-repository with its file hashes and an explicit retired-candidate marker,
-replace the application inventory, verify and rebind the edge inventory, and
-rerun release-specific Phase A for the final candidate. Only one real
-inventory variant may be active under `deploy/`; never retain multiple
-candidate variants there.
+The active Git-ignored application inventory now binds only final workflow run
+`33340075681`, target commit
+`4a774354859c036d45666496539c2fc3c24b9f1c`, and the immutable deploy-server
+and deploy-client references recorded below. The release-independent edge
+inventory was reused byte-identically. Replacement application and edge Phase
+A passed; the evidence packet is
+`D:\Temp\burningspace-ops002-final-private-phasea-20260830T233259Z`, whose
+`SHA256SUMS.txt` SHA-256 is
+`3b78b2861450a1e39aa7dc729dd1cb065c80dcee1cbd8858c1ff04e829838a2e`.
+Only one real inventory variant may be active under `deploy/`; never retain
+multiple candidate variants there.
 
 ## Secret inventory by category only
 
@@ -109,13 +110,19 @@ The final private deployment package repositories are:
 - `ghcr.io/pittonje/burningspace-deploy-server`;
 - `ghcr.io/pittonje/burningspace-deploy-client`.
 
-They have not been bootstrapped and their provider states are not verified.
-The private deployment package must exist before any repository connection.
+They were created by the completed one-time bootstrap and are now the
+authoritative private release pair. The bootstrap tag is
+`bootstrap-20260830T212613Z`, its digest is
+`sha256:1a243e5af4508768fad72a909b1f5173594327caae724af8ae483803e816d197`,
+its role is `NON-RELEASE / NEVER DEPLOYMENT EVIDENCE`, its PAT is revoked, and
+credential cleanup and Gate 1 passed. The private deployment packages existed
+before intentional repository authorization.
 The canonical publication workflow must not emit
 `org.opencontainers.image.source`, and that label must not be reintroduced or
 replaced with another repository-linking label. The workflow retains
 `org.opencontainers.image.revision=${GITHUB_SHA}` as non-linking release
-provenance.
+provenance. Label removal does not guarantee that GitHub's UI will show no
+repository-source association.
 
 First package creation occurs only from a local Windows workstation using the
 daemonless OCI image client `crane` from `google/go-containerregistry`.
@@ -138,10 +145,12 @@ Bootstrap versions have no release authority: retain them as `NON-RELEASE /
 NEVER DEPLOYMENT EVIDENCE`; do not deploy or delete them. Do not use `latest`
 or source-linkage metadata. The bootstrap requires no `delete:packages` scope.
 
-After bootstrap and PAT revocation, the Product Architect performs Gate 1 on
-both package settings. Each must show visibility `PRIVATE`, source repository
+After bootstrap and PAT revocation, the Product Architect performed Gate 1 on
+both package settings. Each showed visibility `PRIVATE`, source repository
 linkage `NONE`, inherited access `OFF / NOT APPLICABLE`, and Manage Actions
-access `NONE`. If either package is public, stop with
+access `NONE`. This historical pre-publication condition is not a durable Gate
+2 source-linkage invariant. If either package is public during a future
+bootstrap, stop with
 `PRIVATE_BOOTSTRAP_FAILED`; do not change visibility, delete a package, or
 automatically retry another namespace.
 
@@ -169,13 +178,17 @@ only then canonical publication dispatch. This is an operator/governance
 precondition; the workflow must not query or create packages to satisfy it.
 
 The normal manual canonical workflow may publish with its repository-scoped
-`GITHUB_TOKEN` only after that access gate. Gate 2 then manually rechecks both
-packages: visibility `PRIVATE`, inherited access `OFF`, unexpected source
-repository linkage `NONE`, and Actions access present for
-`pittonje/BurningSpace`. Record the actual role; `WRITE` is expected. If the
-provider reports `ADMIN`, do not mutate it automatically—return to the Product
-Architect for F4 disposition. If either package is public, stop. Only a
-successful Gate 2 permits final release-specific Phase A.
+`GITHUB_TOKEN` only after that access gate. Durable Gate 2 policy requires
+visibility `PRIVATE`, inherited access `OFF`, and explicit Manage Actions
+access for `pittonje/BurningSpace` with an acceptable recorded role.
+Repository-source linkage itself is permitted. GitHub showed repository source
+`pittonje/BurningSpace` for both final packages after normal publication even
+though the workflow has zero `org.opencontainers.image.source` labels; this is
+recorded as observed provider behavior without asserting why it occurred. Do
+not remove that association, click **Connect repository**, or enable inherited
+access. The actual role for this release is `WRITE`, so Gate 2 passed. A future
+`ADMIN` role requires Product Architect disposition without automatic
+mutation. If either package is public, stop.
 
 The two accidental public generations remain historical evidence and are
 forbidden deployment targets:
@@ -194,10 +207,11 @@ consequence; manual Gate 1 and Gate 2 remain mandatory.
 
 ## Private GHCR pull authority
 
-The Product Architect has decided that both final deployment packages must be
-private. This is canonical policy, not provider-state evidence. Host pull
-authority is unavailable until Gate 2 passes and final immutable release
-references are bound.
+Both final deployment packages are manually verified private at Gate 2. Final
+workflow run `33340075681` and the immutable release references are bound. The
+host pull model is therefore defined, but it remains unusable until a separate
+short-lived host credential is created and the authorized post-reboot pre-GO
+manifest-proof sequence is performed.
 
 Private pull authority uses a fresh, short-lived GitHub personal access token
 (classic) owned by an operator who can read both packages. Its only scope is
@@ -382,12 +396,17 @@ run, commit, and immutable manifest bindings remain historical evidence in the
 GO packet. The workflow does not change package visibility, and publication
 does not authorize deployment.
 
-For the first final release, the operator may dispatch the reviewed
-staging-image publication workflow only after private bootstrap Gate 1 and
-Manage Actions access. Record its exact `GITHUB_SHA` and immutable manifest
-digests in the GO packet, then complete Gate 2. Do not begin release-specific
-Phase A until Gate 2 passes. The exact host pull authority must be defined and
-evidenced before deployment GO.
+The first final release workflow was dispatched exactly once after private
+bootstrap Gate 1 and Manage Actions access `WRITE`. Run `33340075681` succeeded
+at `GITHUB_SHA` `4a774354859c036d45666496539c2fc3c24b9f1c` for
+`linux/amd64` and produced:
+
+- `ghcr.io/pittonje/burningspace-deploy-server@sha256:816062e5165f3d02aed2b1d5524c1bc53de85bd0709fb92b0ef421d3be626085`;
+- `ghcr.io/pittonje/burningspace-deploy-client@sha256:ae65d4c6faadd55b04549a4a070ac5cd6ba1e5d4288a6adb1f6b2a541b9d789f`.
+
+Both registry manifest inspections passed, Gate 2 passed, and replacement
+release-specific Phase A is complete. Publication and Phase A do not authorize
+DNS, host access, credential creation, Phase B, deployment GO, or deployment.
 
 ## Shared-host remediation gates
 
