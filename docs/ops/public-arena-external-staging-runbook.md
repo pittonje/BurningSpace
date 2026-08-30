@@ -58,7 +58,17 @@ a collision if the preserved stopped legacy landing container, whose Docker
 metadata reserves host port `8080`, is started out of band. Do not create or
 commit a real environment file containing host credentials or secrets.
 
-Keep a real plan beside a Git-ignored `deploy/.env.*` file. The committed examples use only `.example.invalid` values and explicitly set external execution and public-production launch authorization to false.
+The four real release-inventory paths are:
+
+- application environment: `deploy/.env.staging`;
+- application plan: `deploy/external-staging-plan.json`;
+- edge environment: `deploy/edge/caddy/.env.staging`;
+- edge plan: `deploy/edge/caddy/edge-plan.json`.
+
+All four real env/plan files are Git-ignored and must never be committed. The
+committed `.example.*` files remain template/example authority only. The real
+application plan's concrete `targetCommit` comes from the successful approved
+publication workflow's `GITHUB_SHA`; it is not a static policy-document SHA.
 
 ## Secret inventory by category only
 
@@ -148,11 +158,17 @@ shared-host deployment command. GHCR is the selected release registry, with
 manual-only `OPS-002 Publish Staging Images` GitHub Actions workflow is the
 approved staging publication mechanism. It runs on `main`, uses the
 repository-scoped `GITHUB_TOKEN` with `contents: read` and `packages: write`,
-and publishes commit-tagged `linux/amd64` images without `latest`. A release
-operator must dispatch the reviewed workflow after it is merged, record its
-exact `GITHUB_SHA` and immutable manifest digests, and decide GHCR package
-visibility separately before deployment GO. Adding the workflow does not
-publish an image, change package visibility, or authorize deployment.
+and publishes commit-tagged `linux/amd64` images without `latest`. The first
+release candidate was published successfully by run `33310151475` from exact
+`GITHUB_SHA` `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`; its immutable manifest
+digests are bound in the GO packet. The workflow did not change package
+visibility, and publication does not authorize deployment.
+
+For every release, the operator must dispatch the reviewed staging-image
+publication workflow, record its exact `GITHUB_SHA` and immutable manifest
+digests in the GO packet, and decide GHCR package visibility separately before
+deployment GO. If the packages remain private, the exact host pull authority
+must be defined and evidenced before deployment GO.
 
 ## Shared-host remediation gates
 

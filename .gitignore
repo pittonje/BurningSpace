@@ -18,3 +18,5 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 /artifacts/archives/
+deploy/external-staging-plan.json
+deploy/edge/caddy/edge-plan.json

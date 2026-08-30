@@ -20,7 +20,14 @@ preserved historical audit conclusion are recorded below.
 - Canonical release registry: `GHCR`
 - Server image repository: `ghcr.io/pittonje/burningspace-server`
 - Client image repository: `ghcr.io/pittonje/burningspace-client`
-- Target commit: `c1daa96aefce961ec6b595af058b8f105ac98800`
+- Target release commit policy: the exact `GITHUB_SHA` of the
+  Product-Architect-approved successful `OPS-002 Publish Staging Images`
+  workflow run, recorded concretely in the release GO packet and real Phase B
+  inventory.
+- Current first release candidate (evidence reference only):
+  `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`
+- Package visibility: `UNCHANGED / PRODUCT ARCHITECT DECISION PENDING`
+- Host pull authority if packages remain private: `NOT DEFINED`
 - First-deployment rollback mode: `bootstrap-no-previous-release`
 - First target edge configuration ID: `burningspace-staging-01-edge-v1`
 - Provider account: `NOT RECORDED IN CANONICAL DOCUMENTATION`
@@ -229,7 +236,8 @@ Merged controls:
   shared host; and
 - an explicit project-scoped Docker network.
 
-The actual target image digests remain unselected and unpublished. For the
+The current target images are published and their immutable digests are bound
+in the GO packet to successful publication workflow run `33310151475`. For the
 first deployment, previous-approved image and commit bindings are intentionally
 absent under `bootstrap-no-previous-release`; for every later deployment they
 remain mandatory under `previous-approved-release`.
