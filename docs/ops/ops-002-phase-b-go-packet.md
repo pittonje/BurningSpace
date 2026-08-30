@@ -25,7 +25,20 @@ can make an environment-specific GO decision.
 - Client build-time server URL:
   `VITE_BURNINGSPACE_SERVER_URL=https://game-server.burningforge.dev`
 - Exact server allowed Origin: `https://game.burningforge.dev`
-- Target commit: `c1daa96aefce961ec6b595af058b8f105ac98800`
+- Hostile smoke Origin: `https://hostile.burningforge.dev` — Origin-header test
+  identity only; no Phase A DNS record, certificate, or host deployment is
+  required for it.
+- Publication workflow: `OPS-002 Publish Staging Images`
+- Publication workflow run ID: `33310151475`
+- Target commit: `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`
+- Target platform: `linux/amd64`
+- Target server image:
+  `ghcr.io/pittonje/burningspace-server@sha256:9bcd2855cb588c326af72d10a634921db05b0729197e477c6862cc9e8aaddd58`
+- Target client image:
+  `ghcr.io/pittonje/burningspace-client@sha256:118ebff019677c11654fef002cb6ca9c2eed8fd6821400994cd0f755eb8508c2`
+- Target image publication: `PUBLISHED / IMMUTABLE DIGESTS BOUND`
+- Package visibility: `UNCHANGED / PRODUCT ARCHITECT DECISION PENDING`
+- Host pull authority if packages remain private: `NOT DEFINED`
 - First-deployment rollback mode: `bootstrap-no-previous-release`
 - First target edge configuration ID: `burningspace-staging-01-edge-v1`
 - First-deployment previous release and edge bindings: `STRUCTURALLY ABSENT`
@@ -90,8 +103,9 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Edge: `SELECTED / REPOSITORY PREPARATION MERGED AND COMPLETE / NOT INSTALLED`
 - DNS: `NOT CONFIGURED`
 - TLS: `NOT CONFIGURED`
-- Target image digest: `NOT SELECTED / PUBLISHED`
-- Rollback image digests: `NOT SELECTED / PUBLISHED`
+- Target images: `PUBLISHED / IMMUTABLE DIGESTS BOUND`
+- Previous release image digests: `STRUCTURALLY ABSENT —
+  bootstrap-no-previous-release`
 - External validation: `NOT STARTED`
 - Deployment GO: `NOT ISSUED`
 - Packet state: `DRAFT / INCOMPLETE`
@@ -102,8 +116,6 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Host/environment asset identifier: `NOT RECORDED IN CANONICAL
   DOCUMENTATION`
 - Target public IP: `NOT RECORDED IN CANONICAL DOCUMENTATION`
-- Target server image digest: `NOT PROVIDED`
-- Target client image digest: `NOT PROVIDED`
 - Previous approved commit: `ABSENT — bootstrap-no-previous-release`
 - Previous server image digest: `ABSENT — bootstrap-no-previous-release`
 - Previous client image digest: `ABSENT — bootstrap-no-previous-release`
@@ -155,8 +167,9 @@ PR #67 merged the controlled-staging repository contract:
   those exact digests without a rebuild.
 
 These repository limits remain `SUITABLE / MUST BE VERIFIED WHEN DEPLOYED`.
-Host capacity is not guaranteed. GHCR is the selected registry authority, but
-no image was published by repository hardening or this packet.
+Host capacity is not guaranteed. GHCR is the selected registry authority. The
+current target images were published by `OPS-002 Publish Staging Images` run
+`33310151475`, not by repository hardening or this packet.
 
 ## GO prerequisites
 
@@ -192,6 +205,8 @@ no image was published by repository hardening or this packet.
   non-placeholder, and derived from approved off-host builds. Previous-release
   references are structurally absent for bootstrap or strictly supplied for a
   later `previous-approved-release` deployment.
+- GHCR package visibility is decided; when packages are private, the exact host
+  pull authority is defined and evidenced.
 - Credential, DNS, TLS, firewall, log-redaction, and rollback readiness are
   confirmed without recording secret values.
 - Operations/Security and Network/Runtime evidence approves the exact target.
@@ -273,7 +288,7 @@ Reason: Environment selection, repository hardening, host discovery, and the
 resource-headroom assessment and Caddy repository preparation are complete,
 but required host maintenance,
 root firewall review, TCP 4000/9090 and TeamSpeak administrative ingress
-dispositions, edge ownership/configuration, DNS, TLS, immutable release and
-rollback bindings, and external validation evidence remain outstanding. Host
+dispositions, edge ownership/configuration, DNS, TLS, rollback readiness, and
+external validation evidence remain outstanding. Host
 Caddy installation and deployment are not authorized, and deployment `GO` is
 not issued.

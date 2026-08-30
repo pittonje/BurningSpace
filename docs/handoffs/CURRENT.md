@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-30
-Updated by: Codex — OPS-002 GHCR staging publication workflow implementation
+Updated by: Codex — OPS-002 release-candidate governance reconciliation
 
 ## Repository state
 
@@ -41,11 +41,16 @@ Updated by: Codex — OPS-002 GHCR staging publication workflow implementation
 - OPS-002 Caddy edge repository preparation: `MERGED / COMPLETE` through PR
   #69 and normal merge commit
   `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Host installation, DNS, TLS,
-  image publication, external validation, deployment, and deployment `GO`
-  remain incomplete or unauthorized.
+  external validation, deployment, and deployment `GO` remain incomplete or
+  unauthorized; image publication completed later through workflow run
+  `33310151475`.
 - OPS-002 first-deployment bootstrap rollback: `MERGED / COMPLETE` through PR
   #71 and normal merge commit
   `0a90effcd11d6745a6a3ad36c2bf5069a1b8d82b`.
+- OPS-002 GHCR staging publication workflow: `MERGED / COMPLETE` through PR
+  #72 and normal merge commit
+  `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`. First publication workflow run
+  `33310151475`: `SUCCESS`.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 - Campaign systems remain deferred and the canonical campaign roadmap is
@@ -275,7 +280,7 @@ Updated by: Codex — OPS-002 GHCR staging publication workflow implementation
 - Host installation: `NOT PERFORMED / NOT AUTHORIZED`.
 - DNS: `NOT CONFIGURED`.
 - TLS: `NOT CONFIGURED`.
-- Images: `NOT PUBLISHED / REGISTRY SELECTED (GHCR) / DIGESTS NOT YET BOUND`.
+- Images: `PUBLISHED / IMMUTABLE DIGESTS BOUND` by workflow run `33310151475`.
 - External validation: `NOT STARTED`.
 - Deployment: `NOT AUTHORIZED / NOT STARTED`.
 - Deployment `GO`: `NOT ISSUED`.
@@ -286,9 +291,9 @@ Updated by: Codex — OPS-002 GHCR staging publication workflow implementation
   and DOCARCH-004 remains `PAUSED`.
 - Review artifact:
   `docs/reviews/ops-002-public-arena-external-staging-deployment-review.md`.
-- Edge external execution: `NONE`. No Contabo access, no host installation, no
-  public TCP 80/443 binding, no DNS or certificate service contact, no image
-  publication, and no deployment occurred at any point.
+- Edge external execution: `NONE`. During that edge task there was no Contabo
+  access, host installation, public TCP 80/443 binding, DNS or certificate
+  service contact, image publication, or deployment.
 
 ## Deployment boundary
 
@@ -334,8 +339,8 @@ Updated by: Codex — OPS-002 GHCR staging publication workflow implementation
 - Edge repository design/preparation: `MERGED / COMPLETE` through PR #69 and
   merge `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Host edge installation and
   ownership: `NOT STARTED / NOT AUTHORIZED`.
-- Edge host installation, DNS, TLS, immutable target/rollback images, external
-  validation: `NOT COMPLETE`.
+- Edge host installation, DNS, TLS, rollback readiness, and external validation:
+  `NOT COMPLETE`. Immutable target images are published and bound.
 - GO packet: `DRAFT / INCOMPLETE`.
 - Deployment GO: `NOT ISSUED`.
 - External deployment: `NOT AUTHORIZED`.
@@ -429,11 +434,12 @@ authorization states otherwise.
 - Merge commit: `0a90effcd11d6745a6a3ad36c2bf5069a1b8d82b`.
 - Base: `c1daa96aefce961ec6b595af058b8f105ac98800` from exact local
   `origin/main`.
-- Product Architect bindings: GHCR repositories
+- Historical implementation bindings: GHCR repositories
   `ghcr.io/pittonje/burningspace-server` and
-  `ghcr.io/pittonje/burningspace-client`; target commit
-  `c1daa96aefce961ec6b595af058b8f105ac98800`; first edge ID
-  `burningspace-staging-01-edge-v1`.
+  `ghcr.io/pittonje/burningspace-client`; first edge ID
+  `burningspace-staging-01-edge-v1`. The concrete deployment target is now
+  governed by the successful publication workflow `GITHUB_SHA`, not this
+  implementation branch's historical base.
 - Rollback modes: first deployment uses exactly
   `bootstrap-no-previous-release` with previous image, commit, and edge fields
   structurally absent; later deployments retain strict
@@ -455,12 +461,16 @@ authorization states otherwise.
 - PR #71: `MERGED / CLOSED`.
 - Protected stash `6dd950c5829db8a88150d3b08217277e17274187` remains present and untouched.
 
-## OPS-002 GHCR staging publication workflow implementation
+## OPS-002 GHCR staging publication and release candidate
 
-- Status: `IMPLEMENTED / TARGETED LOCAL CHECKS PASS / READY FOR CLAUDE TARGETED REVIEW`.
+- Status: `MERGED / CLOSED / FIRST PUBLICATION COMPLETE`.
 - Branch: `ops/ops-002-ghcr-staging-publish`.
 - Base: `0a90effcd11d6745a6a3ad36c2bf5069a1b8d82b` from exact local
   `origin/main`.
+- PR #72 implementation head: `7f20d5a434725bb04e1d204a67b5371e1b6316a3`.
+- PR #72 hostname reconciliation head:
+  `55997ae5afeed1bccb723b0d39c8c34d2f84516d`.
+- PR #72 merge commit: `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`.
 - Workflow: `.github/workflows/publish-staging-images.yml`, manual
   `workflow_dispatch` only, guarded to `refs/heads/main`, on `ubuntu-latest`.
 - Authentication: repository-scoped `GITHUB_TOKEN` with only
@@ -471,29 +481,37 @@ authorization states otherwise.
   inspection. No `latest` tag is published.
 - The workflow emits bounded non-secret `phaseb-image-release.json` evidence
   in the job log and step summary. It does not change package visibility.
-- Reviewer declaration: Security and QA required; Architecture and Network
-  recommended; Gameplay and Visual not applicable. Claude targeted review is
-  still required before merge.
+- Final PR #72 Core run `33309831684`: `SUCCESS`. Claude QA run `33309831735`:
+  `SUCCESS / Approved with suggestions / 0 blockers`.
 - Targeted local checks pass: `git diff --check`, YAML structure and trigger
   inspection, embedded Bash syntax, Dockerfile existence, client build-arg
   consumption, and static credential-output scan.
-- Workflow execution: `NOT RUN`. Images: `NOT PUBLISHED`. Digests:
-  `NOT BOUND`. Package visibility: `UNCHANGED / OPERATOR DECISION PENDING`.
+- First publication workflow run `33310151475`: `SUCCESS` at exact target
+  commit `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`, platform `linux/amd64`.
+- Server image: `PUBLISHED / IMMUTABLE DIGEST BOUND` —
+  `ghcr.io/pittonje/burningspace-server@sha256:9bcd2855cb588c326af72d10a634921db05b0729197e477c6862cc9e8aaddd58`.
+- Client image: `PUBLISHED / IMMUTABLE DIGEST BOUND` —
+  `ghcr.io/pittonje/burningspace-client@sha256:118ebff019677c11654fef002cb6ca9c2eed8fd6821400994cd0f755eb8508c2`.
+- Approved hostile smoke Origin: `https://hostile.burningforge.dev`; this is an
+  Origin-header test identity and requires no Phase A DNS record or TLS
+  certificate.
+- Package visibility: `UNCHANGED / PRODUCT ARCHITECT DECISION PENDING`.
+- Host pull authority if packages remain private: `NOT DEFINED`.
 - No local Docker or PAT was required. No host, provider API, DNS, TLS, Caddy,
-  firewall, or deployment operation occurred.
+  firewall, visibility, credential, or deployment operation occurred.
 
 ## Next safe action
 
-Send the exact GHCR publication workflow diff to Claude for targeted review.
-Do not merge or dispatch the workflow before that review, and do not deploy
-from this checkpoint.
+Send the exact release-candidate governance reconciliation diff to Claude for
+targeted review. Do not create the real Phase B inventory, change GHCR
+visibility, create host pull credentials, or deploy from this checkpoint.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.
 
 Host maintenance, root-level effective firewall review, public/admin port
-remediation, host edge installation and ownership, DNS, TLS, immutable release
-and rollback binding, and external validation remain outstanding and must be
+remediation, host edge installation and ownership, DNS, TLS, rollback
+readiness, and external validation remain outstanding and must be
 completed before the non-secret GO packet can be returned for an
 environment-specific Product Architect GO decision.
 
