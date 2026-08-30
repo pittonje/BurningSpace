@@ -1,13 +1,13 @@
 # OPS-002 Phase B — External Staging Environment Decision
 
-Status: `EDGE REPOSITORY PREPARATION MERGED / COMPLETE / REPLACEMENT PUBLICATION PENDING / HOST REMEDIATION AND INSTALLATION GATES REMAIN / GO NOT ISSUED`
+Status: `FINAL PRIVATE PACKAGE BOOTSTRAP REQUIRED / PROVIDER PRIVATE VERIFICATION PENDING / HOST REMEDIATION AND INSTALLATION GATES REMAIN / GO NOT ISSUED`
 
-Amended: 2026-08-30 — private staging namespace recovery. Repository hardening
-and Caddy edge repository preparation are merged, host discovery is complete,
-and the Product Architect has selected private package policy plus an
-ephemeral read-only host-pull model. The first publication namespaces were
-manually observed public and are retired from deployment authority. The
-originally recorded class
+Amended: 2026-08-30 — final private GHCR namespace and linkage recovery.
+Repository hardening and Caddy edge repository preparation are merged, host
+discovery is complete, and the Product Architect has selected private package
+policy plus an ephemeral read-only host-pull model. Both accidental public
+package generations are retired from deployment authority. The final private
+packages have not been bootstrapped or verified. The originally recorded class
 `dedicated-isolated-single-host-vps` remains superseded for OPS-002 controlled
 low-traffic external staging only. The supersession rationale and the
 preserved historical audit conclusion are recorded below.
@@ -21,28 +21,39 @@ preserved historical audit conclusion are recorded below.
   only`
 - Provider: `Contabo`
 - Canonical release registry: `GHCR`
-- Server image repository: `ghcr.io/pittonje/burningspace-staging-server`
-- Client image repository: `ghcr.io/pittonje/burningspace-staging-client`
+- Server image repository: `ghcr.io/pittonje/burningspace-deploy-server`
+- Client image repository: `ghcr.io/pittonje/burningspace-deploy-client`
 - Target release commit policy: the exact `GITHUB_SHA` of the
   Product-Architect-approved successful `OPS-002 Publish Staging Images`
   workflow run, recorded concretely in the release GO packet and real Phase B
   inventory.
-- Retired first publication evidence: workflow run `33310151475`, target commit
-  `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`.
-- Retired server repository: `ghcr.io/pittonje/burningspace-server` —
-  `PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY / NOT AN AUTHORIZED DEPLOYMENT
-  TARGET`.
-- Retired client repository: `ghcr.io/pittonje/burningspace-client` —
-  `PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY / NOT AN AUTHORIZED DEPLOYMENT
-  TARGET`.
-- Replacement publication: `PENDING / NOT YET RUN`.
-- Replacement target commit: `NOT YET BOUND` — it will be the exact
-  `GITHUB_SHA` of the successful replacement publication workflow run from
-  post-recovery-merge `main`.
+- Retired generation 1: workflow run `33310151475`, target commit
+  `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`, server
+  `ghcr.io/pittonje/burningspace-server@sha256:9bcd2855cb588c326af72d10a634921db05b0729197e477c6862cc9e8aaddd58`,
+  and client
+  `ghcr.io/pittonje/burningspace-client@sha256:118ebff019677c11654fef002cb6ca9c2eed8fd6821400994cd0f755eb8508c2`.
+  Provider state and disposition: `PUBLIC / RETIRED / HISTORICAL EVIDENCE
+  ONLY / FORBIDDEN DEPLOYMENT TARGET`.
+- Retired generation 2: workflow run `33323488162`, target commit
+  `f9c1d86348a9ff572c7068433aa4295cb92befc2`, server
+  `ghcr.io/pittonje/burningspace-staging-server@sha256:0150c4ad32d4a2976502dda68d4507b4bf64eefc9ea7d4f2d23b3740c11c95a1`,
+  and client
+  `ghcr.io/pittonje/burningspace-staging-client@sha256:bf14e873b82d9b419559f48ddac63bf2e2cebeb8c908e108d466b662d8db2968`.
+  Provider state and disposition: `PUBLIC / RETIRED / HISTORICAL EVIDENCE
+  ONLY / FORBIDDEN DEPLOYMENT TARGET`. Package settings showed source
+  repository `pittonje/BurningSpace` and inherited access enabled.
+- Final package bootstrap: `NOT PERFORMED`.
+- Final Gate 1 provider verification: `NOT VERIFIED`.
+- Final Manage Actions access: `NOT CONFIGURED`.
+- Final canonical publication: `NOT RUN`.
+- Final target commit: `NOT BOUND`.
+- Final server/client digests: `NOT BOUND`.
+- Final Gate 2 provider verification: `NOT VERIFIED`.
+- Final release-specific Phase A: `PENDING`.
 - Server package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
 - Client package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
-- Replacement provider visibility confirmation: `PENDING / REQUIRED AFTER
-  FIRST REPLACEMENT PUBLICATION AND BEFORE RELEASE-SPECIFIC PHASE A`
+- Final provider visibility confirmation: `PENDING / REQUIRED AT GATE 1 AND
+  GATE 2 BEFORE RELEASE-SPECIFIC PHASE A`
 - Host pull authority: `DEFINED — EPHEMERAL PAT CLASSIC / read:packages ONLY`
 - Persistent host registry credential: `NONE`
 - Registry credential created: `NO / NOT YET`
@@ -111,6 +122,70 @@ This decision does not authorize:
   images, or otherwise mutating the external host;
 - removal of the preserved BurningForge forum;
 - unrestricted reuse of unrelated host services.
+
+## Final private package bootstrap authority
+
+The private deployment packages must exist before any repository connection.
+Repository linkage at package creation is forbidden. The canonical private
+publication workflow must not emit `org.opencontainers.image.source` or any
+replacement repository-linking label. It retains
+`org.opencontainers.image.revision=${GITHUB_SHA}` as non-linking release
+provenance. The two observed public outcomes occurred with source-repository
+linkage and inherited access. Provider documentation does not fully specify
+the final visibility consequence, so this observation is not treated as a
+general provider guarantee and both manual private gates remain mandatory.
+
+The approved one-time bootstrap architecture is:
+
+1. On a local Windows workstation, use the daemonless OCI image client
+   `crane` from `google/go-containerregistry` to create each final package.
+   `regctl` may be substituted only by a later explicit Product Architect
+   decision. GitHub Actions, the Contabo VPS, Docker Desktop, and Docker
+   Engine must not perform first package creation.
+2. Authenticate locally with a newly created, short-lived PAT classic whose
+   requested scope is only `write:packages`, including any provider-implied
+   package-read capability. `repo`, `workflow`, `delete:packages`, `admin:*`,
+   and `gist` are forbidden. Do not reuse an existing broad `gh` token. No
+   token value may enter repository content or evidence.
+3. Push a minimal standard OCI/Docker image manifest to each final repository
+   with a `bootstrap-<timestamp>` tag. Do not use `latest`, source-linkage
+   metadata, or repository connection metadata. Bootstrap versions are
+   `NON-RELEASE / NEVER DEPLOYMENT EVIDENCE`; retain them and do not delete
+   them.
+4. Log out, destroy the local credential material, and revoke the bootstrap
+   PAT immediately after both pushes and before Gate 1. No GitHub Actions or
+   VPS secret is created. This bootstrap PAT is distinct from the later
+   deployment-host PAT classic with `read:packages` only.
+
+No bootstrap has been performed, `crane` has not been installed by this task,
+and no bootstrap PAT has been created.
+
+### Private Gate 1 and repository authorization
+
+After bootstrap and before repository authorization, the Product Architect
+must manually verify both `burningspace-deploy-server` and
+`burningspace-deploy-client` with all of these conditions: visibility
+`PRIVATE`; source repository linkage `NONE`; inherited access `OFF / NOT
+APPLICABLE`; and Manage Actions access `NONE`. If either package is public,
+stop with `PRIVATE_BOOTSTRAP_FAILED`. Do not change visibility, delete a
+package, or automatically retry under another namespace.
+
+Only after Gate 1 passes, use each package's **Manage Actions access** control
+to add `pittonje/BurningSpace` with `WRITE`. This is the approved repository
+authorization mechanism. Do not use **Connect repository** or inherited
+access, and do not intentionally grant `ADMIN`.
+
+### Private Gate 2 and release eligibility
+
+Only after Gate 1 and Manage Actions access may the normal canonical workflow
+publish through its repository-scoped `GITHUB_TOKEN`. After publication, the
+Product Architect must manually inspect both packages again and require:
+visibility `PRIVATE`; inherited access `OFF`; unexpected source repository
+linkage `NONE`; and Actions access present for `pittonje/BurningSpace`. Record
+the actual role. `WRITE` is expected. If the provider reports `ADMIN`, do not
+mutate it automatically; return to the Product Architect for F4 disposition.
+If either package is public, stop. Only a successful Gate 2 makes the pair
+eligible for final release-specific Phase A.
 
 ## Measured host evidence
 
@@ -254,26 +329,28 @@ Merged controls:
   shared host; and
 - an explicit project-scoped Docker network.
 
-The first publication images from workflow run `33310151475` are historical
-evidence only and are not authorized deployment targets because their package
-namespaces were manually observed public. The replacement publication has not
-run, so no active replacement target commit or image digest is bound. For the
-first deployment, previous-approved image and commit bindings remain
+The images from workflow runs `33310151475` and `33323488162` are historical
+evidence only and are not authorized deployment targets because both package
+generations were manually observed public and retired. The final private
+bootstrap and canonical publication have not run, so no active final target
+commit or image digest is bound. For the first deployment, previous-approved
+image and commit bindings remain
 intentionally absent under `bootstrap-no-previous-release`; for every later
 deployment they remain mandatory under `previous-approved-release`.
 
 ### Private registry authority
 
-Required after the first replacement publication and before its
-release-specific Phase A can be accepted, and again as applicable before GO
-after the separately authorized reboot and baseline revalidation:
+Required after successful private bootstrap Gate 1, Manage Actions access,
+canonical publication, and Gate 2, before release-specific Phase A can be
+accepted, and again as applicable before GO after the separately authorized
+reboot and baseline revalidation:
 
-- manual provider-state confirmation that both replacement server and client
-  packages are private. The Product Architect's private policy is not
-  provider-state evidence. If either replacement package is observed public,
-  stop with
-  `PACKAGE_ALREADY_PUBLIC_PROVIDER_CONSTRAINT`; no visibility mutation is
-  authorized;
+- successful Gate 2 evidence that both final server and client packages are
+  private, have no unexpected source-repository linkage, have inherited access
+  off, and authorize `pittonje/BurningSpace` through Manage Actions access.
+  The Product Architect's private policy is not provider-state evidence. If
+  either package is observed public, stop; no visibility mutation, deletion,
+  or automatic namespace retry is authorized;
 - secure external availability of a fresh short-lived GitHub personal access
   token (classic) with `read:packages` only and read authority for both
   packages. `write:packages`, `delete:packages`, `repo`, `workflow`, `admin:*`,
@@ -468,11 +545,13 @@ the following non-secret prerequisites must be complete:
   assigned.
 - Target image bindings and the exact rollback-mode-appropriate previous-state
   bindings or structural absences are recorded.
-- The replacement publication has succeeded from post-recovery-merge `main`,
+- Private bootstrap Gate 1 has passed, Manage Actions access is configured,
+  the canonical publication has succeeded from post-recovery-merge `main`,
   and its exact workflow `GITHUB_SHA` and immutable server/client digests are
-  bound in the per-release GO packet and real inventory.
-- Both package states are confirmed private through read-only provider
-  evidence; the approved ephemeral credential class is available through
+  bound in the per-release GO packet and real inventory only after Gate 2.
+- Gate 2 confirms both package states private with linkage and inheritance
+  absent and records the actual Actions role; the approved ephemeral host-pull
+  credential class is available through
   secure handling; authentication and both exact manifest resolutions succeed
   without pulling layers; and logout plus temporary-config cleanup are
   evidenced without recording the token.

@@ -29,8 +29,8 @@ jobs:
           set -euo pipefail
 
           readonly registry="ghcr.io"
-          readonly server_repository="ghcr.io/pittonje/burningspace-staging-server"
-          readonly client_repository="ghcr.io/pittonje/burningspace-staging-client"
+          readonly server_repository="ghcr.io/pittonje/burningspace-deploy-server"
+          readonly client_repository="ghcr.io/pittonje/burningspace-deploy-client"
           readonly vite_server_url="https://game-server.burningforge.dev"
           readonly platform="linux/amd64"
           readonly release_tag="sha-${GITHUB_SHA}"
@@ -80,7 +80,6 @@ jobs:
           docker buildx build \
             --platform "$platform" \
             --file deploy/server.Dockerfile \
-            --label org.opencontainers.image.source=https://github.com/pittonje/BurningSpace \
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
             --tag "$server_tag" \
             --metadata-file "$server_metadata" \
@@ -97,7 +96,6 @@ jobs:
             --platform "$platform" \
             --file deploy/client.Dockerfile \
             --build-arg "VITE_BURNINGSPACE_SERVER_URL=${vite_server_url}" \
-            --label org.opencontainers.image.source=https://github.com/pittonje/BurningSpace \
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
             --tag "$client_tag" \
             --metadata-file "$client_metadata" \
