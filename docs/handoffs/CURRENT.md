@@ -130,9 +130,10 @@ Updated by: Codex — OPS-002 GHCR staging publication workflow implementation
   infrastructure disposition, and an explicit environment-specific Product
   Architect deployment `GO`.
 - External Public Arena deployment remains `NOT PERFORMED`. No staging service
-  is online or claimed. The provider and environment class are now recorded as
-  an authority decision; no hostname, public address, credential, SSH
-  material, or secret environment value is recorded.
+  is online or claimed. The provider, environment class, DNS zone, public
+  hostnames, and derived public origins are recorded as authority decisions;
+  DNS and TLS remain unconfigured. No public address, credential, SSH material,
+  or secret environment value is recorded.
 - No other runtime task is active.
 
 ## OPS-002 Phase A completion
@@ -318,7 +319,13 @@ Updated by: Codex — OPS-002 GHCR staging publication workflow implementation
   shared with unrelated workloads.
 - Operational isolation repository contract: `MERGED / COMPLETE` through PR
   #67. Host-side deployment and verification: `NOT STARTED`.
-- Hostnames: `NOT ASSIGNED`.
+- DNS zone: `SELECTED / APPROVED` — `burningforge.dev`; `NOT CONFIGURED`.
+- Client hostname: `SELECTED / APPROVED` — `game.burningforge.dev`; DNS
+  `NOT CONFIGURED`.
+- Server hostname: `SELECTED / APPROVED` — `game-server.burningforge.dev`; DNS
+  `NOT CONFIGURED`.
+- Public origins: `https://game.burningforge.dev` client and
+  `https://game-server.burningforge.dev` server.
 - Authority transition: `MERGED / COMPLETE`.
 - Shared-host repository hardening: `MERGED / COMPLETE`.
 - Host-gate discovery: `COMPLETE`.

@@ -15,6 +15,16 @@ can make an environment-specific GO decision.
 - Canonical release registry: `GHCR`
 - Server image repository: `ghcr.io/pittonje/burningspace-server`
 - Client image repository: `ghcr.io/pittonje/burningspace-client`
+- DNS zone: `burningforge.dev` — `SELECTED / NOT CONFIGURED`
+- Public client hostname: `game.burningforge.dev` — `SELECTED / DNS NOT
+  CONFIGURED`
+- Public server hostname: `game-server.burningforge.dev` — `SELECTED / DNS NOT
+  CONFIGURED`
+- Public client origin: `https://game.burningforge.dev`
+- Public server origin: `https://game-server.burningforge.dev`
+- Client build-time server URL:
+  `VITE_BURNINGSPACE_SERVER_URL=https://game-server.burningforge.dev`
+- Exact server allowed Origin: `https://game.burningforge.dev`
 - Target commit: `c1daa96aefce961ec6b595af058b8f105ac98800`
 - First-deployment rollback mode: `bootstrap-no-previous-release`
 - First target edge configuration ID: `burningspace-staging-01-edge-v1`
@@ -92,9 +102,6 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Host/environment asset identifier: `NOT RECORDED IN CANONICAL
   DOCUMENTATION`
 - Target public IP: `NOT RECORDED IN CANONICAL DOCUMENTATION`
-- Public client origin: `NOT PROVIDED`
-- Public server origin: `NOT PROVIDED`
-- Exact server allowed Origin: `NOT PROVIDED`
 - Target server image digest: `NOT PROVIDED`
 - Target client image digest: `NOT PROVIDED`
 - Previous approved commit: `ABSENT — bootstrap-no-previous-release`
