@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-30
-Updated by: Codex — OPS-002 private staging namespace recovery
+Updated by: Codex — OPS-002 final private GHCR bootstrap recovery
 
 ## Repository state
 
@@ -51,10 +51,16 @@ Updated by: Codex — OPS-002 private staging namespace recovery
   #72 and normal merge commit
   `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`. First publication workflow run
   `33310151475`: `SUCCESS / PUBLIC NAMESPACES / RETIRED CANDIDATE`.
-- OPS-002 private GHCR policy: the replacement staging server and client
-  packages must be `PRIVATE — PRODUCT ARCHITECT DECIDED`; they are not yet
-  published and their provider states are not yet observed. The ephemeral
-  read-only host-pull model is defined, no credential has been created, and no
+- OPS-002 GHCR generation 2 publication workflow run `33323488162`:
+  `SUCCESS / PUBLIC NAMESPACES / RETIRED CANDIDATE`. Package settings showed
+  source repository `pittonje/BurningSpace` and inherited access enabled.
+- OPS-002 private GHCR policy: final repositories
+  `ghcr.io/pittonje/burningspace-deploy-server` and
+  `ghcr.io/pittonje/burningspace-deploy-client` must be `PRIVATE — PRODUCT
+  ARCHITECT DECIDED`. Bootstrap is not performed, provider state is not
+  verified, no bootstrap PAT has been created, Actions access is not
+  configured, and final publication has not run. The separate ephemeral
+  read-only host-pull model remains defined; no host credential exists and no
   persistent VPS registry credential is authorized.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
@@ -466,7 +472,7 @@ authorization states otherwise.
 - PR #71: `MERGED / CLOSED`.
 - Protected stash `6dd950c5829db8a88150d3b08217277e17274187` remains present and untouched.
 
-## OPS-002 GHCR staging publication and retired release candidate
+## OPS-002 GHCR publication and retired public generations
 
 - Status: `MERGED / CLOSED / FIRST PUBLICATION COMPLETE / CANDIDATE RETIRED`.
 - Branch: `ops/ops-002-ghcr-staging-publish`.
@@ -481,9 +487,11 @@ authorization states otherwise.
 - Authentication: repository-scoped `GITHUB_TOKEN` with only
   `contents: read` and `packages: write`; no PAT or repository GHCR secret.
 - Release binding: the checked-out `HEAD` must equal `GITHUB_SHA`; both
-  `linux/amd64` images use commit-derived tags, OCI source/revision labels,
-  buildx metadata digest capture, and independent immutable-reference
-  inspection. No `latest` tag is published.
+  `linux/amd64` images use commit-derived tags, retain the OCI revision label,
+  use buildx metadata digest capture, and receive independent
+  immutable-reference inspection. No `latest` tag is published. The final
+  private publication path omits `org.opencontainers.image.source` and any
+  replacement repository-linking label.
 - The workflow emits bounded non-secret `phaseb-image-release.json` evidence
   in the job log and step summary. It does not change package visibility.
 - Final PR #72 Core run `33309831684`: `SUCCESS`. Claude QA run `33309831735`:
@@ -499,58 +507,89 @@ authorization states otherwise.
   `ghcr.io/pittonje/burningspace-client@sha256:118ebff019677c11654fef002cb6ca9c2eed8fd6821400994cd0f755eb8508c2`.
 - First server/client provider state: `PUBLIC — MANUALLY OBSERVED BY PRODUCT
   ARCHITECT`.
-- First release candidate disposition: `RETIRED AS DEPLOYMENT TARGET`.
-- Old package namespaces: `PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY / NOT
-  AUTHORIZED DEPLOYMENT TARGETS`.
+- Generation 1 disposition: `PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY /
+  FORBIDDEN DEPLOYMENT TARGET`.
+- Generation 2 workflow run: `33323488162 / SUCCESS`, exact target commit
+  `f9c1d86348a9ff572c7068433aa4295cb92befc2`.
+- Generation 2 server image:
+  `ghcr.io/pittonje/burningspace-staging-server@sha256:0150c4ad32d4a2976502dda68d4507b4bf64eefc9ea7d4f2d23b3740c11c95a1`.
+- Generation 2 client image:
+  `ghcr.io/pittonje/burningspace-staging-client@sha256:bf14e873b82d9b419559f48ddac63bf2e2cebeb8c908e108d466b662d8db2968`.
+- Generation 2 provider state: `PUBLIC — MANUALLY OBSERVED BY PRODUCT
+  ARCHITECT`; package settings showed source repository
+  `pittonje/BurningSpace` and inherited access enabled.
+- Generation 2 disposition: `PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY /
+  FORBIDDEN DEPLOYMENT TARGET`.
 - Approved hostile smoke Origin: `https://hostile.burningforge.dev`; this is an
   Origin-header test identity and requires no Phase A DNS record or TLS
   certificate.
-- Replacement server namespace:
-  `ghcr.io/pittonje/burningspace-staging-server`.
-- Replacement client namespace:
-  `ghcr.io/pittonje/burningspace-staging-client`.
-- Replacement package visibility policy: `PRIVATE — PRODUCT ARCHITECT
-  DECIDED`.
-- Replacement publication: `NOT YET RUN`.
-- Replacement target commit: `NOT YET BOUND`.
-- Replacement image digests: `NOT YET BOUND`.
-- Replacement provider visibility: `NOT YET VERIFIED`.
+- Final server namespace: `ghcr.io/pittonje/burningspace-deploy-server`.
+- Final client namespace: `ghcr.io/pittonje/burningspace-deploy-client`.
+- Final package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`.
+- Final bootstrap: `NOT PERFORMED`.
+- Final package existence: `NOT VERIFIED`.
+- Final package provider state: `NOT VERIFIED`.
+- Bootstrap PAT: `NOT CREATED`.
+- Manage Actions access: `NOT CONFIGURED`.
+- Final publication: `NOT RUN`.
+- Final target commit: `NOT BOUND`.
+- Final image digests: `NOT BOUND`.
+- Final Gate 1: `NOT VERIFIED`.
+- Final Gate 2: `NOT VERIFIED`.
+- Final release-specific Phase A: `PENDING`.
 - The current ignored real inventory at `deploy/.env.staging`,
   `deploy/external-staging-plan.json`, `deploy/edge/caddy/.env.staging`, and
   `deploy/edge/caddy/edge-plan.json` belongs to the retired first candidate and
   is `INVALIDATED FOR DEPLOYMENT / HISTORICAL RETIRED-CANDIDATE INPUT ONLY /
   MUST NOT BE USED FOR PHASE B`. It is not corrupted; its release binding was
-  superseded. Replacement real inventory: `NOT YET CREATED`.
+  superseded. Generation 2 never received replacement Phase A inventory. Final
+  real inventory: `NOT CREATED`; regeneration occurs only after Gate 2.
 - Host pull authority: `DEFINED — ephemeral PAT classic with read:packages
   only`; Claude security review moved from `REQUEST_CHANGES` to conditional
   approval on the contained F1/F2 documentation corrections, which are now
   applied. Disposition: `APPROVED FOR COMMIT/PR`.
 - Persistent host registry credential: `NONE`.
 - Registry credential created: `NO`.
-- No local Docker or PAT was required. No host, provider API, DNS, TLS, Caddy,
-  firewall, visibility, credential, or deployment operation occurred.
+- No local Docker or PAT was required for the historical publication work. No
+  host, provider API, DNS, TLS, Caddy, firewall, visibility, credential, or
+  deployment operation occurred in this recovery task.
 
-## OPS-002 private GHCR pull authority and namespace recovery
+## OPS-002 final private GHCR bootstrap and pull authority
 
 - Phase A implementation/tooling: `COMPLETE`.
-- Historical release-specific Phase A for the old candidate: `PASS EVIDENCE
-  EXISTS / RETIRED`.
-- Replacement release-specific Phase A: `PENDING`.
-- Replacement inventory creation is gated on the merged recovery, successful
-  replacement publication, capture of the exact run, `GITHUB_SHA`, and both
-  immutable digests, and manual read-only confirmation that both replacement
-  packages are private. Then archive the retired inventory externally with
-  hashes and a retired-candidate marker, replace the application inventory,
-  verify/rebind the edge inventory, and rerun release-specific Phase A. Never
-  keep multiple active candidate variants under `deploy/`.
-- Replacement server GHCR visibility policy: `PRIVATE`.
-- Replacement client GHCR visibility policy: `PRIVATE`.
+- Generation 1 release-specific Phase A: `PASS EVIDENCE EXISTS / RETIRED`.
+- Generation 2 release-specific Phase A: `NEVER CREATED / RETIRED`.
+- Final release-specific Phase A: `PENDING`.
+- Final inventory creation is gated on merged recovery, local daemonless
+  bootstrap, successful Gate 1, Manage Actions access `WRITE`, successful
+  canonical publication, capture of the exact run, `GITHUB_SHA`, and both
+  immutable digests, and successful Gate 2. Then archive the generation 1
+  inventory externally with hashes and a retired-candidate marker, replace the
+  application inventory, verify/rebind the edge inventory, and rerun
+  release-specific Phase A. Never keep multiple active candidate variants
+  under `deploy/`.
+- Final server GHCR visibility policy: `PRIVATE`.
+- Final client GHCR visibility policy: `PRIVATE`.
 - Product Architect visibility decision: `COMPLETE`.
-- Replacement provider visibility check: `PENDING AFTER PUBLICATION`.
+- Final bootstrap environment/tool: `LOCAL WINDOWS WORKSTATION / crane`.
+- Final bootstrap: `NOT PERFORMED`.
+- Final package existence: `NOT VERIFIED`.
+- Final provider visibility check: `NOT VERIFIED`.
+- Gate 1: `NOT VERIFIED`.
+- Bootstrap credential: `PAT classic / write:packages only / ephemeral`.
+- Bootstrap PAT created: `NO`.
+- Bootstrap artifact: `MINIMAL STANDARD OCI/DOCKER IMAGE MANIFEST /
+  NON-RELEASE / NEVER DEPLOYMENT EVIDENCE / NOT CREATED`.
+- Manage Actions access for `pittonje/BurningSpace`: `NOT CONFIGURED`;
+  requested role after Gate 1 is `WRITE`.
+- Repository connection/inherited access: `FORBIDDEN / MUST REMAIN OFF`.
+- Final canonical publication: `NOT RUN`.
+- Final target commit and digests: `NOT BOUND`.
+- Gate 2: `NOT VERIFIED`.
 - Private host pull model: `DEFINED / CLAUDE SECURITY REVIEW APPROVE`; the
   exact F1/F2 corrections required by that review are applied.
-- Credential: `PAT classic / read:packages only / ephemeral`.
-- Credential created: `NO`.
+- Host-pull credential: `PAT classic / read:packages only / ephemeral`.
+- Host-pull credential created: `NO`.
 - Persistent VPS credential: `NONE`.
 - Pre-GO registry boundary: read-only private-state confirmation and exact
   immutable manifest inspection only; no image-layer pull.
@@ -565,24 +604,34 @@ authorization states otherwise.
 - Images pulled to host: `NO`.
 - Caddy: `NOT DEPLOYED`.
 - BurningSpace: `NOT DEPLOYED`.
-- Reviewer declaration: Security is required because the diff governs
-  credential scope, lifetime, registry contact, and release gates;
-  Architecture is recommended for the operational sequence. Network, QA,
-  Gameplay, and Visual are not applicable because no executable protocol,
-  acceptance test, gameplay, or presentation behavior changes. Independent
-  targeted Claude recovery review: `REQUEST_CHANGES → CONDITIONAL APPROVE ON
-  F1`. The condition is satisfied by the exact inventory-invalidation
-  correction now applied; disposition: `APPROVED FOR COMMIT/PR`, with no
-  re-review required.
+- Root-cause rule: private deployment packages must exist before repository
+  connection. `org.opencontainers.image.source` and replacement
+  repository-linking labels are forbidden in the final private publication
+  path; the revision label remains.
+- Reviewer declaration for this uncommitted recovery: Security and QA are
+  required because publication metadata, credential scope/lifetime, and
+  release-readiness gates change. Architecture is recommended for the package
+  authorization sequence. Network, Gameplay, and Visual are not applicable
+  because protocol/runtime networking, gameplay, and presentation do not
+  change. Targeted Claude bootstrap-recovery review: `REQUEST_CHANGES` with one
+  MEDIUM F1 requiring recorded Gate 1 evidence as a mandatory pre-dispatch
+  operator gate. F1 is applied in the runbook; the reviewer stated that this
+  correction reaches `APPROVE` without re-review. F2 source-label CI grep is
+  `LOW / DEFERRED HARDENING`; F3 is `NOTE / NO CHANGE REQUIRED`.
 
 ## Next safe action
 
-Merge the reviewed private-staging-namespace recovery. After merge, dispatch
-the replacement publication workflow once, manually verify both new package
-states as private, and only then create replacement inventory and rebuild
-replacement release-specific Phase A evidence. Do not publish from this
-unmerged branch, change GHCR visibility, create host pull credentials, contact
-the host, pull images, issue deployment GO, or deploy from this checkpoint.
+Submit the exact uncommitted five-file diff for targeted Claude bootstrap
+recovery review. Do not commit before that review. After human merge, the
+separately authorized sequence is: create the narrow bootstrap PAT immediately
+before use; use local daemonless `crane` to bootstrap both final package names;
+log out, destroy local credential material, and revoke the PAT immediately;
+complete private Gate 1; configure Manage Actions access `WRITE` without
+connecting the repository; dispatch the canonical workflow once; and complete
+private Gate 2. Only then create final inventory and rebuild final
+release-specific Phase A evidence. Do not publish from this unmerged branch,
+change GHCR visibility, create any credential in this task, contact the host,
+pull images, issue deployment GO, or deploy from this checkpoint.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.

@@ -78,15 +78,16 @@ HISTORICAL RETIRED-CANDIDATE INPUT ONLY / MUST NOT BE USED FOR PHASE B`. The
 files are not considered corrupted; their release binding was superseded when
 that candidate's public package namespaces were retired.
 
-Do not create a replacement real inventory until the namespace-recovery change
-is merged, the replacement publication succeeds, its exact workflow run,
-`GITHUB_SHA`, and both immutable manifest digests are captured, and both
-replacement packages are manually confirmed private through read-only provider
-inspection. Then archive the retired inventory outside the repository with its
-file hashes and an explicit retired-candidate marker, replace the application
-inventory, verify and rebind the edge inventory, and rerun release-specific
-Phase A for the replacement candidate. Only one real inventory variant may be
-active under `deploy/`; never retain multiple candidate variants there.
+Do not create final real inventory until the namespace/linkage recovery is
+merged, private bootstrap Gate 1 passes, Manage Actions access is configured,
+the canonical publication succeeds, its exact workflow run, `GITHUB_SHA`, and
+both immutable manifest digests are captured, and private Gate 2 passes for
+both packages. Then archive the retired generation 1 inventory outside the
+repository with its file hashes and an explicit retired-candidate marker,
+replace the application inventory, verify and rebind the edge inventory, and
+rerun release-specific Phase A for the final candidate. Only one real
+inventory variant may be active under `deploy/`; never retain multiple
+candidate variants there.
 
 ## Secret inventory by category only
 
@@ -101,25 +102,102 @@ The future execution owner must provide these categories through secure external
 
 Do not add credential slots to copyable example environment files.
 
+## Private package bootstrap
+
+The final private deployment package repositories are:
+
+- `ghcr.io/pittonje/burningspace-deploy-server`;
+- `ghcr.io/pittonje/burningspace-deploy-client`.
+
+They have not been bootstrapped and their provider states are not verified.
+The private deployment package must exist before any repository connection.
+The canonical publication workflow must not emit
+`org.opencontainers.image.source`, and that label must not be reintroduced or
+replaced with another repository-linking label. The workflow retains
+`org.opencontainers.image.revision=${GITHUB_SHA}` as non-linking release
+provenance.
+
+First package creation occurs only from a local Windows workstation using the
+daemonless OCI image client `crane` from `google/go-containerregistry`.
+`regctl` may be substituted only by later explicit Product Architect
+authority. Do not use BurningSpace GitHub Actions, the Contabo VPS, Docker
+Desktop, or Docker Engine for first package creation.
+
+Create a fresh PAT classic immediately before bootstrap with only
+`write:packages` requested, including any provider-implied package-read
+capability. `repo`, `workflow`, `delete:packages`, `admin:*`, and `gist` are
+forbidden. Do not reuse an existing broad `gh` token. Authenticate `crane`
+locally, push one minimal standard OCI/Docker image manifest to the server and
+client repositories with `bootstrap-<timestamp>` tags, then log out, destroy
+local credential material, and revoke the PAT immediately before Gate 1. No
+token value enters repository content or evidence, and no GitHub Actions or VPS
+secret is created. This bootstrap PAT is distinct from the later deployment
+host PAT classic with `read:packages` only.
+
+Bootstrap versions have no release authority: retain them as `NON-RELEASE /
+NEVER DEPLOYMENT EVIDENCE`; do not deploy or delete them. Do not use `latest`
+or source-linkage metadata. The bootstrap requires no `delete:packages` scope.
+
+After bootstrap and PAT revocation, the Product Architect performs Gate 1 on
+both package settings. Each must show visibility `PRIVATE`, source repository
+linkage `NONE`, inherited access `OFF / NOT APPLICABLE`, and Manage Actions
+access `NONE`. If either package is public, stop with
+`PRIVATE_BOOTSTRAP_FAILED`; do not change visibility, delete a package, or
+automatically retry another namespace.
+
+Standing pre-dispatch operator gate: the canonical `OPS-002 Publish Staging
+Images` workflow must not be dispatched unless recorded Gate 1 evidence exists
+for both `ghcr.io/pittonje/burningspace-deploy-server` and
+`ghcr.io/pittonje/burningspace-deploy-client`. That evidence must be captured
+after the bootstrap PAT is revoked and immediately before proceeding to
+repository Actions authorization and publication. For each package it must
+record visibility `PRIVATE`, source repository linkage `NONE`, inherited
+access `OFF / NOT APPLICABLE`, and Manage Actions access `NONE`. Absence or
+incompleteness of either package's Gate 1 evidence means publication dispatch
+is prohibited.
+
+Only after Gate 1 passes, use **Package settings → Manage Actions access → Add
+repository** to add `pittonje/BurningSpace` with `WRITE` for each package. This
+is the approved repository authorization path. Do not use **Connect
+repository**, enable inherited access, or intentionally grant `ADMIN`.
+
+Immediately before dispatch, reconfirm that the authority for proceeding is
+the recorded post-bootstrap Gate 1 evidence for both packages. The required
+sequence is private bootstrap, bootstrap PAT revocation, recorded Gate 1
+evidence, Manage Actions access `WRITE`, that authority reconfirmation, and
+only then canonical publication dispatch. This is an operator/governance
+precondition; the workflow must not query or create packages to satisfy it.
+
+The normal manual canonical workflow may publish with its repository-scoped
+`GITHUB_TOKEN` only after that access gate. Gate 2 then manually rechecks both
+packages: visibility `PRIVATE`, inherited access `OFF`, unexpected source
+repository linkage `NONE`, and Actions access present for
+`pittonje/BurningSpace`. Record the actual role; `WRITE` is expected. If the
+provider reports `ADMIN`, do not mutate it automatically—return to the Product
+Architect for F4 disposition. If either package is public, stop. Only a
+successful Gate 2 permits final release-specific Phase A.
+
+The two accidental public generations remain historical evidence and are
+forbidden deployment targets:
+
+- generation 1: `burningspace-server` and `burningspace-client`, workflow run
+  `33310151475`, `PUBLIC / RETIRED`;
+- generation 2: `burningspace-staging-server` and
+  `burningspace-staging-client`, workflow run `33323488162`, `PUBLIC /
+  RETIRED`; package settings showed source repository `pittonje/BurningSpace`
+  and inherited access enabled.
+
+Do not delete, mutate, or deploy either generation. The observed public
+outcomes occurred with source-repository linkage and inherited access, but
+provider documentation does not fully specify the final visibility
+consequence; manual Gate 1 and Gate 2 remain mandatory.
+
 ## Private GHCR pull authority
 
-The Product Architect has decided that both
-`ghcr.io/pittonje/burningspace-staging-server` and
-`ghcr.io/pittonje/burningspace-staging-client` must be private. This is
-canonical policy, not provider-state evidence. The replacement packages have
-not yet been published and may not exist. Immediately after their first
-publication, the Product Architect must manually verify both provider states
-as private before accepting the replacement candidate for release-specific
-Phase A. If either package is observed public, stop with
-`PACKAGE_ALREADY_PUBLIC_PROVIDER_CONSTRAINT`; do not mutate or delete it.
-
-The first-publication namespaces
-`ghcr.io/pittonje/burningspace-server` and
-`ghcr.io/pittonje/burningspace-client` were manually observed public. They are
-`PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY` and must never be used as an
-authorized deployment target. Workflow run `33310151475` remains historical
-publication evidence; this retirement does not authorize deletion, renaming,
-or a visibility change.
+The Product Architect has decided that both final deployment packages must be
+private. This is canonical policy, not provider-state evidence. Host pull
+authority is unavailable until Gate 2 passes and final immutable release
+references are bound.
 
 Private pull authority uses a fresh, short-lived GitHub personal access token
 (classic) owned by an operator who can read both packages. Its only scope is
@@ -291,25 +369,25 @@ all service bind/persistent-volume mounts remain forbidden.
 uses it to build both Dockerfiles off-host from the eventual shared VPS and to
 run deterministic loopback container smoke. It is not part of the real
 shared-host deployment command. GHCR is the selected release registry, with
-`ghcr.io/pittonje/burningspace-staging-server` and
-`ghcr.io/pittonje/burningspace-staging-client` as the canonical repositories.
+`ghcr.io/pittonje/burningspace-deploy-server` and
+`ghcr.io/pittonje/burningspace-deploy-client` as the canonical repositories.
 The manual-only `OPS-002 Publish Staging Images` GitHub Actions workflow is
 the approved staging publication mechanism. It runs on `main`, uses the
 repository-scoped `GITHUB_TOKEN` with `contents: read` and `packages: write`,
-and publishes commit-tagged `linux/amd64` images without `latest`. The first
-release candidate was published successfully by run `33310151475` from exact
-`GITHUB_SHA` `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`, but its namespaces were
-manually observed public and the candidate is retired from deployment
-authority. Its immutable manifest digests remain historical evidence in the
-GO packet. The workflow did not change package visibility, and publication
+and publishes commit-tagged `linux/amd64` images without `latest`. It omits
+`org.opencontainers.image.source` and all repository-linking labels while
+preserving the revision label. It is not a first-package-creation mechanism.
+Both earlier public generations are retired from deployment authority; their
+run, commit, and immutable manifest bindings remain historical evidence in the
+GO packet. The workflow does not change package visibility, and publication
 does not authorize deployment.
 
-For every release, the operator must dispatch the reviewed staging-image
-publication workflow, record its exact `GITHUB_SHA` and immutable manifest
-digests in the GO packet, and manually verify both canonical package states as
-private immediately after publication. Do not begin release-specific Phase A
-until that provider verification passes. The exact host pull authority must be
-defined and evidenced before deployment GO.
+For the first final release, the operator may dispatch the reviewed
+staging-image publication workflow only after private bootstrap Gate 1 and
+Manage Actions access. Record its exact `GITHUB_SHA` and immutable manifest
+digests in the GO packet, then complete Gate 2. Do not begin release-specific
+Phase A until Gate 2 passes. The exact host pull authority must be defined and
+evidenced before deployment GO.
 
 ## Shared-host remediation gates
 
