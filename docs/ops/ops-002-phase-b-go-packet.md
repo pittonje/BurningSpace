@@ -29,28 +29,33 @@ can make an environment-specific GO decision.
   identity only; no Phase A DNS record, certificate, or host deployment is
   required for it.
 - Publication workflow: `OPS-002 Publish Staging Images`
-- Final private bootstrap: `NOT PERFORMED`
-- Final package existence: `NOT VERIFIED`
-- Final Gate 1: `NOT VERIFIED`
-- Final Manage Actions access: `NOT CONFIGURED`
-- Final canonical publication: `NOT RUN`
-- Final publication workflow run ID: `NOT RUN`
-- Final target commit: `NOT BOUND`
+- Final private bootstrap: `COMPLETE`
+- Final package existence: `VERIFIED`
+- Final Gate 1: `PASS`
+- Final Manage Actions access before publication: `pittonje/BurningSpace →
+  WRITE` for both packages
+- Final canonical publication: `SUCCESS`
+- Final publication workflow run ID: `33340075681`
+- Final target commit: `4a774354859c036d45666496539c2fc3c24b9f1c`
 - Target platform: `linux/amd64`
-- Final server digest/reference: `NOT BOUND`
-- Final client digest/reference: `NOT BOUND`
-- Final Gate 2: `NOT VERIFIED`
-- Final release-specific Phase A: `PENDING`
+- Final server digest/reference:
+  `ghcr.io/pittonje/burningspace-deploy-server@sha256:816062e5165f3d02aed2b1d5524c1bc53de85bd0709fb92b0ef421d3be626085`
+- Final client digest/reference:
+  `ghcr.io/pittonje/burningspace-deploy-client@sha256:ae65d4c6faadd55b04549a4a070ac5cd6ba1e5d4288a6adb1f6b2a541b9d789f`
+- Final Gate 2: `PASS — PRIVATE / repository source pittonje/BurningSpace
+  observed and accepted / inherited access OFF / Actions WRITE`, both packages
+- Final release-specific Phase A: `COMPLETE`
 - Server package policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
 - Client package policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
-- Final provider state: `NOT VERIFIED — GATE 1 AND GATE 2 REQUIRED BEFORE
-  RELEASE-SPECIFIC PHASE A`
+- Final provider state: `GATE 2 VERIFIED / PRIVATE`
 - Bootstrap environment: `LOCAL WINDOWS WORKSTATION`
-- Bootstrap tool: `crane — NOT INSTALLED BY THIS TASK`
+- Bootstrap tool: `crane — LOCAL DAEMONLESS EXECUTION COMPLETE`
 - Bootstrap credential: `PAT CLASSIC / write:packages ONLY / EPHEMERAL`
-- Bootstrap PAT created: `NO`
+- Bootstrap PAT: `REVOKED / CREDENTIAL CLEANUP PASS`
 - Bootstrap artifact: `MINIMAL STANDARD OCI/DOCKER IMAGE MANIFEST /
-  NON-RELEASE / NEVER DEPLOYMENT EVIDENCE / NOT CREATED`
+  NON-RELEASE / NEVER DEPLOYMENT EVIDENCE`, tag
+  `bootstrap-20260830T212613Z`, digest
+  `sha256:1a243e5af4508768fad72a909b1f5173594327caae724af8ae483803e816d197`
 - Host pull authority: `DEFINED`
 - Credential class: `PAT CLASSIC / read:packages ONLY / EPHEMERAL`
 - Persistent host registry credential: `NONE`
@@ -136,16 +141,27 @@ can make an environment-specific GO decision.
 - Bootstrap versions: minimal standard OCI/Docker image manifests tagged
   `bootstrap-<timestamp>`; no `latest`, source-linkage metadata, or deployment
   authority. Retain them as `NON-RELEASE / NEVER DEPLOYMENT EVIDENCE`.
-- Gate 1 required result: each package `PRIVATE`, source linkage `NONE`,
-  inherited access `OFF / NOT APPLICABLE`, Manage Actions access `NONE`.
+- Completed bootstrap binding: tag `bootstrap-20260830T212613Z`, digest
+  `sha256:1a243e5af4508768fad72a909b1f5173594327caae724af8ae483803e816d197`,
+  PAT `REVOKED`, credential cleanup `PASS`, Gate 1 `PASS`. The bootstrap is not
+  a release target. The first attempt did mutate package state; any earlier
+  zero-mutation conclusion is obsolete.
+- Gate 1 observed result before repository authorization: each package
+  `PRIVATE`, source linkage `NONE`, inherited access `OFF / NOT APPLICABLE`,
+  Manage Actions access `NONE`. This is historical pre-publication evidence,
+  not a durable Gate 2 source-linkage invariant.
 - Repository authorization after Gate 1: Manage Actions access adds
   `pittonje/BurningSpace` with `WRITE`; **Connect repository**, inherited
   access, and an intentional `ADMIN` grant are forbidden.
 - Gate 2 required result after normal `GITHUB_TOKEN` publication: each package
-  `PRIVATE`, source linkage `NONE`, inherited access `OFF`, and Actions access
-  present with the actual role recorded. Expected role: `WRITE`. An observed
-  `ADMIN` role requires Product Architect F4 disposition without automatic
-  mutation.
+  `PRIVATE`, inherited access `OFF`, and explicit Actions access present with
+  an acceptable recorded role. Repository source `pittonje/BurningSpace` is
+  permitted and was observed for both final packages even though the workflow
+  contains zero `org.opencontainers.image.source` labels. This is observed
+  provider behavior, not a causal claim. The actual role is `WRITE`; Gate 2
+  passed. A future `ADMIN` role requires Product Architect disposition without
+  automatic mutation. Do not remove the source association, click **Connect
+  repository**, or enable inherited access.
 - Failure rule: if either package is public, stop. Do not change visibility,
   delete the package, or automatically retry another namespace.
 
@@ -180,18 +196,18 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Edge: `SELECTED / REPOSITORY PREPARATION MERGED AND COMPLETE / NOT INSTALLED`
 - DNS: `NOT CONFIGURED`
 - TLS: `NOT READY / NOT CONFIGURED`
-- Final private bootstrap: `NOT PERFORMED`
-- Final package existence: `NOT VERIFIED`
-- Final Gate 1: `NOT VERIFIED`
-- Final Manage Actions access: `NOT CONFIGURED`
-- Final publication: `NOT RUN`
-- Final target commit: `NOT BOUND`
-- Final image digests: `NOT BOUND`
-- Final Gate 2: `NOT VERIFIED`
-- Final release-specific Phase A: `PENDING`
+- Final private bootstrap: `COMPLETE / PAT REVOKED`
+- Final package existence: `VERIFIED`
+- Final Gate 1: `PASS`
+- Final Manage Actions access: `WRITE / VERIFIED`, both packages
+- Final publication: `33340075681 / SUCCESS`
+- Final target commit: `4a774354859c036d45666496539c2fc3c24b9f1c`
+- Final image digests: `BOUND`, exact references in Fixed bindings
+- Final Gate 2: `PASS`
+- Final release-specific Phase A: `COMPLETE`
 - Server package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
 - Client package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
-- Final provider visibility confirmation: `NOT VERIFIED`
+- Final provider visibility confirmation: `PRIVATE / VERIFIED`
 - Host pull authority: `DEFINED / CREDENTIAL NOT CREATED`
 - Host images pulled: `NO`
 - Caddy deployment: `NOT DEPLOYED`
@@ -205,7 +221,10 @@ DNS, TLS, release/rollback, or external-validation gate.
 ## Incomplete environment and execution bindings
 
 - Final real inventory bound to final target commit and immutable digests:
-  `NOT VERIFIED / NOT CREATED`
+  `VERIFIED / ACTIVE / GIT-IGNORED`; application env SHA-256
+  `8e989f048fa5c80f15b672c5de3638c81d48cbb2f6e1a0f471d60a1a0759b08e`,
+  application plan SHA-256
+  `0ffa473d762230f084f6d239e7fb5a328069cbba0ae9409c7b712e9a3fb29607`
 - Region: `NOT PROVIDED`
 - Host/environment asset identifier: `NOT RECORDED IN CANONICAL
   DOCUMENTATION`
@@ -223,11 +242,12 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Management-access owner: `NOT PROVIDED`
 - Abort owner: `NOT PROVIDED`
 - Credentials-ready confirmation without values: `NOT VERIFIED`
-- Server package provider visibility: `NOT VERIFIED`
-- Client package provider visibility: `NOT VERIFIED`
-- Source repository linkage: `NOT VERIFIED`
-- Inherited access: `NOT VERIFIED`
-- Manage Actions access role: `NOT CONFIGURED / NOT VERIFIED`
+- Server package provider visibility: `PRIVATE / VERIFIED`
+- Client package provider visibility: `PRIVATE / VERIFIED`
+- Repository source: `pittonje/BurningSpace / OBSERVED / ACCEPTED`, both
+  packages
+- Inherited access: `OFF / VERIFIED`, both packages
+- Manage Actions access role: `WRITE / VERIFIED`, both packages
 - Ephemeral private-registry login: `NOT VERIFIED`
 - Exact server manifest resolution: `NOT VERIFIED`
 - Exact client manifest resolution: `NOT VERIFIED`
@@ -272,16 +292,20 @@ PR #67 merged the controlled-staging repository contract:
 These repository limits remain `SUITABLE / MUST BE VERIFIED WHEN DEPLOYED`.
 Host capacity is not guaranteed. GHCR is the selected registry authority. The
 images published by runs `33310151475` and `33323488162` are retired historical
-evidence and not active target images. The final private bootstrap and
-canonical workflow have not run; the exact post-recovery-merge `GITHUB_SHA`
-and immutable image digests remain unbound.
+evidence and not active target images. Final private workflow run `33340075681`
+succeeded once at exact `GITHUB_SHA`
+`4a774354859c036d45666496539c2fc3c24b9f1c`; the immutable deploy-server and
+deploy-client references in Fixed bindings are the only active release images.
 
 ## GO prerequisites
 
 - Phase A implementation/tooling remains merged, Core-green, independently
   approved, and bound to the fixed heads above. Release-specific Phase A for
   generation 1 is superseded, generation 2 never received it, and the final
-  candidate's release-specific Phase A remains pending.
+  candidate's replacement release-specific Phase A is `COMPLETE`. Its evidence
+  is `D:\Temp\burningspace-ops002-final-private-phasea-20260830T233259Z`;
+  `SHA256SUMS.txt` SHA-256 is
+  `3b78b2861450a1e39aa7dc729dd1cb065c80dcee1cbd8858c1ff04e829838a2e`.
 - Every mandatory repository, host, edge, DNS/TLS, rollback, and
   external-validation condition in
   [the environment decision](ops-002-phase-b-environment-decision.md) is
@@ -313,14 +337,14 @@ and immutable image digests remain unbound.
   references are structurally absent for bootstrap or strictly supplied for a
   later `previous-approved-release` deployment.
 - The local daemonless bootstrap has completed with the bootstrap PAT revoked;
-  Gate 1 has verified both packages private with no source linkage, inherited
-  access, or Actions access; and Manage Actions access then grants
+  Gate 1 verified both packages private with no source linkage, inherited
+  access, or Actions access before publication; and Manage Actions access then grants
   `pittonje/BurningSpace` `WRITE` without connecting the repository.
 - The canonical publication has succeeded from post-recovery-merge `main` and
   its workflow run, exact `GITHUB_SHA`, and immutable server/client references
-  are bound. Gate 2 then reconfirms both packages private, linkage absent,
-  inheritance off, and records the actual Actions role before final
-  release-specific Phase A begins.
+  are bound. Gate 2 reconfirmed both packages private, accepted the observed
+  provider repository-source association, verified inheritance off, and
+  recorded Actions role `WRITE` before final release-specific Phase A.
 - If either package is public at a private gate, execution stops. Package
   visibility is not mutated, the package is not deleted, and another namespace
   is not tried automatically. An unexpected `ADMIN` role at Gate 2 is returned
@@ -354,8 +378,9 @@ for:
 
 - The exact repository head and deployed image or build identifiers.
 - Gate 1 and Gate 2 confirmations for both GHCR packages, including private
-  visibility, absent linkage, disabled inheritance, and Actions access state
-  and actual role; successful ephemeral host read-only authentication; both
+  visibility, the observed and accepted repository-source association,
+  disabled inheritance, and Actions access state and actual role; successful
+  ephemeral host read-only authentication; both
   exact pre-GO manifest resolutions; and successful logout and
   temporary-config cleanup, without any credential value or image-layer pull
   before GO.
@@ -426,13 +451,13 @@ no persistent host registry credential is authorized.
 
 GO: `NOT ISSUED`
 
-Reason: Environment selection, repository hardening, host discovery, and the
-resource-headroom assessment and Caddy repository preparation are complete,
-but required host maintenance,
-root firewall review, TCP 4000/9090 and TeamSpeak administrative ingress
-dispositions, final private bootstrap, both private gates, Manage Actions
-access, canonical publication and release-specific Phase A, ephemeral registry authentication
-and exact-manifest evidence, edge
+Reason: Environment selection, repository hardening, host discovery, the
+resource-headroom assessment, Caddy repository preparation, final private
+bootstrap, both private gates, Manage Actions access, canonical publication,
+and replacement release-specific Phase A are complete. Required host
+maintenance, root firewall review, TCP 4000/9090 and TeamSpeak administrative
+ingress dispositions, ephemeral registry authentication and exact-manifest
+evidence, edge
 ownership/configuration, DNS, TLS, rollback readiness, and external validation
 evidence remain outstanding. Host
 Caddy installation and deployment are not authorized, and deployment `GO` is
