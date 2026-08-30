@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-30
-Updated by: Codex — OPS-002 first-deployment bootstrap rollback implementation
+Updated by: Codex — OPS-002 GHCR staging publication workflow implementation
 
 ## Repository state
 
@@ -43,6 +43,9 @@ Updated by: Codex — OPS-002 first-deployment bootstrap rollback implementation
   `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Host installation, DNS, TLS,
   image publication, external validation, deployment, and deployment `GO`
   remain incomplete or unauthorized.
+- OPS-002 first-deployment bootstrap rollback: `MERGED / COMPLETE` through PR
+  #71 and normal merge commit
+  `0a90effcd11d6745a6a3ad36c2bf5069a1b8d82b`.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 - Campaign systems remain deferred and the canonical campaign roadmap is
@@ -412,9 +415,11 @@ authorization states otherwise.
 
 ## OPS-002 first-deployment bootstrap rollback implementation
 
-- Status: `IMPLEMENTED / TARGETED SELF-TESTS PASS / CORE PASS / FINAL CLAUDE APPROVE / READY FOR PRODUCT ARCHITECT MERGE DISPOSITION`.
+- Status: `MERGED / COMPLETE`.
 - Branch: `ops/ops-002-first-deployment-bootstrap-rollback`.
 - Implementation HEAD: `ea216e3be1f6f98776bd66b00162c70f3ca5c501`.
+- Evidence HEAD: `84d36aeb577ec31501b82bde488f610d08ef855d`.
+- Merge commit: `0a90effcd11d6745a6a3ad36c2bf5069a1b8d82b`.
 - Base: `c1daa96aefce961ec6b595af058b8f105ac98800` from exact local
   `origin/main`.
 - Product Architect bindings: GHCR repositories
@@ -439,13 +444,42 @@ authorization states otherwise.
 - Reviewer declaration: Security and QA required; Architecture and Network
   recommended; Gameplay and Visual not applicable. Independent Claude
   targeted/final review: `APPROVE`, with `0 BLOCKER / 0 HIGH / 0 MEDIUM`.
-- PR #71: `READY FOR PRODUCT ARCHITECT MERGE DISPOSITION`.
+- Final-head Core run `33303715791`: `PASS`.
+- PR #71: `MERGED / CLOSED`.
 - Protected stash `6dd950c5829db8a88150d3b08217277e17274187` remains present and untouched.
+
+## OPS-002 GHCR staging publication workflow implementation
+
+- Status: `IMPLEMENTED / TARGETED LOCAL CHECKS PASS / READY FOR CLAUDE TARGETED REVIEW`.
+- Branch: `ops/ops-002-ghcr-staging-publish`.
+- Base: `0a90effcd11d6745a6a3ad36c2bf5069a1b8d82b` from exact local
+  `origin/main`.
+- Workflow: `.github/workflows/publish-staging-images.yml`, manual
+  `workflow_dispatch` only, guarded to `refs/heads/main`, on `ubuntu-latest`.
+- Authentication: repository-scoped `GITHUB_TOKEN` with only
+  `contents: read` and `packages: write`; no PAT or repository GHCR secret.
+- Release binding: the checked-out `HEAD` must equal `GITHUB_SHA`; both
+  `linux/amd64` images use commit-derived tags, OCI source/revision labels,
+  buildx metadata digest capture, and independent immutable-reference
+  inspection. No `latest` tag is published.
+- The workflow emits bounded non-secret `phaseb-image-release.json` evidence
+  in the job log and step summary. It does not change package visibility.
+- Reviewer declaration: Security and QA required; Architecture and Network
+  recommended; Gameplay and Visual not applicable. Claude targeted review is
+  still required before merge.
+- Targeted local checks pass: `git diff --check`, YAML structure and trigger
+  inspection, embedded Bash syntax, Dockerfile existence, client build-arg
+  consumption, and static credential-output scan.
+- Workflow execution: `NOT RUN`. Images: `NOT PUBLISHED`. Digests:
+  `NOT BOUND`. Package visibility: `UNCHANGED / OPERATOR DECISION PENDING`.
+- No local Docker or PAT was required. No host, provider API, DNS, TLS, Caddy,
+  firewall, or deployment operation occurred.
 
 ## Next safe action
 
-Apply the Product Architect merge disposition for PR #71 only after the final
-docs-only reconciliation has passed Core. Do not deploy from this checkpoint.
+Send the exact GHCR publication workflow diff to Claude for targeted review.
+Do not merge or dispatch the workflow before that review, and do not deploy
+from this checkpoint.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.
@@ -457,8 +491,8 @@ completed before the non-secret GO packet can be returned for an
 environment-specific Product Architect GO decision.
 
 Phase B live execution remains unstarted and external deployment remains
-unauthorized. No hostname is assigned, no credential is requested or stored,
-and no deployment GO is issued. Do not configure DNS, TLS, a reverse proxy, or
-a firewall, do not modify the preserved forum or any other unrelated host
-workload, and do not deploy externally until the Product Architect issues an
-explicit environment-specific deployment GO.
+unauthorized. The approved staging hostnames are not yet configured in DNS,
+no credential is requested or stored, and no deployment GO is issued. Do not
+configure DNS, TLS, a reverse proxy, or a firewall, do not modify the preserved
+forum or any other unrelated host workload, and do not deploy externally until
+the Product Architect issues an explicit environment-specific deployment GO.

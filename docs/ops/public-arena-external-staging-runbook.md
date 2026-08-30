@@ -144,9 +144,15 @@ uses it to build both Dockerfiles off-host from the eventual shared VPS and to
 run deterministic loopback container smoke. It is not part of the real
 shared-host deployment command. GHCR is the selected release registry, with
 `ghcr.io/pittonje/burningspace-server` and
-`ghcr.io/pittonje/burningspace-client` as the canonical repositories. This
-task does not publish images; a later authorized release process must publish
-the exact reviewed images and record their resulting digests before GO.
+`ghcr.io/pittonje/burningspace-client` as the canonical repositories. The
+manual-only `OPS-002 Publish Staging Images` GitHub Actions workflow is the
+approved staging publication mechanism. It runs on `main`, uses the
+repository-scoped `GITHUB_TOKEN` with `contents: read` and `packages: write`,
+and publishes commit-tagged `linux/amd64` images without `latest`. A release
+operator must dispatch the reviewed workflow after it is merged, record its
+exact `GITHUB_SHA` and immutable manifest digests, and decide GHCR package
+visibility separately before deployment GO. Adding the workflow does not
+publish an image, change package visibility, or authorize deployment.
 
 ## Shared-host remediation gates
 
