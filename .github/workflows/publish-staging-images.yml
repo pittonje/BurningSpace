@@ -1,0 +1,171 @@
+name: OPS-002 Publish Staging Images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a main-branch dispatch
+        if: github.ref != 'refs/heads/main'
+        shell: bash
+        run: |
+          echo "Staging image publication is restricted to refs/heads/main." >&2
+          exit 1
+
+      - name: Checkout the dispatched commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Build and publish immutable staging images
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          readonly registry="ghcr.io"
+          readonly server_repository="ghcr.io/pittonje/burningspace-server"
+          readonly client_repository="ghcr.io/pittonje/burningspace-client"
+          readonly vite_server_url="https://game-server.burningforge.dev"
+          readonly platform="linux/amd64"
+          readonly release_tag="sha-${GITHUB_SHA}"
+          readonly server_tag="${server_repository}:${release_tag}"
+          readonly client_tag="${client_repository}:${release_tag}"
+          readonly server_metadata="${RUNNER_TEMP}/server-build-metadata.json"
+          readonly client_metadata="${RUNNER_TEMP}/client-build-metadata.json"
+          readonly release_evidence="${RUNNER_TEMP}/phaseb-image-release.json"
+          export DOCKER_CONFIG="${RUNNER_TEMP}/burningspace-docker-config"
+          server_published=false
+          client_published=false
+
+          cleanup_credentials() {
+            docker logout "$registry" >/dev/null 2>&1 || true
+            rm -f "${DOCKER_CONFIG}/config.json"
+          }
+          trap cleanup_credentials EXIT
+
+          report_failure() {
+            local status="$?"
+            trap - ERR
+            printf 'PUBLICATION_FAILED serverPublished=%s clientPublished=%s\n' \
+              "$server_published" "$client_published" >&2
+            {
+              echo '### OPS-002 staging image publication failed'
+              echo
+              echo "- Target commit: \`${GITHUB_SHA}\`"
+              echo "- Server published: \`${server_published}\`"
+              echo "- Client published: \`${client_published}\`"
+              echo '- Package visibility was not changed; operator decision remains pending.'
+            } >>"$GITHUB_STEP_SUMMARY"
+            exit "$status"
+          }
+          trap report_failure ERR
+
+          test "$GITHUB_REF" = "refs/heads/main"
+          checked_out_sha="$(git rev-parse HEAD)"
+          test "$checked_out_sha" = "$GITHUB_SHA"
+          printf 'TARGET_COMMIT=%s\n' "$checked_out_sha"
+
+          docker version
+          docker buildx version
+          printf '%s' "$GHCR_TOKEN" | docker login "$registry" \
+            --username "$GITHUB_ACTOR" --password-stdin
+          unset GHCR_TOKEN
+
+          docker buildx build \
+            --platform "$platform" \
+            --file deploy/server.Dockerfile \
+            --label org.opencontainers.image.source=https://github.com/pittonje/BurningSpace \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "$server_tag" \
+            --metadata-file "$server_metadata" \
+            --push \
+            .
+          server_published=true
+
+          server_digest="$(jq -er '."containerimage.digest"' "$server_metadata")"
+          [[ "$server_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          readonly server_immutable="${server_repository}@${server_digest}"
+          docker buildx imagetools inspect "$server_immutable"
+
+          docker buildx build \
+            --platform "$platform" \
+            --file deploy/client.Dockerfile \
+            --build-arg "VITE_BURNINGSPACE_SERVER_URL=${vite_server_url}" \
+            --label org.opencontainers.image.source=https://github.com/pittonje/BurningSpace \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "$client_tag" \
+            --metadata-file "$client_metadata" \
+            --push \
+            .
+          client_published=true
+
+          client_digest="$(jq -er '."containerimage.digest"' "$client_metadata")"
+          [[ "$client_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          readonly client_immutable="${client_repository}@${client_digest}"
+          docker buildx imagetools inspect "$client_immutable"
+
+          jq -n \
+            --arg repository "pittonje/BurningSpace" \
+            --arg targetCommit "$GITHUB_SHA" \
+            --arg platform "$platform" \
+            --arg serverRepository "$server_repository" \
+            --arg serverDigest "$server_digest" \
+            --arg serverImmutableReference "$server_immutable" \
+            --arg clientRepository "$client_repository" \
+            --arg clientDigest "$client_digest" \
+            --arg clientImmutableReference "$client_immutable" \
+            --arg viteServerUrl "$vite_server_url" \
+            '{
+              repository: $repository,
+              targetCommit: $targetCommit,
+              platform: $platform,
+              server: {
+                repository: $serverRepository,
+                digest: $serverDigest,
+                immutableReference: $serverImmutableReference
+              },
+              client: {
+                repository: $clientRepository,
+                digest: $clientDigest,
+                immutableReference: $clientImmutableReference,
+                viteServerUrl: $viteServerUrl
+              }
+            }' >"$release_evidence"
+
+          jq -e \
+            --arg sha "$GITHUB_SHA" \
+            --arg platform "$platform" \
+            --arg serverRepository "$server_repository" \
+            --arg clientRepository "$client_repository" \
+            --arg viteServerUrl "$vite_server_url" \
+            '.repository == "pittonje/BurningSpace" and
+             .targetCommit == $sha and
+             .platform == $platform and
+             .server.repository == $serverRepository and
+             (.server.digest | test("^sha256:[0-9a-f]{64}$")) and
+             .server.immutableReference == ($serverRepository + "@" + .server.digest) and
+             .client.repository == $clientRepository and
+             (.client.digest | test("^sha256:[0-9a-f]{64}$")) and
+             .client.immutableReference == ($clientRepository + "@" + .client.digest) and
+             .client.viteServerUrl == $viteServerUrl and
+             (keys | sort) == ["client", "platform", "repository", "server", "targetCommit"]' \
+            "$release_evidence" >/dev/null
+
+          echo '--- BEGIN PHASE B IMAGE RELEASE JSON ---'
+          jq . "$release_evidence"
+          echo '--- END PHASE B IMAGE RELEASE JSON ---'
+          {
+            echo '### OPS-002 Phase B image release'
+            echo
+            echo '```json'
+            jq . "$release_evidence"
+            echo '```'
+            echo
+            echo 'Package visibility was not changed; operator decision remains pending.'
+          } >>"$GITHUB_STEP_SUMMARY"

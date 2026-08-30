@@ -30,9 +30,17 @@ preserved historical audit conclusion are recorded below.
 - Host-side deployment and verification: `NOT STARTED`
 - Region: `NOT RECORDED`
 - Public IP: `NOT RECORDED IN CANONICAL DOCUMENTATION`
-- Public client hostname: `NOT ASSIGNED`
-- Public server hostname: `NOT ASSIGNED`
-- DNS zone: `NOT SELECTED`
+- DNS zone: `burningforge.dev` — `PRODUCT ARCHITECT SELECTED / APPROVED;
+  NOT CONFIGURED`
+- Public client hostname: `game.burningforge.dev` — `PRODUCT ARCHITECT
+  SELECTED / APPROVED; DNS NOT CONFIGURED`
+- Public server hostname: `game-server.burningforge.dev` — `PRODUCT ARCHITECT
+  SELECTED / APPROVED; DNS NOT CONFIGURED`
+- Derived public client origin: `https://game.burningforge.dev`
+- Derived public server origin: `https://game-server.burningforge.dev`
+- Client build-time server URL:
+  `VITE_BURNINGSPACE_SERVER_URL=https://game-server.burningforge.dev`
+- Server allowed origin: `https://game.burningforge.dev`
 - TLS edge: `NOT CONFIGURED`
 - Reverse proxy: `NOT CONFIGURED`
 - Firewall: `ROOT REVIEW REQUIRED BEFORE GO`
@@ -296,11 +304,12 @@ Required before GO:
 
 Required before GO:
 
-- an exact staging client hostname;
-- an exact staging server hostname;
+- configured and verified DNS records for `game.burningforge.dev` and
+  `game-server.burningforge.dev`;
 - certificate issuance;
 - certificate renewal ownership;
-- an exact allowed-`Origin` binding;
+- an applied and verified allowed-`Origin` binding for
+  `https://game.burningforge.dev`;
 - no wildcard origin authorization.
 
 ### Rollback
