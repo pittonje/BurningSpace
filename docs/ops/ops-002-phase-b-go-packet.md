@@ -13,8 +13,8 @@ can make an environment-specific GO decision.
 - Superseded environment class: `dedicated-isolated-single-host-vps`
 - Provider: `Contabo`
 - Canonical release registry: `GHCR`
-- Server image repository: `ghcr.io/pittonje/burningspace-server`
-- Client image repository: `ghcr.io/pittonje/burningspace-client`
+- Server image repository: `ghcr.io/pittonje/burningspace-staging-server`
+- Client image repository: `ghcr.io/pittonje/burningspace-staging-client`
 - DNS zone: `burningforge.dev` — `SELECTED / NOT CONFIGURED`
 - Public client hostname: `game.burningforge.dev` — `SELECTED / DNS NOT
   CONFIGURED`
@@ -29,17 +29,17 @@ can make an environment-specific GO decision.
   identity only; no Phase A DNS record, certificate, or host deployment is
   required for it.
 - Publication workflow: `OPS-002 Publish Staging Images`
-- Publication workflow run ID: `33310151475`
-- Target commit: `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`
+- Replacement publication: `PENDING / NOT YET RUN`
+- Replacement publication workflow run ID: `NOT YET RUN`
+- Replacement target commit: `NOT YET BOUND`
 - Target platform: `linux/amd64`
-- Target server image:
-  `ghcr.io/pittonje/burningspace-server@sha256:9bcd2855cb588c326af72d10a634921db05b0729197e477c6862cc9e8aaddd58`
-- Target client image:
-  `ghcr.io/pittonje/burningspace-client@sha256:118ebff019677c11654fef002cb6ca9c2eed8fd6821400994cd0f755eb8508c2`
-- Target image publication: `PUBLISHED / IMMUTABLE DIGESTS BOUND`
+- Replacement server digest/reference: `NOT YET PUBLISHED / BOUND`
+- Replacement client digest/reference: `NOT YET PUBLISHED / BOUND`
+- Replacement release-specific Phase A: `PENDING`
 - Server package policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
 - Client package policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
-- Provider visibility verification: `PENDING / REQUIRED BEFORE GO`
+- Replacement provider visibility verification: `NOT YET VERIFIED PRIVATE —
+  REQUIRED AFTER PUBLICATION AND BEFORE RELEASE-SPECIFIC PHASE A`
 - Host pull authority: `DEFINED`
 - Credential class: `PAT CLASSIC / read:packages ONLY / EPHEMERAL`
 - Persistent host registry credential: `NONE`
@@ -51,7 +51,7 @@ can make an environment-specific GO decision.
 - Phase A merge: `33bff5009926bb5247acad5ebcf85ba8b7f626ce`
 - Phase A implementation head: `3522116d62d8fb93a4a4ca1756aec6818280f0bb`
 - Phase A evidence head: `d2322e24ac2ff0525d5b6332143098bb048d6262`
-- Phase A review: `APPROVED / COMPLETE`
+- Phase A implementation/tooling review: `APPROVED / COMPLETE`
 - Shared-host hardening merge: `21a4ce2fe796f655d20911d8a52a60c69eec432d`
 - Shared-host hardening implementation head:
   `aa611ece4b0f974c30951a10e6954749b3aa10c4`
@@ -79,6 +79,20 @@ can make an environment-specific GO decision.
 - Deployment GO issued: `false`
 - Public production launch authorized: `false`
 
+## Retired first publication evidence
+
+- Workflow run: `33310151475`
+- Target commit: `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`
+- Server image:
+  `ghcr.io/pittonje/burningspace-server@sha256:9bcd2855cb588c326af72d10a634921db05b0729197e477c6862cc9e8aaddd58`
+- Client image:
+  `ghcr.io/pittonje/burningspace-client@sha256:118ebff019677c11654fef002cb6ca9c2eed8fd6821400994cd0f755eb8508c2`
+- Provider state: `PUBLIC — MANUALLY OBSERVED BY PRODUCT ARCHITECT`
+- Disposition: `RETIRED / HISTORICAL EVIDENCE ONLY / NOT AN AUTHORIZED
+  DEPLOYMENT TARGET`
+- Release-specific Phase A: `PASS EVIDENCE EXISTS / SUPERSEDED BY RETIRED
+  CANDIDATE`
+
 ## Known environment facts
 
 [The environment decision](ops-002-phase-b-environment-decision.md) is the
@@ -105,14 +119,22 @@ DNS, TLS, release/rollback, or external-validation gate.
 - TCP 9090: `RESTRICT / VERIFY BEFORE GO`
 - TeamSpeak administrative/query ingress: `VERIFY BEFORE GO`
 - Maintenance: `REQUIRED BEFORE CONTAINER CREATION`
+- Reboot for current deployment sequence: `NOT PERFORMED`
+- Post-reboot baseline: `NOT PERFORMED`
 - Edge: `SELECTED / REPOSITORY PREPARATION MERGED AND COMPLETE / NOT INSTALLED`
 - DNS: `NOT CONFIGURED`
-- TLS: `NOT CONFIGURED`
-- Target images: `PUBLISHED / IMMUTABLE DIGESTS BOUND`
+- TLS: `NOT READY / NOT CONFIGURED`
+- Replacement publication: `PENDING / NOT YET RUN`
+- Replacement target commit: `NOT YET BOUND`
+- Replacement image digests: `NOT YET PUBLISHED / BOUND`
+- Replacement release-specific Phase A: `PENDING`
 - Server package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
 - Client package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
-- Provider visibility confirmation: `PENDING / REQUIRED BEFORE GO`
+- Replacement provider visibility confirmation: `NOT YET VERIFIED PRIVATE`
 - Host pull authority: `DEFINED / CREDENTIAL NOT CREATED`
+- Host images pulled: `NO`
+- Caddy deployment: `NOT DEPLOYED`
+- BurningSpace deployment: `NOT DEPLOYED`
 - Previous release image digests: `STRUCTURALLY ABSENT —
   bootstrap-no-previous-release`
 - External validation: `NOT STARTED`
@@ -121,6 +143,8 @@ DNS, TLS, release/rollback, or external-validation gate.
 
 ## Incomplete environment and execution bindings
 
+- Replacement real inventory bound to replacement target commit and immutable
+  digests: `NOT VERIFIED / NOT CREATED`
 - Region: `NOT PROVIDED`
 - Host/environment asset identifier: `NOT RECORDED IN CANONICAL
   DOCUMENTATION`
@@ -183,13 +207,16 @@ PR #67 merged the controlled-staging repository contract:
 
 These repository limits remain `SUITABLE / MUST BE VERIFIED WHEN DEPLOYED`.
 Host capacity is not guaranteed. GHCR is the selected registry authority. The
-current target images were published by `OPS-002 Publish Staging Images` run
-`33310151475`, not by repository hardening or this packet.
+images published by run `33310151475` are retired historical evidence and not
+active target images. The replacement workflow has not run; its exact
+post-recovery-merge `GITHUB_SHA` and immutable image digests remain unbound.
 
 ## GO prerequisites
 
-- Phase A remains merged, Core-green, independently approved, and bound to the
-  fixed heads above.
+- Phase A implementation/tooling remains merged, Core-green, independently
+  approved, and bound to the fixed heads above. Release-specific Phase A for
+  the retired first candidate is superseded; the replacement candidate's
+  release-specific Phase A remains pending.
 - Every mandatory repository, host, edge, DNS/TLS, rollback, and
   external-validation condition in
   [the environment decision](ops-002-phase-b-environment-decision.md) is
@@ -220,6 +247,10 @@ current target images were published by `OPS-002 Publish Staging Images` run
   non-placeholder, and derived from approved off-host builds. Previous-release
   references are structurally absent for bootstrap or strictly supplied for a
   later `previous-approved-release` deployment.
+- The replacement publication has succeeded from post-recovery-merge `main`;
+  its workflow run, exact `GITHUB_SHA`, and immutable server/client references
+  are bound; both replacement packages are then manually verified private
+  before replacement release-specific Phase A begins.
 - Both GHCR package states are read-only confirmed private. If either is
   observed public, execution stops with
   `PACKAGE_ALREADY_PUBLIC_PROVIDER_CONSTRAINT`; package visibility is not
@@ -327,8 +358,9 @@ Reason: Environment selection, repository hardening, host discovery, and the
 resource-headroom assessment and Caddy repository preparation are complete,
 but required host maintenance,
 root firewall review, TCP 4000/9090 and TeamSpeak administrative ingress
-dispositions, read-only private-package provider confirmation, ephemeral
-registry authentication and exact-manifest evidence, edge
+dispositions, replacement publication and release-specific Phase A, private
+replacement-package provider confirmation, ephemeral registry authentication
+and exact-manifest evidence, edge
 ownership/configuration, DNS, TLS, rollback readiness, and external validation
 evidence remain outstanding. Host
 Caddy installation and deployment are not authorized, and deployment `GO` is

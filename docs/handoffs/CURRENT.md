@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-30
-Updated by: Codex — OPS-002 private GHCR pull-authority canonicalization
+Updated by: Codex — OPS-002 private staging namespace recovery
 
 ## Repository state
 
@@ -42,20 +42,20 @@ Updated by: Codex — OPS-002 private GHCR pull-authority canonicalization
   #69 and normal merge commit
   `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Host installation, DNS, TLS,
   external validation, deployment, and deployment `GO` remain incomplete or
-  unauthorized; image publication completed later through workflow run
-  `33310151475`.
+  unauthorized; the first image publication completed later through workflow
+  run `33310151475` but is now retired from deployment authority.
 - OPS-002 first-deployment bootstrap rollback: `MERGED / COMPLETE` through PR
   #71 and normal merge commit
   `0a90effcd11d6745a6a3ad36c2bf5069a1b8d82b`.
 - OPS-002 GHCR staging publication workflow: `MERGED / COMPLETE` through PR
   #72 and normal merge commit
   `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`. First publication workflow run
-  `33310151475`: `SUCCESS`.
-- OPS-002 private GHCR policy: server and client packages remain `PRIVATE —
-  PRODUCT ARCHITECT DECIDED`; provider-state confirmation remains `PENDING /
-  REQUIRED BEFORE GO`. The ephemeral read-only host-pull model is defined, no
-  credential has been created, and no persistent VPS registry credential is
-  authorized.
+  `33310151475`: `SUCCESS / PUBLIC NAMESPACES / RETIRED CANDIDATE`.
+- OPS-002 private GHCR policy: the replacement staging server and client
+  packages must be `PRIVATE — PRODUCT ARCHITECT DECIDED`; they are not yet
+  published and their provider states are not yet observed. The ephemeral
+  read-only host-pull model is defined, no credential has been created, and no
+  persistent VPS registry credential is authorized.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 - Campaign systems remain deferred and the canonical campaign roadmap is
@@ -466,9 +466,9 @@ authorization states otherwise.
 - PR #71: `MERGED / CLOSED`.
 - Protected stash `6dd950c5829db8a88150d3b08217277e17274187` remains present and untouched.
 
-## OPS-002 GHCR staging publication and release candidate
+## OPS-002 GHCR staging publication and retired release candidate
 
-- Status: `MERGED / CLOSED / FIRST PUBLICATION COMPLETE`.
+- Status: `MERGED / CLOSED / FIRST PUBLICATION COMPLETE / CANDIDATE RETIRED`.
 - Branch: `ops/ops-002-ghcr-staging-publish`.
 - Base: `0a90effcd11d6745a6a3ad36c2bf5069a1b8d82b` from exact local
   `origin/main`.
@@ -497,12 +497,30 @@ authorization states otherwise.
   `ghcr.io/pittonje/burningspace-server@sha256:9bcd2855cb588c326af72d10a634921db05b0729197e477c6862cc9e8aaddd58`.
 - Client image: `PUBLISHED / IMMUTABLE DIGEST BOUND` —
   `ghcr.io/pittonje/burningspace-client@sha256:118ebff019677c11654fef002cb6ca9c2eed8fd6821400994cd0f755eb8508c2`.
+- First server/client provider state: `PUBLIC — MANUALLY OBSERVED BY PRODUCT
+  ARCHITECT`.
+- First release candidate disposition: `RETIRED AS DEPLOYMENT TARGET`.
+- Old package namespaces: `PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY / NOT
+  AUTHORIZED DEPLOYMENT TARGETS`.
 - Approved hostile smoke Origin: `https://hostile.burningforge.dev`; this is an
   Origin-header test identity and requires no Phase A DNS record or TLS
   certificate.
-- Server package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`.
-- Client package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`.
-- Provider visibility confirmation: `PENDING / REQUIRED BEFORE GO`.
+- Replacement server namespace:
+  `ghcr.io/pittonje/burningspace-staging-server`.
+- Replacement client namespace:
+  `ghcr.io/pittonje/burningspace-staging-client`.
+- Replacement package visibility policy: `PRIVATE — PRODUCT ARCHITECT
+  DECIDED`.
+- Replacement publication: `NOT YET RUN`.
+- Replacement target commit: `NOT YET BOUND`.
+- Replacement image digests: `NOT YET BOUND`.
+- Replacement provider visibility: `NOT YET VERIFIED`.
+- The current ignored real inventory at `deploy/.env.staging`,
+  `deploy/external-staging-plan.json`, `deploy/edge/caddy/.env.staging`, and
+  `deploy/edge/caddy/edge-plan.json` belongs to the retired first candidate and
+  is `INVALIDATED FOR DEPLOYMENT / HISTORICAL RETIRED-CANDIDATE INPUT ONLY /
+  MUST NOT BE USED FOR PHASE B`. It is not corrupted; its release binding was
+  superseded. Replacement real inventory: `NOT YET CREATED`.
 - Host pull authority: `DEFINED — ephemeral PAT classic with read:packages
   only`; Claude security review moved from `REQUEST_CHANGES` to conditional
   approval on the contained F1/F2 documentation corrections, which are now
@@ -512,13 +530,23 @@ authorization states otherwise.
 - No local Docker or PAT was required. No host, provider API, DNS, TLS, Caddy,
   firewall, visibility, credential, or deployment operation occurred.
 
-## OPS-002 private GHCR pull authority
+## OPS-002 private GHCR pull authority and namespace recovery
 
-- Phase A: `COMPLETE`.
-- Server GHCR visibility policy: `PRIVATE`.
-- Client GHCR visibility policy: `PRIVATE`.
+- Phase A implementation/tooling: `COMPLETE`.
+- Historical release-specific Phase A for the old candidate: `PASS EVIDENCE
+  EXISTS / RETIRED`.
+- Replacement release-specific Phase A: `PENDING`.
+- Replacement inventory creation is gated on the merged recovery, successful
+  replacement publication, capture of the exact run, `GITHUB_SHA`, and both
+  immutable digests, and manual read-only confirmation that both replacement
+  packages are private. Then archive the retired inventory externally with
+  hashes and a retired-candidate marker, replace the application inventory,
+  verify/rebind the edge inventory, and rerun release-specific Phase A. Never
+  keep multiple active candidate variants under `deploy/`.
+- Replacement server GHCR visibility policy: `PRIVATE`.
+- Replacement client GHCR visibility policy: `PRIVATE`.
 - Product Architect visibility decision: `COMPLETE`.
-- Actual provider visibility check: `PENDING`.
+- Replacement provider visibility check: `PENDING AFTER PUBLICATION`.
 - Private host pull model: `DEFINED / CLAUDE SECURITY REVIEW APPROVE`; the
   exact F1/F2 corrections required by that review are applied.
 - Credential: `PAT classic / read:packages only / ephemeral`.
@@ -542,15 +570,19 @@ authorization states otherwise.
   Architecture is recommended for the operational sequence. Network, QA,
   Gameplay, and Visual are not applicable because no executable protocol,
   acceptance test, gameplay, or presentation behavior changes. Independent
-  targeted Claude security review disposition is `APPROVED FOR COMMIT/PR`
-  after the contained F1/F2 corrections.
+  targeted Claude recovery review: `REQUEST_CHANGES → CONDITIONAL APPROVE ON
+  F1`. The condition is satisfied by the exact inventory-invalidation
+  correction now applied; disposition: `APPROVED FOR COMMIT/PR`, with no
+  re-review required.
 
 ## Next safe action
 
-Send the exact private-GHCR pull-authority canonicalization diff to Claude for
-targeted security review. Do not change GHCR visibility, create host pull
-credentials, contact the host, pull images, issue deployment GO, or deploy from
-this checkpoint.
+Merge the reviewed private-staging-namespace recovery. After merge, dispatch
+the replacement publication workflow once, manually verify both new package
+states as private, and only then create replacement inventory and rebuild
+replacement release-specific Phase A evidence. Do not publish from this
+unmerged branch, change GHCR visibility, create host pull credentials, contact
+the host, pull images, issue deployment GO, or deploy from this checkpoint.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.

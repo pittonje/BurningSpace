@@ -1,11 +1,13 @@
 # OPS-002 Phase B — External Staging Environment Decision
 
-Status: `EDGE REPOSITORY PREPARATION MERGED / COMPLETE / HOST REMEDIATION AND INSTALLATION GATES REMAIN / GO NOT ISSUED`
+Status: `EDGE REPOSITORY PREPARATION MERGED / COMPLETE / REPLACEMENT PUBLICATION PENDING / HOST REMEDIATION AND INSTALLATION GATES REMAIN / GO NOT ISSUED`
 
-Amended: 2026-08-30 — private-GHCR pull-authority canonicalization. Repository
-hardening and Caddy edge repository preparation are merged, host discovery is
-complete, and the Product Architect has selected private package policy plus
-an ephemeral read-only host-pull model. The originally recorded class
+Amended: 2026-08-30 — private staging namespace recovery. Repository hardening
+and Caddy edge repository preparation are merged, host discovery is complete,
+and the Product Architect has selected private package policy plus an
+ephemeral read-only host-pull model. The first publication namespaces were
+manually observed public and are retired from deployment authority. The
+originally recorded class
 `dedicated-isolated-single-host-vps` remains superseded for OPS-002 controlled
 low-traffic external staging only. The supersession rationale and the
 preserved historical audit conclusion are recorded below.
@@ -19,17 +21,28 @@ preserved historical audit conclusion are recorded below.
   only`
 - Provider: `Contabo`
 - Canonical release registry: `GHCR`
-- Server image repository: `ghcr.io/pittonje/burningspace-server`
-- Client image repository: `ghcr.io/pittonje/burningspace-client`
+- Server image repository: `ghcr.io/pittonje/burningspace-staging-server`
+- Client image repository: `ghcr.io/pittonje/burningspace-staging-client`
 - Target release commit policy: the exact `GITHUB_SHA` of the
   Product-Architect-approved successful `OPS-002 Publish Staging Images`
   workflow run, recorded concretely in the release GO packet and real Phase B
   inventory.
-- Current first release candidate (evidence reference only):
-  `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`
+- Retired first publication evidence: workflow run `33310151475`, target commit
+  `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`.
+- Retired server repository: `ghcr.io/pittonje/burningspace-server` —
+  `PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY / NOT AN AUTHORIZED DEPLOYMENT
+  TARGET`.
+- Retired client repository: `ghcr.io/pittonje/burningspace-client` —
+  `PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY / NOT AN AUTHORIZED DEPLOYMENT
+  TARGET`.
+- Replacement publication: `PENDING / NOT YET RUN`.
+- Replacement target commit: `NOT YET BOUND` — it will be the exact
+  `GITHUB_SHA` of the successful replacement publication workflow run from
+  post-recovery-merge `main`.
 - Server package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
 - Client package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
-- Provider visibility confirmation: `PENDING / REQUIRED BEFORE GO`
+- Replacement provider visibility confirmation: `PENDING / REQUIRED AFTER
+  FIRST REPLACEMENT PUBLICATION AND BEFORE RELEASE-SPECIFIC PHASE A`
 - Host pull authority: `DEFINED — EPHEMERAL PAT CLASSIC / read:packages ONLY`
 - Persistent host registry credential: `NONE`
 - Registry credential created: `NO / NOT YET`
@@ -241,20 +254,24 @@ Merged controls:
   shared host; and
 - an explicit project-scoped Docker network.
 
-The current target images are published and their immutable digests are bound
-in the GO packet to successful publication workflow run `33310151475`. For the
-first deployment, previous-approved image and commit bindings are intentionally
-absent under `bootstrap-no-previous-release`; for every later deployment they
-remain mandatory under `previous-approved-release`.
+The first publication images from workflow run `33310151475` are historical
+evidence only and are not authorized deployment targets because their package
+namespaces were manually observed public. The replacement publication has not
+run, so no active replacement target commit or image digest is bound. For the
+first deployment, previous-approved image and commit bindings remain
+intentionally absent under `bootstrap-no-previous-release`; for every later
+deployment they remain mandatory under `previous-approved-release`.
 
 ### Private registry authority
 
-Required before GO, after the separately authorized reboot and baseline
-revalidation:
+Required after the first replacement publication and before its
+release-specific Phase A can be accepted, and again as applicable before GO
+after the separately authorized reboot and baseline revalidation:
 
-- read-only provider-state confirmation that both server and client packages
-  are private. The Product Architect's private policy is not provider-state
-  evidence. If either package is observed public, stop with
+- manual provider-state confirmation that both replacement server and client
+  packages are private. The Product Architect's private policy is not
+  provider-state evidence. If either replacement package is observed public,
+  stop with
   `PACKAGE_ALREADY_PUBLIC_PROVIDER_CONSTRAINT`; no visibility mutation is
   authorized;
 - secure external availability of a fresh short-lived GitHub personal access
@@ -451,6 +468,9 @@ the following non-secret prerequisites must be complete:
   assigned.
 - Target image bindings and the exact rollback-mode-appropriate previous-state
   bindings or structural absences are recorded.
+- The replacement publication has succeeded from post-recovery-merge `main`,
+  and its exact workflow `GITHUB_SHA` and immutable server/client digests are
+  bound in the per-release GO packet and real inventory.
 - Both package states are confirmed private through read-only provider
   evidence; the approved ephemeral credential class is available through
   secure handling; authentication and both exact manifest resolutions succeed
