@@ -2,9 +2,10 @@
 
 Status: `EDGE REPOSITORY PREPARATION MERGED / COMPLETE / HOST REMEDIATION AND INSTALLATION GATES REMAIN / GO NOT ISSUED`
 
-Amended: 2026-08-24 — post-Caddy-edge-merge reconciliation. Repository
-hardening and Caddy edge repository preparation are merged, and host discovery
-is complete. The originally recorded class
+Amended: 2026-08-30 — private-GHCR pull-authority canonicalization. Repository
+hardening and Caddy edge repository preparation are merged, host discovery is
+complete, and the Product Architect has selected private package policy plus
+an ephemeral read-only host-pull model. The originally recorded class
 `dedicated-isolated-single-host-vps` remains superseded for OPS-002 controlled
 low-traffic external staging only. The supersession rationale and the
 preserved historical audit conclusion are recorded below.
@@ -26,8 +27,12 @@ preserved historical audit conclusion are recorded below.
   inventory.
 - Current first release candidate (evidence reference only):
   `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`
-- Package visibility: `UNCHANGED / PRODUCT ARCHITECT DECISION PENDING`
-- Host pull authority if packages remain private: `NOT DEFINED`
+- Server package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
+- Client package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
+- Provider visibility confirmation: `PENDING / REQUIRED BEFORE GO`
+- Host pull authority: `DEFINED — EPHEMERAL PAT CLASSIC / read:packages ONLY`
+- Persistent host registry credential: `NONE`
+- Registry credential created: `NO / NOT YET`
 - First-deployment rollback mode: `bootstrap-no-previous-release`
 - First target edge configuration ID: `burningspace-staging-01-edge-v1`
 - Provider account: `NOT RECORDED IN CANONICAL DOCUMENTATION`
@@ -51,7 +56,7 @@ preserved historical audit conclusion are recorded below.
 - TLS edge: `NOT CONFIGURED`
 - Reverse proxy: `NOT CONFIGURED`
 - Firewall: `ROOT REVIEW REQUIRED BEFORE GO`
-- Deployment credentials: `NOT REQUESTED`
+- Deployment credentials: `APPROVED CLASS DEFINED / NOT CREATED`
 - Authority transition: `MERGED / COMPLETE`
 - Shared-host repository hardening: `MERGED / COMPLETE` — PR #67, merge
   `21a4ce2fe796f655d20911d8a52a60c69eec432d`
@@ -242,6 +247,38 @@ first deployment, previous-approved image and commit bindings are intentionally
 absent under `bootstrap-no-previous-release`; for every later deployment they
 remain mandatory under `previous-approved-release`.
 
+### Private registry authority
+
+Required before GO, after the separately authorized reboot and baseline
+revalidation:
+
+- read-only provider-state confirmation that both server and client packages
+  are private. The Product Architect's private policy is not provider-state
+  evidence. If either package is observed public, stop with
+  `PACKAGE_ALREADY_PUBLIC_PROVIDER_CONSTRAINT`; no visibility mutation is
+  authorized;
+- secure external availability of a fresh short-lived GitHub personal access
+  token (classic) with `read:packages` only and read authority for both
+  packages. `write:packages`, `delete:packages`, `repo`, `workflow`, `admin:*`,
+  and `gist` are forbidden;
+- successful interactive ephemeral authentication using `--password-stdin`
+  and a mode-restricted temporary `DOCKER_CONFIG` under `/run`, with no token
+  in argv, shell history, environment exports, repository content, inventory,
+  GO packet, or evidence;
+- read-only `docker buildx imagetools inspect` resolution, without pulling
+  image layers, of the exact immutable server and client image references
+  bound by the approved per-release GO packet and real inventory; and
+- evidenced logout and removal of the temporary registry configuration.
+
+Actual image pulls remain post-GO. After GO, authenticate through the same
+ephemeral model, run explicit `docker pull` for each exact digest, verify both
+local `RepoDigests`, then log out and destroy the temporary `DOCKER_CONFIG`
+before container startup. Startup must use the exact real shared-host Compose
+arguments with `--pull never`; `docker compose pull` after credential
+destruction is forbidden. Once the images are local, normal container restart
+or reboot recovery does not require GHCR authentication. No persistent host
+registry secret is permitted.
+
 ### Host hardening
 
 Required before GO:
@@ -414,6 +451,11 @@ the following non-secret prerequisites must be complete:
   assigned.
 - Target image bindings and the exact rollback-mode-appropriate previous-state
   bindings or structural absences are recorded.
+- Both package states are confirmed private through read-only provider
+  evidence; the approved ephemeral credential class is available through
+  secure handling; authentication and both exact manifest resolutions succeed
+  without pulling layers; and logout plus temporary-config cleanup are
+  evidenced without recording the token.
 - Edge configuration, rollback mode, owners, and resource limits are recorded.
 - Credential readiness is confirmed without recording credential values.
 - Log-redaction, rollback-readiness, external-smoke, review, and evidence

@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-30
-Updated by: Codex — OPS-002 release-candidate governance reconciliation
+Updated by: Codex — OPS-002 private GHCR pull-authority canonicalization
 
 ## Repository state
 
@@ -51,6 +51,11 @@ Updated by: Codex — OPS-002 release-candidate governance reconciliation
   #72 and normal merge commit
   `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`. First publication workflow run
   `33310151475`: `SUCCESS`.
+- OPS-002 private GHCR policy: server and client packages remain `PRIVATE —
+  PRODUCT ARCHITECT DECIDED`; provider-state confirmation remains `PENDING /
+  REQUIRED BEFORE GO`. The ephemeral read-only host-pull model is defined, no
+  credential has been created, and no persistent VPS registry credential is
+  authorized.
 - The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
   7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
 - Campaign systems remain deferred and the canonical campaign roadmap is
@@ -495,16 +500,57 @@ authorization states otherwise.
 - Approved hostile smoke Origin: `https://hostile.burningforge.dev`; this is an
   Origin-header test identity and requires no Phase A DNS record or TLS
   certificate.
-- Package visibility: `UNCHANGED / PRODUCT ARCHITECT DECISION PENDING`.
-- Host pull authority if packages remain private: `NOT DEFINED`.
+- Server package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`.
+- Client package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`.
+- Provider visibility confirmation: `PENDING / REQUIRED BEFORE GO`.
+- Host pull authority: `DEFINED — ephemeral PAT classic with read:packages
+  only`; Claude security review moved from `REQUEST_CHANGES` to conditional
+  approval on the contained F1/F2 documentation corrections, which are now
+  applied. Disposition: `APPROVED FOR COMMIT/PR`.
+- Persistent host registry credential: `NONE`.
+- Registry credential created: `NO`.
 - No local Docker or PAT was required. No host, provider API, DNS, TLS, Caddy,
   firewall, visibility, credential, or deployment operation occurred.
 
+## OPS-002 private GHCR pull authority
+
+- Phase A: `COMPLETE`.
+- Server GHCR visibility policy: `PRIVATE`.
+- Client GHCR visibility policy: `PRIVATE`.
+- Product Architect visibility decision: `COMPLETE`.
+- Actual provider visibility check: `PENDING`.
+- Private host pull model: `DEFINED / CLAUDE SECURITY REVIEW APPROVE`; the
+  exact F1/F2 corrections required by that review are applied.
+- Credential: `PAT classic / read:packages only / ephemeral`.
+- Credential created: `NO`.
+- Persistent VPS credential: `NONE`.
+- Pre-GO registry boundary: read-only private-state confirmation and exact
+  immutable manifest inspection only; no image-layer pull.
+- Post-GO registry boundary: explicit exact-digest pulls, local `RepoDigests`
+  verification, logout and temporary-config destruction before Compose starts
+  with `--pull never`.
+- DNS: `NOT CONFIGURED`.
+- Reboot: `NOT YET PERFORMED for current deployment sequence`.
+- Post-reboot baseline: `NOT YET PERFORMED`.
+- TLS: `NOT READY`.
+- Phase B GO: `NOT ISSUED`.
+- Images pulled to host: `NO`.
+- Caddy: `NOT DEPLOYED`.
+- BurningSpace: `NOT DEPLOYED`.
+- Reviewer declaration: Security is required because the diff governs
+  credential scope, lifetime, registry contact, and release gates;
+  Architecture is recommended for the operational sequence. Network, QA,
+  Gameplay, and Visual are not applicable because no executable protocol,
+  acceptance test, gameplay, or presentation behavior changes. Independent
+  targeted Claude security review disposition is `APPROVED FOR COMMIT/PR`
+  after the contained F1/F2 corrections.
+
 ## Next safe action
 
-Send the exact release-candidate governance reconciliation diff to Claude for
-targeted review. Do not create the real Phase B inventory, change GHCR
-visibility, create host pull credentials, or deploy from this checkpoint.
+Send the exact private-GHCR pull-authority canonicalization diff to Claude for
+targeted security review. Do not change GHCR visibility, create host pull
+credentials, contact the host, pull images, issue deployment GO, or deploy from
+this checkpoint.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.

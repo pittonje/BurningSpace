@@ -37,8 +37,13 @@ can make an environment-specific GO decision.
 - Target client image:
   `ghcr.io/pittonje/burningspace-client@sha256:118ebff019677c11654fef002cb6ca9c2eed8fd6821400994cd0f755eb8508c2`
 - Target image publication: `PUBLISHED / IMMUTABLE DIGESTS BOUND`
-- Package visibility: `UNCHANGED / PRODUCT ARCHITECT DECISION PENDING`
-- Host pull authority if packages remain private: `NOT DEFINED`
+- Server package policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
+- Client package policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
+- Provider visibility verification: `PENDING / REQUIRED BEFORE GO`
+- Host pull authority: `DEFINED`
+- Credential class: `PAT CLASSIC / read:packages ONLY / EPHEMERAL`
+- Persistent host registry credential: `NONE`
+- Registry credential created: `NO / NOT YET`
 - First-deployment rollback mode: `bootstrap-no-previous-release`
 - First target edge configuration ID: `burningspace-staging-01-edge-v1`
 - First-deployment previous release and edge bindings: `STRUCTURALLY ABSENT`
@@ -104,6 +109,10 @@ DNS, TLS, release/rollback, or external-validation gate.
 - DNS: `NOT CONFIGURED`
 - TLS: `NOT CONFIGURED`
 - Target images: `PUBLISHED / IMMUTABLE DIGESTS BOUND`
+- Server package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
+- Client package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
+- Provider visibility confirmation: `PENDING / REQUIRED BEFORE GO`
+- Host pull authority: `DEFINED / CREDENTIAL NOT CREATED`
 - Previous release image digests: `STRUCTURALLY ABSENT —
   bootstrap-no-previous-release`
 - External validation: `NOT STARTED`
@@ -129,6 +138,12 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Management-access owner: `NOT PROVIDED`
 - Abort owner: `NOT PROVIDED`
 - Credentials-ready confirmation without values: `NOT VERIFIED`
+- Server package provider visibility: `NOT VERIFIED PRIVATE`
+- Client package provider visibility: `NOT VERIFIED PRIVATE`
+- Ephemeral private-registry login: `NOT VERIFIED`
+- Exact server manifest resolution: `NOT VERIFIED`
+- Exact client manifest resolution: `NOT VERIFIED`
+- Registry logout and temporary-config cleanup: `NOT VERIFIED`
 - DNS-ready confirmation: `NOT VERIFIED`
 - TLS-ready confirmation: `NOT VERIFIED`
 - Firewall-ready confirmation: `NOT VERIFIED`
@@ -205,8 +220,24 @@ current target images were published by `OPS-002 Publish Staging Images` run
   non-placeholder, and derived from approved off-host builds. Previous-release
   references are structurally absent for bootstrap or strictly supplied for a
   later `previous-approved-release` deployment.
-- GHCR package visibility is decided; when packages are private, the exact host
-  pull authority is defined and evidenced.
+- Both GHCR package states are read-only confirmed private. If either is
+  observed public, execution stops with
+  `PACKAGE_ALREADY_PUBLIC_PROVIDER_CONSTRAINT`; package visibility is not
+  mutated.
+- The approved host pull authority is available through secure external
+  handling: a fresh short-lived PAT classic with `read:packages` only, read
+  authority for both packages, and no additional `write:packages`,
+  `delete:packages`, `repo`, `workflow`, `admin:*`, or `gist` authority.
+- After the authorized reboot and baseline revalidation, ephemeral
+  authentication succeeds; read-only `docker buildx imagetools inspect`
+  resolves both exact immutable manifests without pulling image layers; and
+  logout plus removal of the temporary `DOCKER_CONFIG` are evidenced without
+  recording the token.
+- Actual image pulls remain post-GO. After GO, explicit `docker pull` retrieves
+  each exact digest, local `RepoDigests` are verified, logout and temporary
+  credential destruction complete before startup, and the exact real Compose
+  startup uses `--pull never`. `docker compose pull` after credential
+  destruction is forbidden.
 - Credential, DNS, TLS, firewall, log-redaction, and rollback readiness are
   confirmed without recording secret values.
 - Operations/Security and Network/Runtime evidence approves the exact target.
@@ -221,6 +252,10 @@ The completed packet and later Phase B record must bind non-secret evidence
 for:
 
 - The exact repository head and deployed image or build identifiers.
+- Read-only confirmation that both GHCR packages are private, successful
+  ephemeral read-only authentication, both exact pre-GO manifest resolutions,
+  and successful logout and temporary-config cleanup, without any credential
+  value or image-layer pull before GO.
 - The environment ID, public client/server origins, and edge configuration.
 - DNS and TLS status, loopback bindings, firewall exposure, and management
   separation.
@@ -278,7 +313,11 @@ previous approved release and edge bindings mandatory.
 Credential values, private keys, provider credentials, SSH configuration,
 private-key paths, real environment dumps, reconnect tokens, query-bearing
 WebSocket URLs, and unbounded sensitive logs must remain outside Git, PR text,
-CI output, and evidence. This packet records readiness by category only.
+CI output, and evidence. The GHCR token is entered directly in the interactive
+SSH session through non-echoing input, is never forwarded through a PowerShell
+command, exported, placed in argv or shell history, or stored in an inventory.
+This packet records readiness by category only. No token has been created and
+no persistent host registry credential is authorized.
 
 ## Product Architect decision
 
@@ -288,7 +327,9 @@ Reason: Environment selection, repository hardening, host discovery, and the
 resource-headroom assessment and Caddy repository preparation are complete,
 but required host maintenance,
 root firewall review, TCP 4000/9090 and TeamSpeak administrative ingress
-dispositions, edge ownership/configuration, DNS, TLS, rollback readiness, and
-external validation evidence remain outstanding. Host
+dispositions, read-only private-package provider confirmation, ephemeral
+registry authentication and exact-manifest evidence, edge
+ownership/configuration, DNS, TLS, rollback readiness, and external validation
+evidence remain outstanding. Host
 Caddy installation and deployment are not authorized, and deployment `GO` is
 not issued.
