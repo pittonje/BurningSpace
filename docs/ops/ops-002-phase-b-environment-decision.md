@@ -1,7 +1,7 @@
 # OPS-002 Phase B — External Staging Environment Decision
 
-Status: `ALL NON-REVIEW PRE-GO BINDINGS COMPLETE / FOURTH DUAL REVIEW PENDING /
-PHASE B IS POST-GO / GO NOT ISSUED / NOT DEPLOYED`
+Status: `PRE-GO DUAL REVIEW RECONCILED / PHASE B IS POST-GO / GO NOT ISSUED /
+NOT DEPLOYED`
 
 Amended: 2026-08-31 — final private GHCR release reconciliation, explicit
 operator-workstation/staging-host execution boundary, three-state staged
@@ -741,24 +741,36 @@ Required after GO as execution gates:
 
 ## Risk classification and review process
 
-The final pre-GO binding reconciliation is review preparation, not approval or
-deployment authority. Independent Operations/Security and Network/Runtime
-review of the complete packet are both required before any later merge/GO
-progression. Architecture is recommended but is not a separate gate because
-the accepted topology and GO/Phase-B authority model do not change. Targeted
-static QA is sufficient for this docs-only preparation; gameplay, protocol,
-UI, and asset behavior do not change.
+The substantive final pre-GO binding reconciliation received independent
+fourth-round `APPROVE PRE-GO` verdicts from Operations/Security and
+Network/Runtime against the same frozen candidate preserved by commit
+`297e96ff6cb43b89e3733bd2faf94dfc1b41d996` and candidate binding
+`d24796c14575eab99d2d6d845bb7e2567c087a479b4c99cd63bb3209b5f0a1d3`.
+Operations/Security report SHA-256 is
+`d9b8f3b6f518a0d7afbd27a0eec4dd812b8182c846909bf840ab279e204e33a9`;
+Network/Runtime report SHA-256 is
+`bbf415911da511c2530d6cf052bffe7cc3bb990646b64f4e75bf1d9fba41c2d1`.
+Factual conflicts and blocking findings for GO readiness are `NONE`. Product
+Architect reconciliation is `GO-READY — DUAL REVIEW RECONCILED`, bound by
+sealed evidence-manifest SHA-256
+`f7748456f8c6bddfb938c0a5b2e8a0ae883b8214e78a326635419a13bff205c1`.
 
-This ordering reconciliation changes documentation and release/security
-authority only; it does not change validator or runtime code. The Product
-Architect recovery authority explicitly requires Core and Claude QA and routes
-this release/security reconciliation through required Security and QA review.
-Architecture and Network review are recommended because the authorization
-boundary and deployment ordering are being reconciled.
-Gameplay and Visual review are not applicable because gameplay and player
-presentation do not change. Core and targeted Claude QA must pass at the exact
-PR head, and the merge remains human-only unless later exact authority says
-otherwise.
+Prior A3-F1, A3-F2, A3-F3, B3-F1, B3-F2, and B3-F3 findings are `CLOSED`.
+Fourth-round A4-F1, A4-F2, A4-F3, B4-F1, B4-F2, B4-F3, and B4-F4 findings are
+non-blocking for GO readiness but remain mandatory acceptance gates at their
+assigned real-bundle stages. A4-F4 is a deferred informational
+evidence-retention note.
+
+This review-result reconciliation changes review and delivery status only; it
+does not change validator/runtime code or deployment authority and does not
+repeat the completed substantive dual review. PR #79 is the canonical delivery
+vehicle. These documents become canonical only when present on `main` through
+PR #79 after exact-head Core and mandatory Claude QA pass; repository history
+is the authority for the resulting merge state. Architecture is not a separate
+gate because the accepted topology and GO/Phase-B authority model do not
+change. Gameplay and Visual review are not applicable because gameplay and
+player presentation do not change. GO remains a separate human Product
+Architect decision.
 
 The completed edge repository implementation retained the reviewer set and
 risk classification selected for its implementation surface. This
