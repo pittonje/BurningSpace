@@ -278,6 +278,8 @@ external smoke.
 - External smoke command: `NOT PROVIDED — PRE-GO RUNBOOK BINDING REMAINS OPEN`
 - Evidence destination:
   `D:\Temp\burningspace-ops002-private-ghcr-prego-retry-20260831T081129Z`
+  — checksum-bound operator evidence outside Git; it is not a CI artifact and
+  requires trusted operator attestation
 - Operations/Security review binding: `NOT PROVIDED FOR COMPLETE PRE-GO PACKET`
 - Network/Runtime review binding: `NOT PROVIDED FOR COMPLETE PRE-GO PACKET`
 - Mandatory Claude QA binding: `PENDING THIS RECONCILIATION PR`

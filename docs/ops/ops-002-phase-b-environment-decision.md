@@ -89,7 +89,9 @@ preserved historical audit conclusion are recorded below.
 - Region: `NOT RECORDED`
 - Public IP: `164.68.107.13`
 - Host asset identifier: `vmi3266913` — intentionally recorded as a non-secret
-  deployment-environment binding by the Product Architect recovery authority
+  deployment-environment binding supplied by the Product Architect recovery
+  authority; it grants no provider-console or API authority, and provider
+  access controls remain independent
 - DNS zone: `burningforge.dev` — `CONFIGURED / PUBLICLY VERIFIED`
 - Public client hostname: `game.burningforge.dev` — `PRODUCT ARCHITECT
   SELECTED / APPROVED; A 164.68.107.13 / NO AAAA / VERIFIED`
@@ -557,9 +559,11 @@ Required after GO as execution gates:
 ## Risk classification and review process
 
 This ordering reconciliation changes documentation and release/security
-authority only; it does not change validator or runtime code. Security and QA
-review are required. Architecture and Network review are recommended because
-the authorization boundary and deployment ordering are being reconciled.
+authority only; it does not change validator or runtime code. The Product
+Architect recovery authority explicitly requires Core and Claude QA and routes
+this release/security reconciliation through required Security and QA review.
+Architecture and Network review are recommended because the authorization
+boundary and deployment ordering are being reconciled.
 Gameplay and Visual review are not applicable because gameplay and player
 presentation do not change. Core and targeted Claude QA must pass at the exact
 PR head, and the merge remains human-only unless later exact authority says
