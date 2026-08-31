@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-31
-Updated by: Codex — OPS-002 final private release reconciliation and replacement Phase A
+Updated by: Codex — OPS-002 pre-GO proof recovery and GO-ordering reconciliation
 
 ## Repository state
 
@@ -35,8 +35,8 @@ Updated by: Codex — OPS-002 final private release reconciliation and replaceme
   `33bff5009926bb5247acad5ebcf85ba8b7f626ce`.
 - OPS-002 shared-host repository hardening: `MERGED / COMPLETE` through PR #67
   and normal merge commit `21a4ce2fe796f655d20911d8a52a60c69eec432d`.
-- OPS-002 host-gate discovery: `COMPLETE`. Host remediation remains required
-  before deployment GO. External deployment remains `NOT AUTHORIZED`,
+- OPS-002 host-gate discovery, remediation, controlled reboot, and post-reboot
+  baseline: `COMPLETE / PASS`. External deployment remains `NOT AUTHORIZED`,
   deployment GO is `NOT ISSUED`, and Phase B live execution is `NOT STARTED`.
 - OPS-002 Caddy edge repository preparation: `MERGED / COMPLETE` through PR
   #69 and normal merge commit
@@ -140,7 +140,9 @@ Updated by: Codex — OPS-002 final private release reconciliation and replaceme
 - Integrated review artifact:
   `docs/reviews/ops-002-public-arena-external-staging-deployment-review.md`.
 - OPS-002 separates Phase A repository/dry-run preparation from Phase B
-  controlled external staging execution.
+  controlled external staging execution. Product Architect disposition now
+  defines Phase B as mandatory post-GO execution-time validation, not a
+  prerequisite for issuing GO.
 - External execution requires reviewed and merged Phase A implementation,
   green required checks, approved Operations/Security and Network/Runtime
   evidence, mandatory Claude QA or a policy-compliant Product Architect
@@ -148,9 +150,9 @@ Updated by: Codex — OPS-002 final private release reconciliation and replaceme
   Architect deployment `GO`.
 - External Public Arena deployment remains `NOT PERFORMED`. No staging service
   is online or claimed. The provider, environment class, DNS zone, public
-  hostnames, and derived public origins are recorded as authority decisions;
-  DNS and TLS remain unconfigured. No public address, credential, SSH material,
-  or secret environment value is recorded.
+  hostnames, and derived public origins are recorded as authority decisions.
+  DNS is configured and verified; TLS remains unconfigured. No credential, SSH
+  material, or secret environment value is recorded.
 - No other runtime task is active.
 
 ## OPS-002 Phase A completion
@@ -290,10 +292,12 @@ Updated by: Codex — OPS-002 final private release reconciliation and replaceme
 - Client upstream: `127.0.0.1:18080`.
 - Server upstream: `127.0.0.1:2567`.
 - Host installation: `NOT PERFORMED / NOT AUTHORIZED`.
-- DNS: `NOT CONFIGURED`.
+- DNS: `CONFIGURED / VERIFIED`.
 - TLS: `NOT CONFIGURED`.
-- Images: `PUBLISHED / IMMUTABLE DIGESTS BOUND` by workflow run `33310151475`.
-- External validation: `NOT STARTED`.
+- Images: final private deploy-server/deploy-client digests `PUBLISHED /
+  IMMUTABLY BOUND` by workflow run `33340075681`; earlier run `33310151475` is
+  retired historical evidence only.
+- External validation: `POST-GO / NOT STARTED`.
 - Deployment: `NOT AUTHORIZED / NOT STARTED`.
 - Deployment `GO`: `NOT ISSUED`.
 - Evidence state: the authorized documentation-only evidence commit and its
@@ -336,23 +340,25 @@ Updated by: Codex — OPS-002 final private release reconciliation and replaceme
   shared with unrelated workloads.
 - Operational isolation repository contract: `MERGED / COMPLETE` through PR
   #67. Host-side deployment and verification: `NOT STARTED`.
-- DNS zone: `SELECTED / APPROVED` — `burningforge.dev`; `NOT CONFIGURED`.
-- Client hostname: `SELECTED / APPROVED` — `game.burningforge.dev`; DNS
-  `NOT CONFIGURED`.
-- Server hostname: `SELECTED / APPROVED` — `game-server.burningforge.dev`; DNS
-  `NOT CONFIGURED`.
+- DNS zone: `CONFIGURED / VERIFIED` — `burningforge.dev`.
+- Client hostname: `game.burningforge.dev` — A `164.68.107.13`, no AAAA,
+  verified through both authoritative Cloudflare nameservers, `1.1.1.1`, and
+  `8.8.8.8`.
+- Server hostname: `game-server.burningforge.dev` — same exact verified state.
 - Public origins: `https://game.burningforge.dev` client and
   `https://game-server.burningforge.dev` server.
 - Authority transition: `MERGED / COMPLETE`.
 - Shared-host repository hardening: `MERGED / COMPLETE`.
 - Host-gate discovery: `COMPLETE`.
-- Host remediation: `REQUIRED BEFORE DEPLOYMENT GO`.
-- Root firewall review: `REQUIRED BEFORE GO`.
+- Host remediation: `COMPLETE`; controlled reboot and post-reboot baseline
+  `PASS`.
+- Root firewall review: `PASS`; UFW active.
 - Edge repository design/preparation: `MERGED / COMPLETE` through PR #69 and
   merge `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Host edge installation and
   ownership: `NOT STARTED / NOT AUTHORIZED`.
-- Edge host installation, DNS, TLS, rollback readiness, and external validation:
-  `NOT COMPLETE`. Immutable target images are published and bound.
+- Edge host installation, TLS, Edge/Application Phase B, image pull/start, and
+  external validation: `POST-GO / NOT STARTED`. Immutable target images are
+  published and bound; DNS is complete.
 - GO packet: `DRAFT / INCOMPLETE`.
 - Deployment GO: `NOT ISSUED`.
 - External deployment: `NOT AUTHORIZED`.
@@ -375,8 +381,9 @@ Updated by: Codex — OPS-002 final private release reconciliation and replaceme
   `127.0.0.1:18080` client; `18080` is an environment-specific override of the
   valid generic `8080` default because a preserved legacy container reserves
   host port `8080` in its Docker metadata.
-- No public address, SSH target, SSH fingerprint, container identifier, or
-  unrelated-service private identifier is recorded in canonical documentation.
+- The selected public address is `164.68.107.13` and host asset identifier is
+  `vmi3266913`; no SSH fingerprint, private key, credential, or unrelated-service
+  private identifier is recorded in canonical documentation.
 - The forum and all other unrelated host workloads remain outside BurningSpace
   ownership and must not be modified by BurningSpace deployment operations.
 - Host selection is `APPROVED`; repository hardening is `MERGED / COMPLETE`.
@@ -385,13 +392,11 @@ Updated by: Codex — OPS-002 final private release reconciliation and replaceme
   authorizes no external access, credential collection, host installation,
   public binding, DNS/TLS change, container creation, image publication, or
   deployment.
-- Remaining pre-GO gates include root-level effective firewall review;
-  restriction of the public plaintext dashboard on TCP 4000; restriction or
-  effective-ingress verification for Cockpit on TCP 9090; review/restriction
-  of TeamSpeak administrative/query TCP 10011, 10022, and 10080; host
-  maintenance before BurningSpace containers are created; edge, DNS, TLS,
-  immutable release/rollback, and external validation completion; and the
-  forum standstill and preservation controls in the external staging runbook.
+- Host maintenance, root-level firewall review, dashboard/Cockpit remediation,
+  TeamSpeak administrative/query review, controlled reboot, post-reboot
+  baseline, DNS, immutable release/rollback authority, and the forum standstill
+  are complete. Remaining true pre-GO bindings are recorded in the GO packet;
+  live edge/TLS, Phase B, image pull/start, and external validation are post-GO.
 
 ## Review and merge gate
 
@@ -607,19 +612,34 @@ authorization states otherwise.
 - Gate 2: `PASS`.
 - Private host pull model: `DEFINED / CLAUDE SECURITY REVIEW APPROVE`; the
   exact F1/F2 corrections required by that review are applied.
-- Host-pull credential: `PAT classic / read:packages only / ephemeral`.
-- Host-pull credential created: `NO`.
+- Host-pull credential: `PAT classic / read:packages only / ephemeral /
+  OPERATOR-HELD / NOT STORED ON HOST`.
+- Proof PAT lifecycle: `NOT REVOKED AUTOMATICALLY`; reuse is limited to the
+  post-GO exact-digest pull, followed by immediate logout/config destruction
+  and manual revocation, or earlier revocation when expired/not required.
 - Persistent VPS credential: `NONE`.
 - Pre-GO registry boundary: read-only private-state confirmation and exact
   immutable manifest inspection only; no image-layer pull.
 - Post-GO registry boundary: explicit exact-digest pulls, local `RepoDigests`
   verification, logout and temporary-config destruction before Compose starts
   with `--pull never`.
-- DNS: `NOT CONFIGURED`.
-- Reboot: `NOT YET PERFORMED for current deployment sequence`.
-- Post-reboot baseline: `NOT YET PERFORMED`.
+- DNS: `PASS / CONFIGURED / PUBLICLY VERIFIED`.
+- Controlled reboot: `COMPLETE` at `2026-08-31T07:10:25Z`; boot ID
+  `088f9941-7056-488e-a0fb-b25f8e87a0c7`.
+- Post-reboot baseline: `PASS`; reboot-required `CLEARED`.
+- Root firewall/listener evidence:
+  `D:\Temp\burningspace-ops002-controlled-reboot-20260831T070724Z`, manifest
+  SHA-256
+  `509a4b066d30ea7cae38edcf62dd9dc58c6e6b0dfa0867593d1893b480ee438d`.
+- Private GHCR pre-GO proof: `PASS` — ephemeral login and exact server/client
+  immutable manifest resolution succeeded without pulling layers; logout and
+  isolated-config destruction passed; persistent host credential `NONE`.
+- Proof evidence:
+  `D:\Temp\burningspace-ops002-private-ghcr-prego-retry-20260831T081129Z`.
 - TLS: `NOT READY`.
-- Phase B GO: `NOT ISSUED`.
+- Deployment GO: `NOT ISSUED`.
+- Edge Phase B: `POST-GO / NOT RUN`.
+- Application Phase B: `POST-GO / NOT RUN`.
 - Images pulled to host: `NO`.
 - Caddy: `NOT DEPLOYED`.
 - BurningSpace: `NOT DEPLOYED`.
@@ -629,34 +649,39 @@ authorization states otherwise.
   association. The final UI association is accepted because visibility is
   private, inheritance is off, and explicit Actions access remains `WRITE`.
 - Reviewer declaration: Security and QA are required because this is
-  release/security governance. Architecture is recommended for the corrected
-  package authorization model. Network, Gameplay, and Visual are not
-  applicable because runtime networking, gameplay, and presentation do not
-  change. Core and mandatory Claude QA must pass at the exact PR head before
-  normal merge.
+  release/security governance. Architecture and Network are recommended for
+  the corrected GO/Phase B boundary. Gameplay and Visual are not applicable
+  because gameplay and presentation do not change. Core and mandatory Claude
+  QA must pass at the exact PR head before normal merge.
+- Reconciliation implementation-head review: Core run `33374592005` returned
+  `SUCCESS`; mandatory Claude QA run `33374592021` reviewed
+  `f6a4cd3cc94435ee21a157c93df826626636cf6b`, returned wrapper `SUCCESS` and
+  substantive `Approved with suggestions`, and reported no blockers. The
+  bounded evidence-only head that records this result still requires exact-head
+  Core and Claude PR checks before normal merge.
 
 ## Next safe action
 
-The next separately authorized operational sequence is DNS configuration,
-controlled reboot, post-reboot baseline revalidation, private GHCR pre-GO
-manifest proof, and only then a Phase B GO decision. A fresh short-lived
-deployment-host PAT classic with `read:packages` only is still not created.
-Do not change GHCR visibility/access, create that credential in this task,
-contact the host, pull images, run Phase B, issue deployment GO, or deploy from
-this checkpoint.
+The next safe action is to complete the remaining pre-GO decision bindings:
+record the region; name the management-access, abort, and rollback owners; bind
+the exact external smoke command; and bind Operations/Security plus
+Network/Runtime approval of the complete packet. This reconciliation PR must
+also be normally merged after exact-head Core and mandatory Claude QA succeed.
+Only after merge and every remaining binding closes may the Product Architect
+make the explicit environment-and-release-specific Deployment GO decision.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.
 
-Host maintenance, root-level effective firewall review, public/admin port
-remediation, host edge installation and ownership, DNS, TLS, rollback
-readiness, and external validation remain outstanding and must be
-completed before the non-secret GO packet can be returned for an
-environment-specific Product Architect GO decision.
+Host Caddy installation, ACME/TLS, Edge Phase B, Application Phase B, exact
+image pull/start, and external smoke are intentionally post-GO execution gates.
+Their pending state does not block issuing GO after every true pre-GO binding
+passes, but each gate remains mandatory in sequence and failure stops
+progression.
 
 Phase B live execution remains unstarted and external deployment remains
-unauthorized. The approved staging hostnames are not yet configured in DNS,
-no credential is requested or stored, and no deployment GO is issued. Do not
-configure DNS, TLS, a reverse proxy, or a firewall, do not modify the preserved
-forum or any other unrelated host workload, and do not deploy externally until
-the Product Architect issues an explicit environment-specific deployment GO.
+unauthorized. DNS is configured; no credential is stored on the host and no
+deployment GO is issued. Do not install Caddy, contact ACME intentionally, set
+execution/TLS authorization fields, pull images, run either Phase B validator,
+start containers, or deploy until the Product Architect issues an explicit
+environment-specific deployment GO.
