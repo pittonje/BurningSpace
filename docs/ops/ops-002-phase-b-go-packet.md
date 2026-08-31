@@ -282,7 +282,10 @@ external smoke.
   requires trusted operator attestation
 - Operations/Security review binding: `NOT PROVIDED FOR COMPLETE PRE-GO PACKET`
 - Network/Runtime review binding: `NOT PROVIDED FOR COMPLETE PRE-GO PACKET`
-- Mandatory Claude QA binding: `PENDING THIS RECONCILIATION PR`
+- Mandatory Claude QA binding: `PR REQUIRED CHECK / MUST BE SUCCESS ON EXACT
+  MERGE HEAD`; the substantive reconciliation review on implementation head
+  `f6a4cd3cc94435ee21a157c93df826626636cf6b` returned `Approved with
+  suggestions` with no blockers in workflow run `33374592021`
 - Product Architect GO reference: `NOT PROVIDED`
 
 The missing GO reference and all `true` execution fields are intentionally
@@ -498,7 +501,9 @@ private publication and gates, replacement release-specific Phase A, ephemeral
 registry login, both exact manifest resolutions, and credential cleanup are
 complete. True pre-GO packet blockers remain: region metadata; management,
 abort, and rollback owners; the exact external smoke command; complete
-Operations/Security and Network/Runtime review bindings; and final mandatory
-Claude QA binding. Live Caddy installation, TLS, Edge/Application Phase B,
-image pull/start, and smoke execution are post-GO gates rather than pre-GO
-blockers. Deployment `GO` is not issued.
+Operations/Security and Network/Runtime review bindings. Mandatory Claude QA
+for this reconciliation is enforced as a required PR check on the exact merge
+head and does not replace either specialist packet review. Live Caddy
+installation, TLS, Edge/Application Phase B, image pull/start, and smoke
+execution are post-GO gates rather than pre-GO blockers. Deployment `GO` is
+not issued.
