@@ -300,8 +300,10 @@ firewall, proxy, DNS, or TLS mutation occurred.
 - Unrelated stable services remained operational during and after the forum
   shutdown.
 
-Full container identifiers, SSH targets, public addresses, SSH fingerprints,
-and unrelated-service private identifiers are deliberately excluded from
+The exact selected public IP and host asset identifier are now intentionally
+recorded as Product-Architect-supplied non-secret deployment bindings. Full
+container identifiers, SSH targets, SSH fingerprints, credentials, and
+unrelated-service private identifiers remain deliberately excluded from
 canonical documentation.
 
 ## Supersession of the earlier shared-host rejection

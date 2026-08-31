@@ -387,6 +387,13 @@ changes no executable behavior, external infrastructure, security control,
 test acceptance, gameplay, or presentation. This bounded route does not apply
 to the later edge implementation or Phase B execution.
 
+The Product Architect's pre-GO proof recovery and GO-ordering reconciliation is
+a separate docs-only release/security authority change. Security and QA are
+required; Architecture and Network are recommended; Gameplay and Visual are
+not applicable. Core and mandatory Claude QA must pass on the exact final PR
+head before normal merge. This route changes no validator or runtime code and
+does not issue GO.
+
 Claude QA must provide a usable substantive implementation verdict. A wrapper
 failure may be dispositioned only by an explicit policy-compliant Product
 Architect infrastructure decision when usable substantive review evidence
