@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-08-31
-Updated by: Codex — OPS-002 pre-GO proof recovery and GO-ordering reconciliation
+Updated by: Codex — OPS-002 staged post-GO inventory authority correction
 
 ## Repository state
 
@@ -359,7 +359,8 @@ Updated by: Codex — OPS-002 pre-GO proof recovery and GO-ordering reconciliati
 - Edge host installation, TLS, Edge/Application Phase B, image pull/start, and
   external validation: `POST-GO / NOT STARTED`. Immutable target images are
   published and bound; DNS is complete.
-- GO packet: `DRAFT / INCOMPLETE`.
+- GO packet: `DRAFT / ALL NON-REVIEW PRE-GO BINDINGS COMPLETE / DUAL REVIEW
+  PENDING`.
 - Deployment GO: `NOT ISSUED`.
 - External deployment: `NOT AUTHORIZED`.
 - Phase B live execution: `NOT STARTED`.
@@ -554,8 +555,9 @@ authorization states otherwise.
   `D:\Temp\burningspace-ops002-retired-inventory-20260830T233138Z`; its
   `SHA256SUMS.txt` SHA-256 is
   `0275a1d578842bc47a0de317b88b037aaaabbeb250017dc94057ee10722dd116`.
-- The active ignored application inventory binds only the final release. The
-  release-independent edge inventory remains byte-identical. Active hashes:
+- The canonical ignored inventory is the immutable `PRE_GO_BASE` for the final
+  release. It is never edited after GO; post-GO authorization exists only in a
+  unique detached pinned execution worktree. Canonical hashes:
   application env
   `8e989f048fa5c80f15b672c5de3638c81d48cbb2f6e1a0f471d60a1a0759b08e`,
   application plan
@@ -614,9 +616,10 @@ authorization states otherwise.
   exact F1/F2 corrections required by that review are applied.
 - Host-pull credential: `PAT classic / read:packages only / ephemeral /
   OPERATOR-HELD / NOT STORED ON HOST`.
-- Proof PAT lifecycle: `NOT REVOKED AUTOMATICALLY`; reuse is limited to the
-  post-GO exact-digest pull, followed by immediate logout/config destruction
-  and manual revocation, or earlier revocation when expired/not required.
+- Pre-GO proof PAT: `REVOKED / MUST NOT BE REUSED`.
+- Future post-GO pull PAT: `FRESH SHORT-LIVED PAT CLASSIC / read:packages ONLY /
+  NOT CREATED`; it is created only after GO immediately before exact-digest
+  pull, then logout/config destruction and manual revocation are mandatory.
 - Persistent VPS credential: `NONE`.
 - Pre-GO registry boundary: read-only private-state confirmation and exact
   immutable manifest inspection only; no image-layer pull.
@@ -636,6 +639,48 @@ authorization states otherwise.
   isolated-config destruction passed; persistent host credential `NONE`.
 - Proof evidence:
   `D:\Temp\burningspace-ops002-private-ghcr-prego-retry-20260831T081129Z`.
+- Management-access owner: `pittonje / Product Architect operator`.
+- Abort owner: `pittonje / Product Architect operator`.
+- Rollback owner: `pittonje / Product Architect operator`.
+- Exact external smoke command: `BOUND` to the existing
+  `apps/server/scripts/external-staging-smoke.ts` production invocation with
+  exact client/server/allowed/hostile origins and a 15000 ms bound. It is not
+  executed pre-GO. Its pinned-worktree provisioning procedure is `BOUND /
+  LOCALLY PROVEN` on the Product Architect/operator Windows workstation in Git
+  for Windows Bash. The same detached target worktree receives all four exact
+  hash-bound ignored inventories, uses verified standalone Compose, and runs
+  both validator families and smoke tooling. No Git/Node/npm/worktree or smoke
+  tooling is placed on the shared VPS. Named harness and assertion evidence
+  markers are mechanically distinct.
+- Complete execution-side/inventory proof:
+  `D:\Temp\burningspace-ops002-pinned-execution-proof-20260831T143459Z`;
+  fresh ancestry, source/copy bindings, `npm ci`, builds, readable module files,
+  Compose normalization, Application/Edge Phase A, 3 smoke self-tests, 56
+  preflight self-tests, exact Bash smoke form, and cleanup all `PASS`.
+- The post-GO inventory authority is `THREE_STATE_STAGE_BOUND`:
+  `PRE_GO_BASE` is the immutable canonical source; `GO_AUTHORIZED_PRE_TLS` is a
+  worktree-only derivative activated by a concrete Product Architect GO and
+  changes only the exact GO/execution/host-installation/DNS allowlist while
+  keeping `tlsReady=false`; `TLS_READY_PHASE_B` derives from State 2 only after
+  retained real TLS evidence and changes only edge-plan `tlsReady=false ->
+  true`. Every stage uses its own manifest-bound hashes. Smoke readiness uses
+  `TLS_READY_PHASE_B`, never the canonical pre-GO hashes.
+- The exact field allowlist and both real validator command paths were proven
+  locally with a clearly non-authoritative synthetic GO/TLS fixture at
+  `D:\Temp\burningspace-ops002-inventory-stage-proof-20260831T170134Z`.
+  State transformations, Edge Phase-B CLI, Application Phase-B CLI, daemonless
+  Compose normalization, and smoke self-test 3/3 passed. This is not real GO,
+  real TLS, real Edge/Application Phase B, or external smoke.
+- Region / provider location: `Hub Europe — PROVIDER-CONFIRMED BY PRODUCT
+  ARCHITECT`; this preserves the literal Contabo panel value without inferring
+  a country, city, or physical datacenter.
+- Operations/Security latest review: `REQUEST_CHANGES / A3-F1 MEDIUM`; the
+  impossible pre-GO-hash/post-GO-mutation authority model is corrected by the
+  three-state stage manifest and is `PENDING FOURTH REVIEW`. Adjacent A3-F2
+  Bash-version and A3-F3 worktree-variable clarity defects are corrected.
+- Network/Runtime latest review: `REQUEST_CHANGES / B3-F1 HIGH`; the same
+  stale-hash contradiction is corrected and `PENDING FOURTH REVIEW`. B3-F2
+  live-evidence wording and B3-F3 exact Bash-banner policy are corrected.
 - TLS: `NOT READY`.
 - Deployment GO: `NOT ISSUED`.
 - Edge Phase B: `POST-GO / NOT RUN`.
@@ -648,11 +693,12 @@ authorization states otherwise.
   their absence does not guarantee that GitHub shows no repository-source
   association. The final UI association is accepted because visibility is
   private, inheritance is off, and explicit Actions access remains `WRITE`.
-- Reviewer declaration: Security and QA are required because this is
-  release/security governance. Architecture and Network are recommended for
-  the corrected GO/Phase B boundary. Gameplay and Visual are not applicable
-  because gameplay and presentation do not change. Core and mandatory Claude
-  QA must pass at the exact PR head before normal merge.
+- Final-binding reviewer declaration: independent Operations/Security and
+  Network/Runtime review are both required before any later merge/GO
+  progression. Architecture is recommended but not a separate gate because
+  topology and the GO/Phase-B authority model do not change. Targeted static QA
+  applies to this docs-only preparation. Gameplay and Visual are not applicable
+  because gameplay and presentation do not change.
 - Reconciliation implementation-head review: Core run `33374592005` returned
   `SUCCESS`; mandatory Claude QA run `33374592021` reviewed
   `f6a4cd3cc94435ee21a157c93df826626636cf6b`, returned wrapper `SUCCESS` and
@@ -662,13 +708,15 @@ authorization states otherwise.
 
 ## Next safe action
 
-The next safe action is to complete the remaining pre-GO decision bindings:
-record the region; name the management-access, abort, and rollback owners; bind
-the exact external smoke command; and bind Operations/Security plus
-Network/Runtime approval of the complete packet. This reconciliation PR must
-also be normally merged after exact-head Core and mandatory Claude QA succeed.
-Only after merge and every remaining binding closes may the Product Architect
-make the explicit environment-and-release-specific Deployment GO decision.
+All non-review pre-GO bindings are complete, including the bound and locally
+proven three-state execution-inventory model and both offline Phase-B command
+paths. Send the exact fourth frozen candidate for two separate new independent
+verdicts: Operations/Security and Network/Runtime.
+Do not treat one generic approval as satisfying both roles. Do not commit, open
+a PR, merge, issue GO, or begin post-GO execution during this review-handoff
+task. Only after both approvals and a later exact reconciliation/authorization
+sequence may the Product Architect make the environment-and-release-specific
+Deployment GO decision.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.
