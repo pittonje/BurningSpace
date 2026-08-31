@@ -15,11 +15,11 @@ can make an environment-specific GO decision.
 - Canonical release registry: `GHCR`
 - Server image repository: `ghcr.io/pittonje/burningspace-deploy-server`
 - Client image repository: `ghcr.io/pittonje/burningspace-deploy-client`
-- DNS zone: `burningforge.dev` — `SELECTED / NOT CONFIGURED`
-- Public client hostname: `game.burningforge.dev` — `SELECTED / DNS NOT
-  CONFIGURED`
-- Public server hostname: `game-server.burningforge.dev` — `SELECTED / DNS NOT
-  CONFIGURED`
+- DNS zone: `burningforge.dev` — `CONFIGURED / PUBLICLY VERIFIED`
+- Public client hostname: `game.burningforge.dev` — `A 164.68.107.13 / NO
+  AAAA / VERIFIED`
+- Public server hostname: `game-server.burningforge.dev` — `A 164.68.107.13 /
+  NO AAAA / VERIFIED`
 - Public client origin: `https://game.burningforge.dev`
 - Public server origin: `https://game-server.burningforge.dev`
 - Client build-time server URL:
@@ -59,7 +59,11 @@ can make an environment-specific GO decision.
 - Host pull authority: `DEFINED`
 - Credential class: `PAT CLASSIC / read:packages ONLY / EPHEMERAL`
 - Persistent host registry credential: `NONE`
-- Registry credential created: `NO / NOT YET`
+- Registry credential: `OPERATOR-HELD / NOT STORED ON HOST`
+- Pre-GO private GHCR login: `PASS`
+- Exact server manifest resolution: `PASS`
+- Exact client manifest resolution: `PASS`
+- Registry logout and temporary-config cleanup: `PASS`
 - First-deployment rollback mode: `bootstrap-no-previous-release`
 - First target edge configuration ID: `burningspace-staging-01-edge-v1`
 - First-deployment previous release and edge bindings: `STRUCTURALLY ABSENT`
@@ -168,10 +172,11 @@ can make an environment-specific GO decision.
 ## Known environment facts
 
 [The environment decision](ops-002-phase-b-environment-decision.md) is the
-single source of truth for the measured host evidence summarized here. These
-facts resolve host selection, repository hardening, host discovery, and
-resource-headroom assessment only. They satisfy no host-remediation, edge,
-DNS, TLS, release/rollback, or external-validation gate.
+single source of truth for the measured host evidence summarized here. Current
+evidence satisfies the recorded pre-GO host remediation, reboot/baseline, DNS,
+release, Phase A, private-registry, and bootstrap rollback-authority gates. It
+does not establish live Caddy/TLS, either Phase B result, image pull/start, or
+external smoke.
 
 - Environment selected: `YES`
 - Provider selected: `YES` — Contabo
@@ -185,16 +190,18 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Client loopback: `127.0.0.1:18080` for this selected host; the generic
   Compose default remains `8080`
 - Shared-host repository hardening: `MERGED / COMPLETE`
-- Host remediation: `REQUIRED BEFORE DEPLOYMENT GO`
-- Firewall: `ROOT REVIEW REQUIRED`
-- TCP 4000: `RESTRICT BEFORE GO`
-- TCP 9090: `RESTRICT / VERIFY BEFORE GO`
-- TeamSpeak administrative/query ingress: `VERIFY BEFORE GO`
-- Maintenance: `REQUIRED BEFORE CONTAINER CREATION`
-- Reboot for current deployment sequence: `NOT PERFORMED`
-- Post-reboot baseline: `NOT PERFORMED`
+- Host remediation and controlled reboot: `COMPLETE / POST-REBOOT BASELINE PASS`
+- Firewall: `PASS — ROOT-LEVEL EFFECTIVE REVIEW COMPLETE / UFW ACTIVE`
+- TCP 4000: `LOOPBACK ONLY`
+- TCP 9090: `LOOPBACK ONLY`
+- TeamSpeak administrative/query ingress: `REVIEWED / EXPECTED LISTENERS ONLY`
+- Maintenance: `COMPLETE BEFORE CONTAINER CREATION`
+- Controlled reboot for current deployment sequence: `COMPLETE` at
+  `2026-08-31T07:10:25Z`; boot ID
+  `088f9941-7056-488e-a0fb-b25f8e87a0c7`
+- Post-reboot baseline: `PASS`; reboot-required `CLEARED`
 - Edge: `SELECTED / REPOSITORY PREPARATION MERGED AND COMPLETE / NOT INSTALLED`
-- DNS: `NOT CONFIGURED`
+- DNS: `CONFIGURED / VERIFIED`
 - TLS: `NOT READY / NOT CONFIGURED`
 - Final private bootstrap: `COMPLETE / PAT REVOKED`
 - Final package existence: `VERIFIED`
@@ -208,7 +215,8 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Server package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
 - Client package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`
 - Final provider visibility confirmation: `PRIVATE / VERIFIED`
-- Host pull authority: `DEFINED / CREDENTIAL NOT CREATED`
+- Host pull authority: `DEFINED / OPERATOR-HELD / PRE-GO PROOF PASS / NO HOST
+  PERSISTENCE`
 - Host images pulled: `NO`
 - Caddy deployment: `NOT DEPLOYED`
 - BurningSpace deployment: `NOT DEPLOYED`
@@ -218,17 +226,16 @@ DNS, TLS, release/rollback, or external-validation gate.
 - Deployment GO: `NOT ISSUED`
 - Packet state: `DRAFT / INCOMPLETE`
 
-## Incomplete environment and execution bindings
+## Remaining pre-GO decision bindings and post-GO execution bindings
 
 - Final real inventory bound to final target commit and immutable digests:
   `VERIFIED / ACTIVE / GIT-IGNORED`; application env SHA-256
   `8e989f048fa5c80f15b672c5de3638c81d48cbb2f6e1a0f471d60a1a0759b08e`,
   application plan SHA-256
   `0ffa473d762230f084f6d239e7fb5a328069cbba0ae9409c7b712e9a3fb29607`
-- Region: `NOT PROVIDED`
-- Host/environment asset identifier: `NOT RECORDED IN CANONICAL
-  DOCUMENTATION`
-- Target public IP: `NOT RECORDED IN CANONICAL DOCUMENTATION`
+- Region: `NOT PROVIDED — PRE-GO BLOCKER`
+- Host/environment asset identifier: `vmi3266913`
+- Target public IP: `164.68.107.13`
 - Previous approved commit: `ABSENT — bootstrap-no-previous-release`
 - Previous server image digest: `ABSENT — bootstrap-no-previous-release`
 - Previous client image digest: `ABSENT — bootstrap-no-previous-release`
@@ -239,30 +246,41 @@ DNS, TLS, release/rollback, or external-validation gate.
   socket ownership/mode, and absence of TCP admin listeners: `NOT VERIFIED`
 - Rollback mode: `bootstrap-no-previous-release`
 - Effective resource-limit validation on deployed containers: `NOT PERFORMED`
-- Management-access owner: `NOT PROVIDED`
-- Abort owner: `NOT PROVIDED`
-- Credentials-ready confirmation without values: `NOT VERIFIED`
+- Management-access owner: `NOT PROVIDED — PRE-GO BLOCKER`
+- Abort owner: `NOT PROVIDED — PRE-GO BLOCKER`
+- Rollback owner: `NOT PROVIDED — PRE-GO BLOCKER`
+- Credentials-ready confirmation without values: `PASS — operator-held
+  read:packages PAT; no value recorded`
 - Server package provider visibility: `PRIVATE / VERIFIED`
 - Client package provider visibility: `PRIVATE / VERIFIED`
 - Repository source: `pittonje/BurningSpace / OBSERVED / ACCEPTED`, both
   packages
 - Inherited access: `OFF / VERIFIED`, both packages
 - Manage Actions access role: `WRITE / VERIFIED`, both packages
-- Ephemeral private-registry login: `NOT VERIFIED`
-- Exact server manifest resolution: `NOT VERIFIED`
-- Exact client manifest resolution: `NOT VERIFIED`
-- Registry logout and temporary-config cleanup: `NOT VERIFIED`
-- DNS-ready confirmation: `NOT VERIFIED`
-- TLS-ready confirmation: `NOT VERIFIED`
-- Firewall-ready confirmation: `NOT VERIFIED`
-- Log-redaction confirmation: `NOT VERIFIED`
-- Rollback-ready confirmation: `NOT VERIFIED`
-- External smoke command: `NOT PROVIDED`
-- Evidence destination: `NOT PROVIDED`
-- Operations/Security review binding: `NOT PROVIDED`
-- Network/Runtime review binding: `NOT PROVIDED`
-- Mandatory Claude QA binding: `NOT PROVIDED`
+- Ephemeral private-registry login: `PASS`
+- Exact server manifest resolution: `PASS`
+- Exact client manifest resolution: `PASS`
+- Registry logout and temporary-config cleanup: `PASS`
+- DNS-ready confirmation: `PASS`
+- TLS-ready confirmation: `POST-GO EXECUTION GATE / NOT READY`
+- Firewall-ready confirmation: `PASS — controlled-reboot baseline evidence`
+- Log-redaction confirmation: `PRE-GO LOCAL CONTRACT PASS / LIVE POST-GO
+  EVIDENCE PENDING`
+- Rollback-ready confirmation: `BOOTSTRAP AUTHORITY PASS / NAMED ABORT OWNER
+  STILL REQUIRED`
+- External smoke command: `NOT PROVIDED — PRE-GO RUNBOOK BINDING REMAINS OPEN`
+- Evidence destination:
+  `D:\Temp\burningspace-ops002-private-ghcr-prego-retry-20260831T081129Z`
+- Operations/Security review binding: `NOT PROVIDED FOR COMPLETE PRE-GO PACKET`
+- Network/Runtime review binding: `NOT PROVIDED FOR COMPLETE PRE-GO PACKET`
+- Mandatory Claude QA binding: `PENDING THIS RECONCILIATION PR`
 - Product Architect GO reference: `NOT PROVIDED`
+
+The missing GO reference and all `true` execution fields are intentionally
+post-decision values, not pre-GO blockers. Host Caddy installation, real TLS,
+Edge Phase B, Application Phase B, image pull/start, and external smoke are
+mandatory post-GO execution gates. They remain pending by design and cannot be
+used to claim deployment success.
 
 ## Repository hardening contract
 
@@ -297,7 +315,7 @@ succeeded once at exact `GITHUB_SHA`
 `4a774354859c036d45666496539c2fc3c24b9f1c`; the immutable deploy-server and
 deploy-client references in Fixed bindings are the only active release images.
 
-## GO prerequisites
+## Pre-GO prerequisites
 
 - Phase A implementation/tooling remains merged, Core-green, independently
   approved, and bound to the fixed heads above. Release-specific Phase A for
@@ -306,14 +324,11 @@ deploy-client references in Fixed bindings are the only active release images.
   is `D:\Temp\burningspace-ops002-final-private-phasea-20260830T233259Z`;
   `SHA256SUMS.txt` SHA-256 is
   `3b78b2861450a1e39aa7dc729dd1cb065c80dcee1cbd8858c1ff04e829838a2e`.
-- Every mandatory repository, host, edge, DNS/TLS, rollback, and
-  external-validation condition in
+- Every pre-GO repository, host, DNS, private-registry, rollback-readiness, and
+  operational-isolation condition in
   [the environment decision](ops-002-phase-b-environment-decision.md) is
-  complete and evidenced. Because the selected host is shared and not
-  physically isolated, the required operational isolation boundary — bounded
-  Compose project, container, and project-scoped network boundaries, explicit
-  loopback binds, explicit resource limits, and immutable release and rollback
-  bindings — is implemented and verified.
+  complete and evidenced. Live Caddy/TLS state and both Phase B validators are
+  post-GO execution gates and are not prerequisites for issuing GO.
 - Host maintenance is complete before any BurningSpace container is created,
   the separately Product-Architect-authorized reboot is complete, and the new
   boot ID plus post-reboot forum, port, Docker, unrelated-service, failed-unit,
@@ -327,11 +342,10 @@ deploy-client references in Fixed bindings are the only active release images.
 - The exact environment, public origins, Origin allowlist, release bindings,
   edge configuration, rollback binding, resource limits, owners, and evidence
   destination are complete.
-- The effective Caddy unit uses the reviewed drop-in, runs as `caddy:caddy`,
-  creates `/run/caddy` mode `0700` with `UMask=0077`, exposes only
-  `/run/caddy/burningspace-admin.sock` for administration, denies an unrelated
-  local user, and reloads successfully through that socket with no TCP admin
-  listener before or after reload.
+- The pre-GO Caddy contract binds the reviewed version, drop-in, service
+  identity, runtime directory, Unix admin socket, hashes, log-safety rules, and
+  rollback. Effective host ownership/listener/reload/TLS evidence is required
+  after GO and before Edge Phase B may pass.
 - The target server/client image references are supplied, digest-pinned,
   non-placeholder, and derived from approved off-host builds. Previous-release
   references are structurally absent for bootstrap or strictly supplied for a
@@ -363,13 +377,30 @@ deploy-client references in Fixed bindings are the only active release images.
   credential destruction complete before startup, and the exact real Compose
   startup uses `--pull never`. `docker compose pull` after credential
   destruction is forbidden.
-- Credential, DNS, TLS, firewall, log-redaction, and rollback readiness are
-  confirmed without recording secret values.
+- Credential, DNS, firewall, pre-GO log-redaction contract, and rollback
+  readiness are confirmed without recording secret values. Real TLS and live
+  log-redaction evidence are post-GO execution gates.
 - Operations/Security and Network/Runtime evidence approves the exact target.
 - Mandatory Claude QA is bound to the exact target or receives a
   policy-compliant Product Architect infrastructure disposition.
 - The Product Architect issues an explicit GO naming the environment and
   target release.
+
+## Mandatory post-GO execution gates
+
+GO authorizes the bounded host-mutation sequence; it does not waive any gate:
+
+1. bind the exact GO reference and truthful authorization fields;
+2. install/activate the Phase-A-reviewed Caddy edge;
+3. obtain and prove real automatic-HTTPS/ACME certificates;
+4. set `tlsReady=true` only after evidence exists and require Edge Phase B PASS;
+5. require Application Phase B PASS from the pinned target worktree;
+6. perform exact-digest pulls under ephemeral authentication, verify
+   `RepoDigests`, log out, and destroy the temporary config;
+7. start with `--pull never`, run external smoke, and complete or roll back.
+
+Failure of either Phase B validator stops progression. GO is not permission to
+bypass a failed validator.
 
 ## Required evidence
 
@@ -385,8 +416,8 @@ for:
   temporary-config cleanup, without any credential value or image-layer pull
   before GO.
 - The environment ID, public client/server origins, and edge configuration.
-- DNS and TLS status, loopback bindings, firewall exposure, and management
-  separation.
+- Pre-GO DNS, loopback bindings, firewall exposure, and management separation;
+  the later Phase B record binds live TLS status.
 - Effective Caddy service identity, committed drop-in, runtime-directory and
   socket ownership/modes, service umask, Unix-socket reload result, unrelated
   local-user denial, post-reload routing, and live proof that no TCP admin
@@ -444,21 +475,21 @@ WebSocket URLs, and unbounded sensitive logs must remain outside Git, PR text,
 CI output, and evidence. The GHCR token is entered directly in the interactive
 SSH session through non-echoing input, is never forwarded through a PowerShell
 command, exported, placed in argv or shell history, or stored in an inventory.
-This packet records readiness by category only. No token has been created and
-no persistent host registry credential is authorized.
+This packet records readiness by category only. The short-lived token remains
+operator-held; its value is not recorded, and no persistent host registry
+credential is authorized or present.
 
 ## Product Architect decision
 
 GO: `NOT ISSUED`
 
-Reason: Environment selection, repository hardening, host discovery, the
-resource-headroom assessment, Caddy repository preparation, final private
-bootstrap, both private gates, Manage Actions access, canonical publication,
-and replacement release-specific Phase A are complete. Required host
-maintenance, root firewall review, TCP 4000/9090 and TeamSpeak administrative
-ingress dispositions, ephemeral registry authentication and exact-manifest
-evidence, edge
-ownership/configuration, DNS, TLS, rollback readiness, and external validation
-evidence remain outstanding. Host
-Caddy installation and deployment are not authorized, and deployment `GO` is
-not issued.
+Reason: Environment selection, repository/host hardening, controlled reboot,
+post-reboot baseline, DNS, Caddy repository preparation/local validation, final
+private publication and gates, replacement release-specific Phase A, ephemeral
+registry login, both exact manifest resolutions, and credential cleanup are
+complete. True pre-GO packet blockers remain: region metadata; management,
+abort, and rollback owners; the exact external smoke command; complete
+Operations/Security and Network/Runtime review bindings; and final mandatory
+Claude QA binding. Live Caddy installation, TLS, Edge/Application Phase B,
+image pull/start, and smoke execution are post-GO gates rather than pre-GO
+blockers. Deployment `GO` is not issued.

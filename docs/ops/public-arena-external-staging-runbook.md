@@ -209,16 +209,16 @@ consequence; manual Gate 1 and Gate 2 remain mandatory.
 
 Both final deployment packages are manually verified private at Gate 2. Final
 workflow run `33340075681` and the immutable release references are bound. The
-host pull model is therefore defined, but it remains unusable until a separate
-short-lived host credential is created and the authorized post-reboot pre-GO
-manifest-proof sequence is performed.
+host pull model is defined, and the authorized post-reboot pre-GO proof now
+records successful ephemeral login, both exact immutable manifest resolutions,
+logout, and temporary-config cleanup without image-layer pulls.
 
 Private pull authority uses a fresh, short-lived GitHub personal access token
 (classic) owned by an operator who can read both packages. Its only scope is
 `read:packages`. `write:packages`, `delete:packages`, `repo`, `workflow`,
 `admin:*`, and `gist` are forbidden. Do not reuse local `gh` authentication or
-use `GITHUB_TOKEN` on the VPS. No token has been created by this decision, and
-no persistent registry credential is permitted on the host.
+use `GITHUB_TOKEN` on the VPS. The proof credential remains operator-held and
+is not stored on the host; no persistent registry credential is permitted.
 
 For each release, the operator enters the token directly in the interactive
 SSH session. Do not forward or paste it through a PowerShell command. The
@@ -410,28 +410,17 @@ DNS, host access, credential creation, Phase B, deployment GO, or deployment.
 
 ## Shared-host remediation gates
 
-Repository hardening and read-only host discovery are complete. The following
-host actions remain required before deployment GO and are not authorized by
-this runbook or by edge design/preparation:
+Repository hardening, root-level effective firewall review, Dashy/Cockpit
+loopback remediation, TeamSpeak administrative/query review, host maintenance,
+the controlled reboot, and post-reboot baseline are complete. UFW is active,
+the reboot-required marker is cleared, and the current boot ID is
+`088f9941-7056-488e-a0fb-b25f8e87a0c7`.
 
-- Complete root-level effective firewall review for IPv4 and IPv6, including
-  `ufw status verbose`, `nft list ruleset`, `iptables -S`, `ip6tables -S`, the
-  `DOCKER-USER` chain, and effective exposure for TCP 22, 4000, 9090, 10011,
-  10022, 10080, 30033, and UDP 9987. UFW default INPUT/FORWARD DROP is not by
-  itself a firewall PASS because Docker-published ports do not rely solely on
-  the UFW INPUT chain.
-- Restrict the public plaintext Dashy dashboard on TCP 4000. Acceptable future
-  dispositions are loopback rebinding behind an appropriately authenticated
-  administrative path or effective Docker-aware source filtering. The exact
-  mechanism requires separate authority.
-- Retain Cockpit on TCP 9090, but restrict or verify its effective ingress,
-  including root-level IPv4/IPv6 treatment and the operator access path.
-- Review and restrict as required the unrelated TeamSpeak administrative/query
-  TCP 10011, 10022, and 10080. BurningSpace operations do not own TeamSpeak;
-  UDP 9987 and required file transfer remain subject to host-owner needs.
-- Complete host maintenance before creating BurningSpace containers. The
-  audited pending set includes Docker Engine, Docker CLI, containerd, Docker
-  Compose plugin, and Docker Buildx, so the Docker daemon may restart.
+Immediately before GO and again before the first post-GO mutation, confirm that
+this evidence remains current. Any drift in firewall treatment, administrative
+listeners, forum standstill, Docker health, unrelated services, or reserved
+ports returns the packet to pre-GO remediation; this runbook does not authorize
+an automatic repair.
 
 After host maintenance, reverify Docker health; the forum remains stopped with
 restart policy `no`; TCP 80/443 and both selected loopback ports remain free;
@@ -440,14 +429,16 @@ acceptable. Use exact individual container inspection as authority. Docker
 aggregate container counters have disagreed with individually inspected state
 on this host, so `docker info ContainersRunning` alone is not a stop/GO gate.
 
-The required Phase B order is: completed host maintenance; then one controlled,
-separately Product-Architect-authorized reboot; then shared-host baseline
-revalidation; then image and edge deployment. This runbook does not authorize
-or perform that reboot. After the reboot and before deployment, record the new
-boot ID and verify: the forum is stopped with restart policy `no`; TCP 80/443,
-2567, and 18080 are free; Dashy and Cockpit are loopback-only; TeamSpeak has
-only its expected listeners; failed systemd units have been checked; and the
-current reboot-required state has been checked and recorded.
+The required authorization order is: completed host maintenance; then one
+controlled, separately Product-Architect-authorized reboot; then shared-host
+baseline revalidation and the complete pre-GO packet; then explicit Deployment
+GO; then the bounded post-GO edge and application sequence below. This runbook
+does not authorize or perform a reboot or issue GO. After the reboot and before
+the GO decision, record the new boot ID and verify: the forum is stopped with
+restart policy `no`; TCP 80/443, 2567, and 18080 are free; Dashy and Cockpit are
+loopback-only; TeamSpeak has only its expected listeners; failed systemd units
+have been checked; and the current reboot-required state has been checked and
+recorded.
 
 ## Preserved forum standstill and cleanup prohibition
 
@@ -500,29 +491,38 @@ GO must name the environment and target release explicitly. It cannot be inferre
 
 Only after explicit GO:
 
-1. Revalidate the non-secret plan in `--phase-b` mode and bind the approved
-   target release plus exactly one rollback mode. The first deployment uses
-   `bootstrap-no-previous-release`; later deployments use
-   `previous-approved-release`.
-2. Confirm credentials are available through secure channels and no value will enter repository output.
-3. Confirm maintenance and all shared-host remediation gates are complete,
-   including the forum standstill and cleanup prohibition.
-4. Confirm the selected Caddy version, effective systemd drop-in and service
-   identity, `/run/caddy` ownership/mode, service umask, Unix admin socket and
-    reload path, absence of IPv4/IPv6 TCP admin listeners, rollback-mode-correct
-    current/previous config IDs, rendered/adapted hashes, DNS/TLS edge state, log safety, and
-   service-port exposure against the approved inventory and Caddy runbook.
-5. Authenticate through the ephemeral private-GHCR procedure, pull the exact
-   prebuilt digest-pinned target images with explicit `docker pull`, verify
-   their local `RepoDigests`, then log out and destroy the temporary
-   `DOCKER_CONFIG`; never build from source on the shared host.
-6. Start the one-server/one-client deployment with the exact real Compose
-   arguments and `--pull never`, then apply the provider-neutral edge
-   configuration through the approved operational mechanism. Do not run
-   `docker compose pull` after credential destruction.
-7. Run the complete external matrix below, including machine reconnect/session smoke and separate browser UX evidence.
-8. Abort or roll back on any failed required check; never report a partial smoke as success.
-9. Capture only bounded, redacted evidence.
+1. Bind the concrete GO reference and switch only the authorized real edge and
+   application inventory fields to truthful execution semantics. Preserve the
+   exact target release and exactly one rollback mode:
+   `bootstrap-no-previous-release` for the first deployment or
+   `previous-approved-release` later.
+2. Confirm maintenance and shared-host pre-GO gates remain current, including
+   the forum standstill, cleanup prohibition, DNS, firewall, and reserved ports.
+3. Install and activate the already Phase-A-reviewed Caddy version, drop-in,
+   service identity, runtime directory, Unix admin socket, configuration, and
+   bounded logging contract. This is the first host-mutation stage authorized
+   by GO.
+4. Allow automatic HTTPS/ACME to obtain the real certificates. Prove the live
+   certificate, renewal ownership, exact Origin behavior, listeners, socket
+   permissions, adapted hashes, and log safety before setting `tlsReady=true`.
+5. Run Edge Phase B with truthful `dnsConfigured=true`, `tlsReady=true`,
+   `hostInstallationAuthorized=true`, `externalExecutionAuthorized=true`, and
+   the exact GO reference. If it fails, stop before application deployment.
+6. From the pinned release worktree whose `HEAD` equals `targetCommit`, run
+   Application Phase B with the exact immutable images, rollback structure,
+   normalized Compose contract, execution authorization, and GO reference. If
+   it fails, do not pull or start application images.
+7. Authenticate through the ephemeral private-GHCR procedure, run explicit
+   `docker pull` for exactly the two digest-pinned images, verify local
+   `RepoDigests`, then log out and destroy the temporary `DOCKER_CONFIG`.
+8. Start the one-server/one-client deployment with the exact real Compose
+   arguments and `--pull never`. Never use `docker compose pull` after
+   credential destruction.
+9. Run the complete external matrix below, including machine reconnect/session
+   smoke and separate browser UX evidence.
+10. Abort or perform the bounded rollback on any failed required check; never
+    bypass either Phase B validator or report a partial smoke as success.
+11. Capture only bounded, redacted evidence.
 
 ## External validation matrix
 

@@ -6,7 +6,7 @@ Track: `Public Arena Alpha launch track`
 
 ## Status
 
-`ACTIVE — EDGE REPOSITORY PREPARATION COMPLETE; HOST/RELEASE/DNS/TLS/VALIDATION REMAIN; DEPLOYMENT NOT AUTHORIZED`
+`ACTIVE — PRE-GO OPERATIONAL EVIDENCE PARTIAL; PHASE B POST-GO; DEPLOYMENT NOT AUTHORIZED`
 
 ## Risk
 
@@ -30,14 +30,16 @@ authorize external staging execution.
 - External Public Arena deployment has not been performed.
 - Shared-host repository hardening is `MERGED / COMPLETE` through PR #67 and
   merge commit `21a4ce2fe796f655d20911d8a52a60c69eec432d`.
-- Read-only host-gate discovery is `COMPLETE`. Host remediation remains
-  required before deployment GO.
+- Read-only host-gate discovery, remediation, controlled reboot, and
+  post-reboot baseline are `COMPLETE`.
 - Caddy edge repository preparation is `MERGED / COMPLETE` through PR #69 and
   merge `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Caddy is not installed or
   configured on the host, and this authority permits no external host mutation.
-- Host remediation, target and rollback image publication/binding, DNS/TLS,
-  Caddy installation, and external validation remain required. Deployment `GO`
-  remains `NOT ISSUED`.
+- Final target publication/binding, release-specific Phase A, DNS, and the
+  private manifest-only GHCR proof are complete. Remaining true pre-GO packet
+  bindings must still close. Caddy installation, ACME/TLS, both Phase B
+  validators, image pull/start, and external validation are mandatory post-GO
+  gates. Deployment `GO` remains `NOT ISSUED`.
 - The accepted decision count remains 35. OPS-002 creates no accepted game
   design, architecture, process, or CI decision.
 - The campaign roadmap and DOCARCH-004 paused state are unchanged.
@@ -157,12 +159,10 @@ authorize Phase B.
 Phase B may begin only after:
 
 - Phase A implementation is reviewed and merged;
-- every mandatory repository, host, edge, DNS/TLS, rollback, and
-  external-validation condition in the Phase B
+- every pre-GO repository, host, DNS, private-registry, rollback-readiness, and
+  operational-isolation condition in the Phase B
   [environment decision](../ops/ops-002-phase-b-environment-decision.md) is
-  complete and evidenced, including the operational isolation boundary
-  required because the selected staging host is shared and not physically
-  isolated;
+  complete and evidenced;
 - mandatory Core passes on the approved implementation/evidence head;
 - mandatory Claude QA produces a usable blocker-free substantive result, or a
   policy-compliant Product Architect infrastructure disposition is recorded;
@@ -173,8 +173,12 @@ Phase B may begin only after:
 - the rollback path is ready; and
 - credentials are available through secure external channels.
 
-Phase B performs one controlled staging deployment and captures evidence. A
-successful Phase A merge alone is not deployment authorization.
+Phase B performs one controlled staging deployment and captures evidence. It is
+a post-GO execution phase, not a prerequisite for issuing GO. GO authorizes the
+bounded host-side sequence but never waives a Phase B validator: live Caddy
+installation and ACME/TLS evidence precede Edge Phase B; Edge Phase B PASS
+precedes Application Phase B; Application Phase B PASS precedes image pull and
+startup. A successful Phase A merge alone is not deployment authorization.
 
 ### Current edge-preparation authority
 
@@ -196,9 +200,12 @@ Product Architect authorization.
 Before deployment GO, complete the root-level effective firewall review,
 restrict TCP 4000, restrict or verify effective TCP 9090 ingress, review and
 restrict as required TeamSpeak administrative/query TCP 10011/10022/10080,
-complete host maintenance before container creation, preserve the forum
-standstill and prune prohibition, and finish the edge, DNS, TLS, immutable
-release/rollback, and external-validation gates in the environment decision.
+complete host maintenance and the controlled reboot/baseline, preserve the
+forum standstill and prune prohibition, verify DNS, private manifest access and
+credential cleanup, and finish immutable release/rollback readiness. Caddy host
+installation, ACME/TLS, Edge Phase B, Application Phase B, image pulls, startup,
+and external smoke are post-GO execution gates in the exact order defined by
+the environment decision and runbook.
 
 ## Implementation scope boundary
 

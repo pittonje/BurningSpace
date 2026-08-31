@@ -51,9 +51,12 @@ enforcement is enabled.
 The rendered configuration should be `root:caddy` and non-world-readable; the
 data and log directories should be owned by the Caddy service account. The
 standard Caddy unit must run as `caddy:caddy`, causing systemd's
-`RuntimeDirectory=caddy` to own `/run/caddy` for that service identity. Exact
-ownership, mode, socket, and systemd-unit evidence must be recorded before GO.
-Repository preparation creates none of these host files.
+`RuntimeDirectory=caddy` to own `/run/caddy` for that service identity.
+Pre-GO evidence binds the intended ownership, mode, socket, systemd-unit, and
+locally validated configuration contract. Exact effective host evidence is
+recorded after GO-authorized installation and must pass Edge Phase B before
+application deployment proceeds. Repository preparation creates none of these
+host files.
 
 ## Install boundary
 
@@ -182,6 +185,12 @@ the approved upstreams are loopback plaintext services. Repository and Core
 contract checks use high unprivileged loopback HTTP ports and never contact an
 ACME endpoint.
 
+Local render/adapt/validate/inspect evidence is pre-GO. Host Caddy installation,
+automatic HTTPS/ACME, and real certificate evidence are post-GO. Only after
+real TLS readiness is proven may the edge inventory truthfully set
+`tlsReady=true` and run Edge Phase B. Edge Phase B PASS is required before the
+application deployment sequence may continue.
+
 ## Reload
 
 The future operator must render to a private staging path, verify the exact
@@ -262,7 +271,8 @@ dumps, or unbounded logs.
 
 ## Deployment boundary
 
-Caddy is not installed by this repository preparation. Host installation,
-systemd changes, public 80/443 activation, real DNS, certificate requests,
-image publication, external validation, Phase B execution, and deployment GO
-remain incomplete and unauthorized.
+Caddy is not installed by this repository preparation. DNS is now configured
+and publicly verified; host installation, systemd changes, public 80/443
+activation, certificate requests, external validation, Phase B execution, and
+Deployment GO remain incomplete and unauthorized. Final private image
+publication is complete, but image pull/start remains post-GO.
