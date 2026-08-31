@@ -219,6 +219,10 @@ Private pull authority uses a fresh, short-lived GitHub personal access token
 `admin:*`, and `gist` are forbidden. Do not reuse local `gh` authentication or
 use `GITHUB_TOKEN` on the VPS. The proof credential remains operator-held and
 is not stored on the host; no persistent registry credential is permitted.
+It is intentionally not revoked by automation because the same short-lived
+credential may be used for the one post-GO exact-digest pull. The operator must
+revoke it manually immediately after the pull's logout/config cleanup, or
+earlier when expired or no longer required.
 
 For each release, the operator enters the token directly in the interactive
 SSH session. Do not forward or paste it through a PowerShell command. The
@@ -415,6 +419,11 @@ loopback remediation, TeamSpeak administrative/query review, host maintenance,
 the controlled reboot, and post-reboot baseline are complete. UFW is active,
 the reboot-required marker is cleared, and the current boot ID is
 `088f9941-7056-488e-a0fb-b25f8e87a0c7`.
+
+The bounded root-level evidence is
+`D:\Temp\burningspace-ops002-controlled-reboot-20260831T070724Z\post-reboot-firewall.json`
+plus `post-reboot-listeners.json`; its `SHA256SUMS.txt` SHA-256 is
+`509a4b066d30ea7cae38edcf62dd9dc58c6e6b0dfa0867593d1893b480ee438d`.
 
 Immediately before GO and again before the first post-GO mutation, confirm that
 this evidence remains current. Any drift in firewall treatment, administrative

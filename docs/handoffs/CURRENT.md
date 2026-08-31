@@ -614,6 +614,9 @@ authorization states otherwise.
   exact F1/F2 corrections required by that review are applied.
 - Host-pull credential: `PAT classic / read:packages only / ephemeral /
   OPERATOR-HELD / NOT STORED ON HOST`.
+- Proof PAT lifecycle: `NOT REVOKED AUTOMATICALLY`; reuse is limited to the
+  post-GO exact-digest pull, followed by immediate logout/config destruction
+  and manual revocation, or earlier revocation when expired/not required.
 - Persistent VPS credential: `NONE`.
 - Pre-GO registry boundary: read-only private-state confirmation and exact
   immutable manifest inspection only; no image-layer pull.
@@ -624,6 +627,10 @@ authorization states otherwise.
 - Controlled reboot: `COMPLETE` at `2026-08-31T07:10:25Z`; boot ID
   `088f9941-7056-488e-a0fb-b25f8e87a0c7`.
 - Post-reboot baseline: `PASS`; reboot-required `CLEARED`.
+- Root firewall/listener evidence:
+  `D:\Temp\burningspace-ops002-controlled-reboot-20260831T070724Z`, manifest
+  SHA-256
+  `509a4b066d30ea7cae38edcf62dd9dc58c6e6b0dfa0867593d1893b480ee438d`.
 - Private GHCR pre-GO proof: `PASS` — ephemeral login and exact server/client
   immutable manifest resolution succeeded without pulling layers; logout and
   isolated-config destruction passed; persistent host credential `NONE`.

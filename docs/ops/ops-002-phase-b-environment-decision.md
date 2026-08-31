@@ -75,6 +75,10 @@ preserved historical audit conclusion are recorded below.
   exact immutable manifest resolutions succeeded without an image-layer pull;
   logout and temporary-config cleanup passed.
 - Registry credential disposition: `OPERATOR-HELD / NOT STORED ON HOST`
+- Proof PAT lifecycle: `NOT REVOKED AUTOMATICALLY / SHORT-LIVED /
+  OPERATOR-HELD`; it may be reused only for the post-GO exact-digest pull and
+  must be revoked manually immediately after that pull's logout/config cleanup,
+  or earlier when expired or no longer required.
 - First-deployment rollback mode: `bootstrap-no-previous-release`
 - First target edge configuration ID: `burningspace-staging-01-edge-v1`
 - Provider account: `NOT RECORDED IN CANONICAL DOCUMENTATION`
@@ -84,7 +88,8 @@ preserved historical audit conclusion are recorded below.
 - Host-side deployment and verification: `NOT STARTED`
 - Region: `NOT RECORDED`
 - Public IP: `164.68.107.13`
-- Host asset identifier: `vmi3266913`
+- Host asset identifier: `vmi3266913` — intentionally recorded as a non-secret
+  deployment-environment binding by the Product Architect recovery authority
 - DNS zone: `burningforge.dev` — `CONFIGURED / PUBLICLY VERIFIED`
 - Public client hostname: `game.burningforge.dev` — `PRODUCT ARCHITECT
   SELECTED / APPROVED; A 164.68.107.13 / NO AAAA / VERIFIED`
@@ -448,6 +453,13 @@ under the controlled host workflow. UFW remains active. The controlled reboot
 completed at `2026-08-31T07:10:25Z`; the current boot ID is
 `088f9941-7056-488e-a0fb-b25f8e87a0c7`, the post-reboot baseline passes, and
 the reboot-required marker is cleared.
+
+Traceability: the root-level `ufw`, `iptables`, `ip6tables`, and `DOCKER-USER`
+capture plus per-port IPv4/IPv6 dispositions are in
+`D:\Temp\burningspace-ops002-controlled-reboot-20260831T070724Z\post-reboot-firewall.json`;
+listener evidence is in `post-reboot-listeners.json`. The evidence
+`SHA256SUMS.txt` SHA-256 is
+`509a4b066d30ea7cae38edcf62dd9dc58c6e6b0dfa0867593d1893b480ee438d`.
 
 The completed order was host maintenance, one separately authorized controlled
 reboot, and shared-host baseline revalidation. Edge and image deployment remain

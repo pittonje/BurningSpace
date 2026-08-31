@@ -60,6 +60,10 @@ can make an environment-specific GO decision.
 - Credential class: `PAT CLASSIC / read:packages ONLY / EPHEMERAL`
 - Persistent host registry credential: `NONE`
 - Registry credential: `OPERATOR-HELD / NOT STORED ON HOST`
+- Proof PAT lifecycle: `NOT REVOKED AUTOMATICALLY / SHORT-LIVED /
+  OPERATOR-HELD`; reuse is limited to the post-GO exact-digest pull, followed
+  immediately by logout, config destruction, and manual revocation. Revoke
+  earlier if it expires or is no longer required.
 - Pre-GO private GHCR login: `PASS`
 - Exact server manifest resolution: `PASS`
 - Exact client manifest resolution: `PASS`
@@ -263,7 +267,10 @@ external smoke.
 - Registry logout and temporary-config cleanup: `PASS`
 - DNS-ready confirmation: `PASS`
 - TLS-ready confirmation: `POST-GO EXECUTION GATE / NOT READY`
-- Firewall-ready confirmation: `PASS — controlled-reboot baseline evidence`
+- Firewall-ready confirmation: `PASS` — root-level evidence
+  `D:\Temp\burningspace-ops002-controlled-reboot-20260831T070724Z\post-reboot-firewall.json`,
+  listener evidence `post-reboot-listeners.json`, evidence-manifest SHA-256
+  `509a4b066d30ea7cae38edcf62dd9dc58c6e6b0dfa0867593d1893b480ee438d`
 - Log-redaction confirmation: `PRE-GO LOCAL CONTRACT PASS / LIVE POST-GO
   EVIDENCE PENDING`
 - Rollback-ready confirmation: `BOOTSTRAP AUTHORITY PASS / NAMED ABORT OWNER
