@@ -12,10 +12,37 @@ Phase A is repository and dry-run preparation only. It may validate committed te
 
 Phase B is controlled external execution. It may begin only after the Phase A implementation is reviewed and human-merged, the exact approved head has green Core and blocker-free specialist/QA evidence, rollback is ready, and the Product Architect issues an explicit environment-specific deployment GO. A merged Phase A PR is not a deployment GO. Public-production launch remains separately unauthorized.
 
+## Execution-side binding
+
+All repository and TypeScript tooling executes on the Product
+Architect/operator Windows workstation in Git for Windows Bash, specifically
+`C:\Program Files\Git\bin\bash.exe`, with a semantic Bash minimum of `3.0` for
+the used shell features. Record the actual observed version in evidence; exact
+patch-level banner equality is not required. This side
+performs the fresh fetch, ancestry gate, detached worktree creation, active
+inventory copy/hash binding, `npm ci`, workspace builds, standalone Compose
+normalization, Edge and Application Phase B validator processes, smoke harness
+readiness, external smoke against the public origins, and bounded evidence
+collection. Node, npm, and npx must be reachable from that Bash process.
+
+The staging host `burningspace-staging-01` / `164.68.107.13` performs only
+authorized runtime operations: Caddy installation/activation, ACME/TLS,
+listener/service observation, ephemeral private-GHCR login, exact-digest
+pulls and `RepoDigests` proof, credential/config destruction, Compose runtime
+startup, and bounded rollback. Host evidence is retained separately and its
+hashes authorize evidence-linked inventory field promotion; it is not
+represented as a live-evidence file directly consumed by the validator. The staging host must not receive a
+BurningSpace Git checkout/worktree, `node_modules`, npm installation, workspace
+validator build output, or external-smoke tooling. No step in this runbook
+authorizes npm or repository tooling on the VPS.
+
 ## Required non-secret inventory
 
 - non-secret environment identifier and exact
   `shared-existing-vps-with-isolated-compose-staging` class;
+- exact provider-confirmed region/location; for `burningspace-staging-01` the
+  literal Contabo panel value is `Hub Europe`, which does not establish a
+  country, city, or physical datacenter;
 - alpha/non-persistent label;
 - exact public client and server origins;
 - exact allowed browser Origins;
@@ -24,6 +51,7 @@ Phase B is controlled external execution. It may begin only after the Phase A im
 - loopback server and client bind ports;
 - edge configuration identifier/version;
 - rollback mode;
+- management-access, abort, and rollback owners;
 - Product Architect deployment GO reference.
 
 The release inventory always binds two immutable target OCI references:
@@ -78,17 +106,19 @@ explicit retired marker and SHA-256 manifest before replacement. Its
 `SHA256SUMS.txt` SHA-256 is
 `0275a1d578842bc47a0de317b88b037aaaabbeb250017dc94057ee10722dd116`.
 
-The active Git-ignored application inventory now binds only final workflow run
+The canonical Git-ignored `PRE_GO_BASE` application inventory binds only final workflow run
 `33340075681`, target commit
 `4a774354859c036d45666496539c2fc3c24b9f1c`, and the immutable deploy-server
 and deploy-client references recorded below. The release-independent edge
-inventory was reused byte-identically. Replacement application and edge Phase
+inventory was reused byte-identically. These four canonical files remain
+immutable after GO; all authorization promotion occurs only in the unique
+detached execution worktree. Replacement application and edge Phase
 A passed; the evidence packet is
 `D:\Temp\burningspace-ops002-final-private-phasea-20260830T233259Z`, whose
 `SHA256SUMS.txt` SHA-256 is
 `3b78b2861450a1e39aa7dc729dd1cb065c80dcee1cbd8858c1ff04e829838a2e`.
-Only one real inventory variant may be active under `deploy/`; never retain
-multiple candidate variants there.
+Only `PRE_GO_BASE` may exist under canonical `deploy/`; never retain a promoted
+State 2 or State 3 variant there.
 
 ## Secret inventory by category only
 
@@ -217,12 +247,11 @@ Private pull authority uses a fresh, short-lived GitHub personal access token
 (classic) owned by an operator who can read both packages. Its only scope is
 `read:packages`. `write:packages`, `delete:packages`, `repo`, `workflow`,
 `admin:*`, and `gist` are forbidden. Do not reuse local `gh` authentication or
-use `GITHUB_TOKEN` on the VPS. The proof credential remains operator-held and
-is not stored on the host; no persistent registry credential is permitted.
-It is intentionally not revoked by automation because the same short-lived
-credential may be used for the one post-GO exact-digest pull. The operator must
-revoke it manually immediately after the pull's logout/config cleanup, or
-earlier when expired or no longer required.
+use `GITHUB_TOKEN` on the VPS. The completed pre-GO proof PAT is `REVOKED` and
+must never be reused. No persistent registry credential is permitted. The
+future post-GO exact pull requires a newly created short-lived PAT of the same
+read-only class; it is `NOT CREATED` before GO and must be revoked manually
+immediately after the pull's logout/config cleanup.
 
 For each release, the operator enters the token directly in the interactive
 SSH session. Do not forward or paste it through a PowerShell command. The
@@ -253,12 +282,12 @@ printf '%s' "$GHCR_PAT" |
 unset GHCR_PAT
 ```
 
-Before GO, use the authenticated session only for read-only provider-state and
-manifest checks. Confirm both packages are private, then resolve both exact
-immutable manifests without pulling image layers. The two variables below
-must contain the exact immutable `repository@sha256:<digest>` references
-already approved in the current per-release GO packet and real inventory;
-mutable tags are forbidden:
+The completed pre-GO proof used its now-revoked authenticated session only for
+read-only provider-state and manifest checks. It confirmed both packages
+private and resolved both exact immutable manifests without pulling image
+layers. The two variables below were the exact immutable
+`repository@sha256:<digest>` references approved in the packet and base
+inventory; mutable tags remain forbidden:
 
 ```sh
 docker buildx imagetools inspect "$BURNINGSPACE_SERVER_IMAGE"
@@ -471,12 +500,324 @@ Docker disk accounting may classify them as reclaimable. Bounded
 BurningSpace-specific container/image cleanup is allowed only when it is
 conclusively unable to touch preserved forum assets.
 
+## Pinned release-worktree provisioning
+
+This entire section runs on `[OPERATOR WORKSTATION]`, never on the staging
+host. Application Phase B, Edge Phase B, and later external smoke use one clean
+detached release worktree at exactly
+`4a774354859c036d45666496539c2fc3c24b9f1c`. The operator uses Git for Windows
+Bash at `C:\Program Files\Git\bin\bash.exe`, gated semantically at Bash `>=3.0`,
+and sets `COMPOSE_EXE` to a directly executable local standalone Compose
+binary. That binary must be official Compose `v5.5.0` with SHA-256
+`51e1e61195f3616896265487ed64551095f3bd27ac7fbd5758d3538c3bfa1b19`.
+No Docker daemon or ambient `docker compose` command is required on the
+workstation.
+
+Before creating the worktree, perform a bounded fresh remote-tracking update.
+Fetch failure is `PINNED_WORKTREE_PROVISIONING_NOT_READY`; do not use stale
+`origin/main`, and do not pull, merge, reset, or check out `main`:
+
+```sh
+targetCommit=4a774354859c036d45666496539c2fc3c24b9f1c
+canonicalCheckout=/d/BurningSpace
+releaseRoot="$(mktemp -d /d/Temp/burningspace-ops002-release-exec-XXXXXXXX)"
+releaseWorktree="$releaseRoot/release"
+: "${COMPOSE_EXE:?set COMPOSE_EXE to the verified standalone Compose binary}"
+if (( BASH_VERSINFO[0] < 3 )); then
+  printf '%s\n' 'Git for Windows Bash 3.0 or newer is required.' >&2
+  exit 1
+fi
+git -C "$canonicalCheckout" fetch --no-tags origin main
+git -C "$canonicalCheckout" cat-file -e "$targetCommit^{commit}"
+git -C "$canonicalCheckout" merge-base --is-ancestor "$targetCommit" origin/main
+git -C "$canonicalCheckout" worktree add --detach "$releaseWorktree" "$targetCommit"
+cd "$releaseWorktree"
+test "$(git rev-parse HEAD)" = "$targetCommit"
+test -z "$(git status --porcelain --untracked-files=all)"
+test "$("$COMPOSE_EXE" version)" = "Docker Compose version v5.5.0"
+test "$(sha256sum "$COMPOSE_EXE" | cut -d' ' -f1)" = "51e1e61195f3616896265487ed64551095f3bd27ac7fbd5758d3538c3bfa1b19"
+```
+
+The immutable canonical `PRE_GO_BASE` exists only in `D:\BurningSpace` and is
+Git-ignored. Before every base copy, the workstation must prove each source exists,
+is a regular local file, is not a symlink/junction/reparse point, remains
+Git-ignored, and has the exact bound hash below. A mismatch is
+`ACTIVE_RELEASE_INVENTORY_BINDING_FAILED`; never regenerate from templates.
+Copy without moving, editing, line-ending normalization, or JSON rewriting:
+
+```sh
+while read -r expected relative; do
+  sourceFile="$canonicalCheckout/$relative"
+  destinationFile="$releaseWorktree/$relative"
+  test -f "$sourceFile" && test ! -L "$sourceFile"
+  git -C "$canonicalCheckout" check-ignore --quiet -- "$relative"
+  test "$(sha256sum "$sourceFile" | cut -d' ' -f1)" = "$expected"
+  cp -- "$sourceFile" "$destinationFile"
+  test -f "$destinationFile" && test ! -L "$destinationFile"
+  git check-ignore --quiet -- "$relative"
+  test "$(sha256sum "$destinationFile" | cut -d' ' -f1)" = "$expected"
+done <<'INVENTORY'
+8e989f048fa5c80f15b672c5de3638c81d48cbb2f6e1a0f471d60a1a0759b08e deploy/.env.staging
+0ffa473d762230f084f6d239e7fb5a328069cbba0ae9409c7b712e9a3fb29607 deploy/external-staging-plan.json
+478e01e65070a10eb170e41ba1ee3c85b593e3382f397fcc2108d7ae230e98f4 deploy/edge/caddy/.env.staging
+c9168b6801ce8df86bee9ba967e77a85d5b8d79f3e31dd9cf96a631022ca5ec7 deploy/edge/caddy/edge-plan.json
+INVENTORY
+test -z "$(git status --porcelain --untracked-files=all)"
+```
+
+On Windows, the source and destination checks additionally inspect
+`Get-Item -Force` attributes and reject `ReparsePoint`; the Bash `-L` guard is
+not a substitute for that Windows-native check. Run this bounded PowerShell
+5.1 guard and enter the exact newly created absolute directory. This block
+defines its own `$ReleaseWorktree`, rejects empty/unresolved/wrong-root values,
+and does not reuse Bash variable syntax:
+
+```powershell
+$ReleaseWorktree = Read-Host 'Exact D:\Temp\burningspace-ops002-release-exec-...\release path'
+if ([string]::IsNullOrWhiteSpace($ReleaseWorktree) -or
+    -not [IO.Path]::IsPathRooted($ReleaseWorktree)) {
+  throw 'ReleaseWorktree must be one bound absolute path'
+}
+$ReleaseWorktree = (Resolve-Path -LiteralPath $ReleaseWorktree).Path
+$RequiredPrefix = 'D:\Temp\burningspace-ops002-release-exec-'
+if (-not $ReleaseWorktree.StartsWith($RequiredPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+    $ReleaseWorktree.StartsWith('D:\BurningSpace', [StringComparison]::OrdinalIgnoreCase)) {
+  throw 'ReleaseWorktree must be the unique execution worktree outside canonical/shared worktrees'
+}
+if ((git -C $ReleaseWorktree rev-parse HEAD) -ne
+    '4a774354859c036d45666496539c2fc3c24b9f1c') {
+  throw 'ReleaseWorktree does not point to the exact target'
+}
+$RelativeInventory = @(
+  'deploy/.env.staging',
+  'deploy/external-staging-plan.json',
+  'deploy/edge/caddy/.env.staging',
+  'deploy/edge/caddy/edge-plan.json'
+)
+foreach ($Relative in $RelativeInventory) {
+  foreach ($Path in @(
+    (Join-Path 'D:\BurningSpace' $Relative),
+    (Join-Path $ReleaseWorktree $Relative)
+  )) {
+    $Item = Get-Item -LiteralPath $Path -Force
+    if ($Item.PSIsContainer -or
+        (($Item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+      throw "Inventory path is not a regular non-reparse file: $Path"
+    }
+  }
+}
+```
+
+Only exact, ignored, byte-identical regular `PRE_GO_BASE` destinations with an
+empty status emit `PINNED_WORKTREE_INVENTORY_BOUND_PASS`. Do not retain `.old`,
+`.copy`, or alternate active inventory. Never edit the canonical sources.
+
+At real GO, the Product Architect assigns an independent reference such as
+`OPS002-DEPLOY-GO-<UTC>-<NONCE>` and seals a non-secret execution bundle. The
+bundle binds decision timestamp, target commit/images, the four base hashes,
+per-file allowed transitions, expected State 2 and State 3 hashes, owners,
+rollback, GO reference, and bundle SHA-256. Its
+`inventory-stage-manifest.json` has these activation rules:
+
+- `PRE_GO_BASE`: current canonical bytes; active before GO and immutable;
+- `GO_AUTHORIZED_PRE_TLS`: requires `PRODUCT_ARCHITECT_GO`;
+- `TLS_READY_PHASE_B`: requires `PRODUCT_ARCHITECT_GO` plus
+  `REAL_TLS_EVIDENCE`.
+
+Expected State 3 hashes may be computed deterministically when the GO bundle is
+sealed. Those expected future bytes are not current readiness evidence, and
+State 3 must not be materialized before real TLS evidence is retained.
+
+Use a bounded structural promotion helper, not search/replace. It must parse env
+files as exact key/value records, reject duplicates, and parse JSON
+structurally. It rejects unknown/missing keys, wrong base hashes,
+symlink/reparse substitution, unexpected initial true flags, wrong
+target/image/origin/rollback bindings, mutable image refs, and retired
+namespaces. It writes deterministically, hashes destinations against the stage
+manifest, and emits a structured field diff. The complete allowlist is:
+
+- application env, State 2:
+  `BURNINGSPACE_DEPLOYMENT_GO_REFERENCE`,
+  `BURNINGSPACE_EXTERNAL_EXECUTION_AUTHORIZED`;
+- application plan, State 2: `deploymentGoReference`,
+  `externalExecutionAuthorized`;
+- edge env, State 2: `BURNINGSPACE_DEPLOYMENT_GO_REFERENCE`;
+- edge plan, State 2: `deploymentGoReference`,
+  `hostInstallationAuthorized`, `dnsConfigured`,
+  `externalExecutionAuthorized`; and
+- edge plan, State 3: only `tlsReady`.
+
+State 2 uses the same concrete GO reference in every owning file, sets the
+application and edge execution flags true, sets host installation true, binds
+the independently proven DNS state true, and leaves `tlsReady=false`. State 3
+is created only after retained real TLS evidence and changes edge-plan
+`tlsReady=false -> true`; the application files and edge env stay identical to
+State 2. No other field changes. Environment/class, target, images, origins,
+allowlist/hostile Origin, ports, rollback, edge/Caddy IDs, resource limits, and
+bootstrap previous-release structural absence remain unchanged.
+
+Before GO, verify `PRE_GO_BASE` hashes. After GO and before TLS, verify
+`GO_AUTHORIZED_PRE_TLS`. After TLS, verify `TLS_READY_PHASE_B`. Stale base
+hashes must never be required for promoted execution copies.
+
+Provision from the target lockfile and strengthen module readiness from mere
+resolution to readable regular-file integrity:
+
+```sh
+npm ci
+npm run build -w @burningspace/shared
+npm run build -w @burningspace/protocol
+test -f packages/shared/dist/index.js
+test -f packages/protocol/dist/index.js
+npx --no-install tsx --version
+node --input-type=module -e "import {fileURLToPath} from 'node:url'; import {accessSync,constants,statSync} from 'node:fs'; for (const s of ['tsx','colyseus.js','@burningspace/shared','@burningspace/protocol']) { const p=fileURLToPath(import.meta.resolve(s)); accessSync(p,constants.R_OK); if (!statSync(p).isFile()) throw new Error(s+' is not a readable regular file'); console.log(s+'='+p); }"
+test -z "$(git status --porcelain --untracked-files=all)"
+```
+
+Use the target commit's committed `package-lock.json`. `npm install`, `npm
+update`, package/lockfile mutation, implicit `npx` installation, and execution
+from a newer docs-tip checkout are forbidden. The target manifests bind the
+workspace names `@burningspace/shared` and `@burningspace/protocol` and export
+their runtime entry points from the two checked `dist/index.js` files.
+
+Before Application Phase B, generate normalized Compose JSON on the operator
+workstation through the verified direct `COMPOSE_EXE` path. The harness precheck
+must prove exact HEAD and fresh ancestry, the application files against their
+State 2/3 expected hashes and the edge files against State 3 after Edge Phase B,
+the exact `TLS_READY_PHASE_B` stage name and concrete GO reference, ignored
+status, target lockfile and `node_modules`, both dist files, tsx and module-file
+integrity, Compose version/hash, successful normalization, exact final private
+image refs, absence of retired refs, exact origins/loopback ports/rollback
+mode, and a clean worktree. Only then emit
+`APPLICATION_PHASE_B_HARNESS_READY` and invoke the unchanged validator:
+
+```sh
+"$COMPOSE_EXE" --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml config --format json | \
+npx --no-install tsx apps/server/scripts/external-staging-preflight.ts --phase-b --env deploy/.env.staging --plan deploy/external-staging-plan.json --compose-stdin
+```
+
+If the precheck fails, emit event `application_phase_b_harness_not_ready`,
+classify `APPLICATION_PHASE_B_HARNESS_NOT_READY`, record that the validator was
+not invoked, and stop before validator/pull/start. This tooling failure does not
+by itself require runtime rollback because application mutation has not begun.
+If the ready validator returns bounded validation failure, emit
+`application_phase_b_validator_failed`, classify
+`APPLICATION_PHASE_B_VALIDATOR_FAILED`, preserve its bounded output, and stop
+before pull/start.
+
+Edge Phase B is also an `[OPERATOR WORKSTATION]` TypeScript process in this
+same worktree. Its actual accepted inputs are the State 3 edge env/plan,
+committed Caddy validation release, Caddyfile, and systemd drop-in. Caddy/TLS
+operations and observations remain on `[STAGING HOST]`; retained live evidence
+is stored separately and authorizes evidence-linked promotion of
+`dnsConfigured`, `hostInstallationAuthorized`, `tlsReady`,
+`externalExecutionAuthorized`, and the GO reference. The promotion record links
+evidence hashes, allowed transitions, and resulting inventory hashes. The
+validator checks declared execution inventory/static edge authority; it does
+not query the host. Node/npm/tsx never moves there.
+
+```sh
+npx --no-install tsx apps/server/scripts/external-staging-edge-preflight.ts --phase-b --env deploy/edge/caddy/.env.staging --plan deploy/edge/caddy/edge-plan.json
+```
+
+Keep this same provisioned worktree for the later smoke. The procedure is
+pre-GO `BOUND / LOCALLY PROVEN`, including State 1→2, State 2→3, the exact Edge
+and Application Phase-B command paths, Compose normalization, and smoke
+self-test 3/3 at
+`D:\Temp\burningspace-ops002-inventory-stage-proof-20260831T170134Z`. That
+packet uses only a `LOCAL_FIXTURE_ONLY / NON_AUTHORITATIVE / NEVER_DEPLOY` GO
+reference and `LOCAL_TLS_READY_FIXTURE`; it is not real GO, TLS, either real
+Phase B, or external smoke. Actual worktree provisioning and stage activation
+remain post-GO execution steps.
+
+## Bound external smoke command
+
+The exact post-deployment machine smoke is the existing repository script. Run
+it from the provisioned pinned release worktree only after explicit GO,
+`PINNED_WORKTREE_PROVISIONING_PASS`, Caddy/TLS, Edge Phase B PASS, Application
+Phase B PASS, exact image pull and digest verification, credential cleanup,
+Compose startup, and `SMOKE_HARNESS_READINESS_PASS`:
+
+```sh
+BURNINGSPACE_EXTERNAL_SMOKE_CLIENT_ORIGIN=https://game.burningforge.dev \
+BURNINGSPACE_EXTERNAL_SMOKE_SERVER_ORIGIN=https://game-server.burningforge.dev \
+BURNINGSPACE_EXTERNAL_SMOKE_ALLOWED_ORIGIN=https://game.burningforge.dev \
+BURNINGSPACE_EXTERNAL_SMOKE_HOSTILE_ORIGIN=https://hostile.burningforge.dev \
+BURNINGSPACE_EXTERNAL_SMOKE_TIMEOUT_MS=15000 \
+npx --no-install tsx apps/server/scripts/external-staging-smoke.ts
+```
+
+Do not set `BURNINGSPACE_EXTERNAL_SMOKE_ALLOW_LOOPBACK_HTTP` for this external
+run. Node HTTPS/fetch and raw TLS use the normal public trust chain; no
+certificate-verification bypass is permitted. The HTTPS checks reject any
+redirect and require direct `200` responses. The client checks cover `/`,
+`/index.html`, and a referenced fingerprinted asset. Server checks require
+`/health` to return `{ "ok": true, "service": "burningspace-server" }` and
+`/ready` to return `{ "ok": true, "service": "burningspace-server", "ready":
+true }`, both with HTTP `200`.
+
+There is no invented fixed gameplay WebSocket path. The script uses the same
+Colyseus client contract as the browser: matchmaking through
+`joinOrCreate('battle')` (`/matchmake/joinOrCreate/battle`) and then the
+server-returned WebSocket session path. It also sends the literal hostile
+Origin `https://hostile.burningforge.dev` through hostile matchmaking and a
+raw WebSocket upgrade and requires the latter to receive HTTP `403`; no DNS
+record for that hostile identity is required.
+
+Immediately before this command, on `[OPERATOR WORKSTATION]` in that same
+worktree, rerun exact HEAD, all four `TLS_READY_PHASE_B` hashes/ignored status,
+shell, toolchain, dist, and module-file integrity checks. The smoke does not
+consume inventory directly, but this binding proves the exact authorized
+release context:
+
+```sh
+test "$(git rev-parse HEAD)" = "4a774354859c036d45666496539c2fc3c24b9f1c"
+test "${BASH_VERSINFO[0]}" -gt 3 || { test "${BASH_VERSINFO[0]}" -eq 3 && test "${BASH_VERSINFO[1]}" -ge 0; }
+test -d node_modules
+test -f packages/shared/dist/index.js
+test -f packages/protocol/dist/index.js
+npx --no-install tsx --version
+node --input-type=module -e "import {fileURLToPath} from 'node:url'; import {accessSync,constants,statSync} from 'node:fs'; for (const s of ['tsx','colyseus.js','@burningspace/shared','@burningspace/protocol']) { const p=fileURLToPath(import.meta.resolve(s)); accessSync(p,constants.R_OK); if (!statSync(p).isFile()) throw new Error(s+' is not a readable regular file'); }"
+```
+
+Only all PASS emits event `smoke_harness_readiness_pass` and classification
+`SMOKE_HARNESS_READINESS_PASS`.
+
+If the precheck fails or the smoke process cannot load/start before producing
+its structured failure envelope, emit `smoke_harness_not_ready` and classify
+`SMOKE_HARNESS_NOT_READY`: the abort owner halts progression and no completion
+may be declared, but harness failure alone does not prove the deployed runtime
+unhealthy and does not automatically invoke rollback. Repair or reprovision
+the harness and rerun under bounded authority, or obtain an explicit Product
+Architect rollback decision for another reason.
+
+Once the ready harness starts, it exits `0` only after every required client,
+health/readiness, hostile-Origin, WebSocket, authoritative-state/movement,
+reconnect-continuity, and duplicate-ownership assertion passes. Any required
+assertion failure emits structured event `external_staging_smoke_failed` with
+a bounded named error code and is classified `SMOKE_ASSERTION_FAILED`: the
+abort owner halts progression, deployment validation fails, and the mandatory
+`bootstrap-no-previous-release` rollback disposition applies. Binding this
+command and classification is a pre-GO packet requirement; executing it is
+post-deployment only and forbidden during packet preparation.
+
+Retained bounded evidence records the precheck result/exit, whether smoke was
+invoked, smoke process exit, whether the structured failure envelope existed,
+and its bounded error code when present. Never record secrets or reconnect
+tokens. This evidence makes harness-start failure mechanically distinct from a
+deployed assertion failure.
+
 ## Deployment GO packet
 
 Before the Product Architect can issue GO, provide one non-secret packet containing:
 
 - target environment identifier;
+- provider-confirmed region/location;
 - target commit/image bindings and the exact rollback mode;
+- independently assigned GO reference and sealed GO execution-bundle SHA-256;
+- `inventory-stage-manifest.json` with `PRE_GO_BASE`,
+  `GO_AUTHORIZED_PRE_TLS`, and `TLS_READY_PHASE_B` hashes, activation rules,
+  and exact per-file allowed transitions;
 - exact client/server origins and allowlist;
 - edge configuration ID;
 - the bootstrap absence of a previous edge configuration, or the strict
@@ -486,12 +827,12 @@ Before the Product Architect can issue GO, provide one non-secret packet contain
 - Operations/Security and Network/Runtime verdict bindings;
 - mandatory Claude QA result and reviewed head;
 - read-only confirmation that both GHCR packages are private;
-- availability of the approved ephemeral PAT-class authority without its
-  value, successful authentication, both exact pre-GO manifest resolutions,
-  and logout/temporary-config cleanup evidence;
+- confirmation that the pre-GO proof PAT is revoked and the future post-GO
+  pull PAT is not yet created; plus completed exact pre-GO manifest-resolution
+  and logout/temporary-config cleanup evidence without any token value;
 - rollback readiness and expected room reset;
-- exact external smoke command with values supplied outside evidence;
-- named abort owner;
+- exact external smoke command with the bound non-secret production values;
+- named management-access, abort, and rollback owners;
 - intended redacted evidence location.
 
 GO must name the environment and target release explicitly. It cannot be inferred from a merge, a green check, or this document.
@@ -500,38 +841,49 @@ GO must name the environment and target release explicitly. It cannot be inferre
 
 Only after explicit GO:
 
-1. Bind the concrete GO reference and switch only the authorized real edge and
-   application inventory fields to truthful execution semantics. Preserve the
-   exact target release and exactly one rollback mode:
-   `bootstrap-no-previous-release` for the first deployment or
-   `previous-approved-release` later.
-2. Confirm maintenance and shared-host pre-GO gates remain current, including
-   the forum standstill, cleanup prohibition, DNS, firewall, and reserved ports.
-3. Install and activate the already Phase-A-reviewed Caddy version, drop-in,
-   service identity, runtime directory, Unix admin socket, configuration, and
-   bounded logging contract. This is the first host-mutation stage authorized
-   by GO.
-4. Allow automatic HTTPS/ACME to obtain the real certificates. Prove the live
-   certificate, renewal ownership, exact Origin behavior, listeners, socket
-   permissions, adapted hashes, and log safety before setting `tlsReady=true`.
-5. Run Edge Phase B with truthful `dnsConfigured=true`, `tlsReady=true`,
-   `hostInstallationAuthorized=true`, `externalExecutionAuthorized=true`, and
-   the exact GO reference. If it fails, stop before application deployment.
-6. From the pinned release worktree whose `HEAD` equals `targetCommit`, run
-   Application Phase B with the exact immutable images, rollback structure,
-   normalized Compose contract, execution authorization, and GO reference. If
-   it fails, do not pull or start application images.
-7. Authenticate through the ephemeral private-GHCR procedure, run explicit
-   `docker pull` for exactly the two digest-pinned images, verify local
-   `RepoDigests`, then log out and destroy the temporary `DOCKER_CONFIG`.
-8. Start the one-server/one-client deployment with the exact real Compose
-   arguments and `--pull never`. Never use `docker compose pull` after
-   credential destruction.
-9. Run the complete external matrix below, including machine reconnect/session
-   smoke and separate browser UX evidence.
-10. Abort or perform the bounded rollback on any failed required check; never
-    bypass either Phase B validator or report a partial smoke as success.
-11. Capture only bounded, redacted evidence.
+1. `[OPERATOR WORKSTATION / GOVERNANCE]` Assign the concrete GO reference and
+   seal the execution bundle/stage manifest with exact targets, base hashes,
+   allowlist, expected State 2/3 hashes, owners, rollback, and bundle SHA.
+2. `[OPERATOR WORKSTATION]` Create/reverify the exact target worktree, copy
+   immutable `PRE_GO_BASE`, promote only allowlisted fields to
+   `GO_AUTHORIZED_PRE_TLS`, and verify exact State 2 hashes with
+   `tlsReady=false`.
+3. `[STAGING HOST]` Confirm shared-host gates remain current, then install and
+   activate the Phase-A-reviewed Caddy version, service identity, runtime
+   directory, Unix admin socket, configuration, and bounded logging contract.
+4. `[STAGING HOST]` Allow automatic HTTPS/ACME to obtain certificates and prove
+   live certificate, renewal, listeners, socket permissions, adapted hashes,
+   exact Origin behavior, and log safety.
+5. `[OPERATOR WORKSTATION / GOVERNANCE]` Bind retained TLS evidence to the
+   execution bundle.
+6. `[OPERATOR WORKSTATION]` Promote only edge-plan `tlsReady=false -> true`,
+   producing `TLS_READY_PHASE_B`, and verify exact State 3 hashes.
+7. `[OPERATOR WORKSTATION]` Run the Edge Phase B TypeScript validator against
+   State 3 and require PASS. If it fails, stop before application deployment.
+8. `[OPERATOR WORKSTATION]` Perform or reverify fresh ancestry, the detached
+   worktree, all four State 3 hashes/ignored status, target-lockfile
+   install/builds, module-file integrity, and standalone Compose binding.
+9. `[OPERATOR WORKSTATION]` Require `APPLICATION_PHASE_B_HARNESS_READY`, then
+   run Application Phase B through direct `COMPOSE_EXE` normalized JSON and
+   `npx --no-install tsx`. Apply the named harness/validator events above and
+   stop before pull/start on either failure.
+10. `[STAGING HOST]` Create/use the fresh post-GO pull PAT, authenticate through
+   the ephemeral private-GHCR procedure,
+   explicitly pull exactly the two digest-pinned images, and verify local
+   `RepoDigests`.
+11. `[STAGING HOST]` Log out and destroy the temporary `DOCKER_CONFIG`; never run
+   `docker compose pull` after credential destruction.
+12. `[STAGING HOST]` Start the one-server/one-client runtime with the authorized
+   deployment files and `docker compose up -d --pull never`.
+13. `[OPERATOR WORKSTATION]` Recheck the same worktree, exact release context,
+    and all State 3 hashes;
+    require event `smoke_harness_readiness_pass`.
+14. `[OPERATOR WORKSTATION]` Execute the bound external smoke against the public
+    origins and separately capture browser UX evidence. Apply
+    `SMOKE_HARNESS_NOT_READY` versus `SMOKE_ASSERTION_FAILED` mechanically.
+15. `[GOVERNANCE]` Declare completion only after all required PASS evidence, or
+    halt and apply the bounded rollback disposition. Preserve only bounded,
+    redacted evidence.
 
 ## External validation matrix
 
@@ -585,7 +937,11 @@ release IDs, timestamps, outcomes, and the expected reset; never record secrets.
 Abort Phase B for invalid TLS; wrong DNS; stripped/rewritten Origin; hostile or absent Origin acceptance; wildcard allowlist; broken WebSocket upgrade; direct service/admin port exposure; plaintext external target; disabled TLS verification; secret, reconnect-token, query-string, or environment leakage; readiness remaining false; client endpoint mismatch; duplicate reconnect ownership/session/ship; stale Core/reviewer/QA binding; unavailable or unbound rollback; failed shutdown; unexpected persistence requirement; or any difference between the approved plan and effective environment.
 
 After abort, do not continue toward public launch. Execute the selected rollback
-mode when safe, preserve redacted evidence, and report the exact bounded failure.
+mode when required by the classified failure: it is mandatory for
+`SMOKE_ASSERTION_FAILED`, while `SMOKE_HARNESS_NOT_READY` alone requires halt,
+harness repair/reprovisioning, and rerun or an explicit Product Architect
+rollback decision. Preserve redacted evidence and report the exact bounded
+failure.
 
 ## Evidence and redaction
 

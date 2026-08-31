@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-08-31
-Updated by: Codex — OPS-002 pre-GO proof recovery and GO-ordering reconciliation
+Last updated: 2026-09-01
+Updated by: Codex — OPS-002 PR #79 review-result reconciliation
 
 ## Repository state
 
@@ -359,7 +359,7 @@ Updated by: Codex — OPS-002 pre-GO proof recovery and GO-ordering reconciliati
 - Edge host installation, TLS, Edge/Application Phase B, image pull/start, and
   external validation: `POST-GO / NOT STARTED`. Immutable target images are
   published and bound; DNS is complete.
-- GO packet: `DRAFT / INCOMPLETE`.
+- GO packet: `DRAFT / PRE-GO DUAL REVIEW RECONCILED / GO NOT ISSUED`.
 - Deployment GO: `NOT ISSUED`.
 - External deployment: `NOT AUTHORIZED`.
 - Phase B live execution: `NOT STARTED`.
@@ -554,8 +554,9 @@ authorization states otherwise.
   `D:\Temp\burningspace-ops002-retired-inventory-20260830T233138Z`; its
   `SHA256SUMS.txt` SHA-256 is
   `0275a1d578842bc47a0de317b88b037aaaabbeb250017dc94057ee10722dd116`.
-- The active ignored application inventory binds only the final release. The
-  release-independent edge inventory remains byte-identical. Active hashes:
+- The canonical ignored inventory is the immutable `PRE_GO_BASE` for the final
+  release. It is never edited after GO; post-GO authorization exists only in a
+  unique detached pinned execution worktree. Canonical hashes:
   application env
   `8e989f048fa5c80f15b672c5de3638c81d48cbb2f6e1a0f471d60a1a0759b08e`,
   application plan
@@ -614,9 +615,10 @@ authorization states otherwise.
   exact F1/F2 corrections required by that review are applied.
 - Host-pull credential: `PAT classic / read:packages only / ephemeral /
   OPERATOR-HELD / NOT STORED ON HOST`.
-- Proof PAT lifecycle: `NOT REVOKED AUTOMATICALLY`; reuse is limited to the
-  post-GO exact-digest pull, followed by immediate logout/config destruction
-  and manual revocation, or earlier revocation when expired/not required.
+- Pre-GO proof PAT: `REVOKED / MUST NOT BE REUSED`.
+- Future post-GO pull PAT: `FRESH SHORT-LIVED PAT CLASSIC / read:packages ONLY /
+  NOT CREATED`; it is created only after GO immediately before exact-digest
+  pull, then logout/config destruction and manual revocation are mandatory.
 - Persistent VPS credential: `NONE`.
 - Pre-GO registry boundary: read-only private-state confirmation and exact
   immutable manifest inspection only; no image-layer pull.
@@ -636,6 +638,65 @@ authorization states otherwise.
   isolated-config destruction passed; persistent host credential `NONE`.
 - Proof evidence:
   `D:\Temp\burningspace-ops002-private-ghcr-prego-retry-20260831T081129Z`.
+- Management-access owner: `pittonje / Product Architect operator`.
+- Abort owner: `pittonje / Product Architect operator`.
+- Rollback owner: `pittonje / Product Architect operator`.
+- Exact external smoke command: `BOUND` to the existing
+  `apps/server/scripts/external-staging-smoke.ts` production invocation with
+  exact client/server/allowed/hostile origins and a 15000 ms bound. It is not
+  executed pre-GO. Its pinned-worktree provisioning procedure is `BOUND /
+  LOCALLY PROVEN` on the Product Architect/operator Windows workstation in Git
+  for Windows Bash. The same detached target worktree receives all four exact
+  hash-bound ignored inventories, uses verified standalone Compose, and runs
+  both validator families and smoke tooling. No Git/Node/npm/worktree or smoke
+  tooling is placed on the shared VPS. Named harness and assertion evidence
+  markers are mechanically distinct.
+- Complete execution-side/inventory proof:
+  `D:\Temp\burningspace-ops002-pinned-execution-proof-20260831T143459Z`;
+  fresh ancestry, source/copy bindings, `npm ci`, builds, readable module files,
+  Compose normalization, Application/Edge Phase A, 3 smoke self-tests, 56
+  preflight self-tests, exact Bash smoke form, and cleanup all `PASS`.
+- The post-GO inventory authority is `THREE_STATE_STAGE_BOUND`:
+  `PRE_GO_BASE` is the immutable canonical source; `GO_AUTHORIZED_PRE_TLS` is a
+  worktree-only derivative activated by a concrete Product Architect GO and
+  changes only the exact GO/execution/host-installation/DNS allowlist while
+  keeping `tlsReady=false`; `TLS_READY_PHASE_B` derives from State 2 only after
+  retained real TLS evidence and changes only edge-plan `tlsReady=false ->
+  true`. Every stage uses its own manifest-bound hashes. Smoke readiness uses
+  `TLS_READY_PHASE_B`, never the canonical pre-GO hashes.
+- The exact field allowlist and both real validator command paths were proven
+  locally with a clearly non-authoritative synthetic GO/TLS fixture at
+  `D:\Temp\burningspace-ops002-inventory-stage-proof-20260831T170134Z`.
+  State transformations, Edge Phase-B CLI, Application Phase-B CLI, daemonless
+  Compose normalization, and smoke self-test 3/3 passed. This is not real GO,
+  real TLS, real Edge/Application Phase B, or external smoke.
+- Region / provider location: `Hub Europe — PROVIDER-CONFIRMED BY PRODUCT
+  ARCHITECT`; this preserves the literal Contabo panel value without inferring
+  a country, city, or physical datacenter.
+- Fourth-round Operations/Security review: `APPROVE PRE-GO`; report SHA-256
+  `d9b8f3b6f518a0d7afbd27a0eec4dd812b8182c846909bf840ab279e204e33a9`,
+  reviewer-manifest SHA-256
+  `2837394d53907852d4a9fbcfec1eb66c0d91ed6bd3b529872b43fa23874b8a4e`.
+- Fourth-round Network/Runtime review: `APPROVE PRE-GO`; report SHA-256
+  `bbf415911da511c2530d6cf052bffe7cc3bb990646b64f4e75bf1d9fba41c2d1`,
+  reviewer-manifest SHA-256
+  `b45fef55079e70dfe43b14006051639df4973e4ff4ed0f37e86cecc14f4609b5`.
+- Both fourth-round reviewers assessed the same frozen substantive candidate,
+  preserved by commit `297e96ff6cb43b89e3733bd2faf94dfc1b41d996`
+  and candidate binding
+  `d24796c14575eab99d2d6d845bb7e2567c087a479b4c99cd63bb3209b5f0a1d3`.
+  Factual conflicts: `NONE`. Blocking findings for GO readiness: `NONE`.
+- Product Architect dual-review reconciliation:
+  `GO-READY — DUAL REVIEW RECONCILED`; sealed readiness evidence-manifest
+  SHA-256
+  `f7748456f8c6bddfb938c0a5b2e8a0ae883b8214e78a326635419a13bff205c1`
+  and packet `SHA256SUMS.txt` SHA-256
+  `c747f0674acb10d9e220eb12a0be254b4f3f30a722cc2c0fa4cb2f407929d20f`.
+- Prior findings A3-F1, A3-F2, A3-F3, B3-F1, B3-F2, and B3-F3 are `CLOSED`.
+  Fourth-round A4-F1, A4-F2, A4-F3, B4-F1, B4-F2, B4-F3, and B4-F4 are
+  non-blocking for GO readiness but remain mandatory acceptance gates at their
+  assigned real-bundle stages. A4-F4 remains a deferred informational
+  evidence-retention note.
 - TLS: `NOT READY`.
 - Deployment GO: `NOT ISSUED`.
 - Edge Phase B: `POST-GO / NOT RUN`.
@@ -648,27 +709,45 @@ authorization states otherwise.
   their absence does not guarantee that GitHub shows no repository-source
   association. The final UI association is accepted because visibility is
   private, inheritance is off, and explicit Actions access remains `WRITE`.
-- Reviewer declaration: Security and QA are required because this is
-  release/security governance. Architecture and Network are recommended for
-  the corrected GO/Phase B boundary. Gameplay and Visual are not applicable
-  because gameplay and presentation do not change. Core and mandatory Claude
-  QA must pass at the exact PR head before normal merge.
-- Reconciliation implementation-head review: Core run `33374592005` returned
+- Final-binding reviewer disposition: the required independent
+  Operations/Security and Network/Runtime reviews are complete. Architecture
+  is recommended but not a separate gate because topology and the GO/Phase-B
+  authority model do not change. Targeted static QA applies to this docs-only
+  delivery. Gameplay and Visual are not applicable because gameplay and
+  presentation do not change.
+- Historical pre-PR reconciliation checks: Core run `33374592005` returned
   `SUCCESS`; mandatory Claude QA run `33374592021` reviewed
   `f6a4cd3cc94435ee21a157c93df826626636cf6b`, returned wrapper `SUCCESS` and
-  substantive `Approved with suggestions`, and reported no blockers. The
-  bounded evidence-only head that records this result still requires exact-head
-  Core and Claude PR checks before normal merge.
+  substantive `Approved with suggestions`, and reported no blockers. These
+  checks do not replace exact-head Core and mandatory Claude QA on PR #79.
+- Canonical delivery binding: PR #79 is the delivery vehicle for the reviewed
+  substantive candidate plus this review-result-only reconciliation. These
+  documents become canonical authority only when present on `main` through PR
+  #79 after exact-head Core and mandatory Claude QA pass. Repository history is
+  the authority for the resulting merge state. GO remains a separate human
+  Product Architect decision.
 
 ## Next safe action
 
-The next safe action is to complete the remaining pre-GO decision bindings:
-record the region; name the management-access, abort, and rollback owners; bind
-the exact external smoke command; and bind Operations/Security plus
-Network/Runtime approval of the complete packet. This reconciliation PR must
-also be normally merged after exact-head Core and mandatory Claude QA succeed.
-Only after merge and every remaining binding closes may the Product Architect
-make the explicit environment-and-release-specific Deployment GO decision.
+All non-review pre-GO bindings are complete, including the bound and locally
+proven three-state execution-inventory model and both offline Phase-B command
+paths.
+
+The two independent fourth-round reviews and the sealed Product Architect
+reconciliation are complete. The earlier prohibition on committing, pushing,
+or opening a PR before those reviews was a `HISTORICAL PRE-REVIEW FREEZE
+CONDITION — SATISFIED / EXPIRED`.
+
+The canonical delivery protocol is completed dual review, review-result
+reconciliation, exact-head Core CI, exact-head mandatory Claude QA, and normal
+merge through PR #79. Presence of this reconciliation on `main` proves
+canonical delivery; repository history records the resulting merge state.
+Before that delivery, complete only the bounded PR #79 checks and normal merge.
+After that delivery, the next authority decision is the human Product
+Architect's environment-and-release-specific Deployment GO decision. The
+bounded read-only DNS/host currency spot-check and final GO-handoff sealing
+must complete first; repository and sealed evidence state record whether those
+conditions are satisfied. Merge does not issue GO.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.
