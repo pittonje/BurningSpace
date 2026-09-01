@@ -1,7 +1,46 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-01
-Updated by: Codex — OPS-002 PR #79 review-result reconciliation
+Updated by: Codex — OPS-002 deployment-GO reactivation canonicalization
+
+## OPS-002 canonical GO authority
+
+- Deployment GO reference: `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57`.
+- Originally issued: `2026-08-31T23:22:51Z` against canonical `main`
+  `aaba1cee1112f65d3b2330359e60a4547d251358` and release target
+  `4a774354859c036d45666496539c2fc3c24b9f1c`.
+- Evidence-chain execution suspension: `LIFTED` at
+  `2026-09-01T05:17:39Z`. The suspension had been imposed because the
+  historical final handoff passed sealed-byte verification but failed strict
+  transitive format validation in two JSON artifacts.
+- Current GO status: `ACTIVE / CONDITIONAL / STAGE-GATED`.
+- Corrected evidence: strict transitive validation `PASS`, semantic authority
+  unchanged, and historical bytes preserved. Corrected evidence-manifest
+  SHA-256:
+  `f4f8d272dbc56a642291c40766af5d1858a41c102d392ba29c6f68e0a743e4ec`.
+  Corrected root-manifest SHA-256:
+  `157d0ac1da0e91152a90999070c94607867fd2f640cb7ebb5282ec1aa6697539`.
+  Corrected binding SHA-256:
+  `e08820660acf650e199466187b6ee8e6ff5bba1d7397fd7b864b0c971bd9cd0e`.
+  Semantic-equivalence SHA-256:
+  `e8b3b6ec616217b6dae0c5182309d70d15be9286039de3662d9d5a95edaea47c`.
+  Format-contract SHA-256:
+  `b2d34846e66bab92f04500f930a9dfda7c566ad25e1722e1a26cd1c73e856be8`.
+- Targeted integrity reviews: Operations/Security
+  `OPERATIONS_SECURITY_INTEGRITY_APPROVE` and Network/Runtime
+  `NETWORK_RUNTIME_INTEGRITY_APPROVE`; neither reports a BLOCKER, HIGH, or
+  MEDIUM finding.
+- Reactivation is not deployment success. The real promotion bundle is not yet
+  prepared, reviewed, or executed. State 2/3 activation, host mutation, Caddy,
+  ACME/TLS, real Phase B, credentials, image pull/start, and external smoke are
+  all unperformed.
+- The first active promotion or host mutation remains mechanically locked until
+  separate Operations/Security and Network/Runtime approvals both bind the
+  exact final real-promotion-bundle hash.
+- Reviewer routing for this documentation-only reconciliation: exact-head Core
+  and mandatory Claude QA are required. Architecture is not a separate gate
+  because topology and authority boundaries do not change; Gameplay and Visual
+  are not applicable because gameplay and presentation do not change.
 
 ## Repository state
 
@@ -36,13 +75,14 @@ Updated by: Codex — OPS-002 PR #79 review-result reconciliation
 - OPS-002 shared-host repository hardening: `MERGED / COMPLETE` through PR #67
   and normal merge commit `21a4ce2fe796f655d20911d8a52a60c69eec432d`.
 - OPS-002 host-gate discovery, remediation, controlled reboot, and post-reboot
-  baseline: `COMPLETE / PASS`. External deployment remains `NOT AUTHORIZED`,
-  deployment GO is `NOT ISSUED`, and Phase B live execution is `NOT STARTED`.
+  baseline: `COMPLETE / PASS`. Deployment GO is `ACTIVE / CONDITIONAL /
+  STAGE-GATED`; external deployment and Phase B live execution remain `NOT
+  STARTED` pending the exact-bundle dual-review lock and all execution gates.
 - OPS-002 Caddy edge repository preparation: `MERGED / COMPLETE` through PR
   #69 and normal merge commit
-  `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Host installation, DNS, TLS,
-  external validation, deployment, and deployment `GO` remain incomplete or
-  unauthorized; the first image publication completed later through workflow
+  `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. DNS is complete. Host
+  installation, TLS, external validation, and deployment remain unperformed and
+  bundle-locked; the first image publication completed later through workflow
   run `33310151475` but is now retired from deployment authority.
 - OPS-002 first-deployment bootstrap rollback: `MERGED / COMPLETE` through PR
   #71 and normal merge commit
@@ -291,15 +331,17 @@ Updated by: Codex — OPS-002 PR #79 review-result reconciliation
   including the Caddy default TCP `2019`.
 - Client upstream: `127.0.0.1:18080`.
 - Server upstream: `127.0.0.1:2567`.
-- Host installation: `NOT PERFORMED / NOT AUTHORIZED`.
+- Host installation: `NOT PERFORMED / EXACT-BUNDLE DUAL-REVIEW LOCKED`.
 - DNS: `CONFIGURED / VERIFIED`.
 - TLS: `NOT CONFIGURED`.
 - Images: final private deploy-server/deploy-client digests `PUBLISHED /
   IMMUTABLY BOUND` by workflow run `33340075681`; earlier run `33310151475` is
   retired historical evidence only.
 - External validation: `POST-GO / NOT STARTED`.
-- Deployment: `NOT AUTHORIZED / NOT STARTED`.
-- Deployment `GO`: `NOT ISSUED`.
+- Deployment: `NOT STARTED`.
+- Deployment `GO`: `ACTIVE / CONDITIONAL / STAGE-GATED` under reference
+  `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57`; first active action remains
+  locked pending dual approval of the exact real promotion bundle.
 - Evidence state: the authorized documentation-only evidence commit and its
   final-head checks are complete. The exact one-time merge authorization was
   used for PR #69 and is exhausted.
@@ -313,13 +355,15 @@ Updated by: Codex — OPS-002 PR #79 review-result reconciliation
 
 ## Deployment boundary
 
-- OPS-002 Phase B live execution: `NOT STARTED`. External deployment remains
-  unauthorized.
+- OPS-002 Phase B live execution: `NOT STARTED`. The issued GO does not waive
+  any stage gate and does not declare deployment success.
 - Target provider/environment: `SELECTED` — Contabo,
   `burningspace-staging-01`, class
   `shared-existing-vps-with-isolated-compose-staging`. Selection is not
   deployment authorization.
-- Deployment `GO`: `NOT ISSUED`.
+- Deployment `GO`: `ACTIVE / CONDITIONAL / STAGE-GATED`; issued
+  `2026-08-31T23:22:51Z`, evidence suspension lifted
+  `2026-09-01T05:17:39Z`.
 - External staging: `NOT DEPLOYED`. No staging service is online.
 - Public production launch: `NOT AUTHORIZED`.
 - No credential was requested, supplied, or stored. The four active real
@@ -355,13 +399,13 @@ Updated by: Codex — OPS-002 PR #79 review-result reconciliation
 - Root firewall review: `PASS`; UFW active.
 - Edge repository design/preparation: `MERGED / COMPLETE` through PR #69 and
   merge `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Host edge installation and
-  ownership: `NOT STARTED / NOT AUTHORIZED`.
+  ownership: `NOT STARTED / EXACT-BUNDLE DUAL-REVIEW LOCKED`.
 - Edge host installation, TLS, Edge/Application Phase B, image pull/start, and
   external validation: `POST-GO / NOT STARTED`. Immutable target images are
   published and bound; DNS is complete.
-- GO packet: `DRAFT / PRE-GO DUAL REVIEW RECONCILED / GO NOT ISSUED`.
-- Deployment GO: `NOT ISSUED`.
-- External deployment: `NOT AUTHORIZED`.
+- GO packet: `ISSUED / REACTIVATED / CONDITIONAL / STAGE-GATED`.
+- Deployment GO: `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57`.
+- External deployment: `NOT STARTED / EXECUTION BUNDLE LOCKED`.
 - Phase B live execution: `NOT STARTED`.
 - External staging: `NOT DEPLOYED`.
 - Public production launch: `NOT AUTHORIZED`.
@@ -698,7 +742,7 @@ authorization states otherwise.
   assigned real-bundle stages. A4-F4 remains a deferred informational
   evidence-retention note.
 - TLS: `NOT READY`.
-- Deployment GO: `NOT ISSUED`.
+- Deployment GO: `ACTIVE / CONDITIONAL / STAGE-GATED`.
 - Edge Phase B: `POST-GO / NOT RUN`.
 - Application Phase B: `POST-GO / NOT RUN`.
 - Images pulled to host: `NO`.
@@ -709,45 +753,31 @@ authorization states otherwise.
   their absence does not guarantee that GitHub shows no repository-source
   association. The final UI association is accepted because visibility is
   private, inheritance is off, and explicit Actions access remains `WRITE`.
-- Final-binding reviewer disposition: the required independent
-  Operations/Security and Network/Runtime reviews are complete. Architecture
-  is recommended but not a separate gate because topology and the GO/Phase-B
-  authority model do not change. Targeted static QA applies to this docs-only
-  delivery. Gameplay and Visual are not applicable because gameplay and
-  presentation do not change.
+- Final-binding reviewer disposition: the pre-GO independent
+  Operations/Security and Network/Runtime reviews are complete, as are the two
+  targeted integrity reviews of the corrected evidence chain. These reviews do
+  not replace the future pair of exact-real-bundle approvals.
 - Historical pre-PR reconciliation checks: Core run `33374592005` returned
   `SUCCESS`; mandatory Claude QA run `33374592021` reviewed
   `f6a4cd3cc94435ee21a157c93df826626636cf6b`, returned wrapper `SUCCESS` and
   substantive `Approved with suggestions`, and reported no blockers. These
   checks do not replace exact-head Core and mandatory Claude QA on PR #79.
-- Canonical delivery binding: PR #79 is the delivery vehicle for the reviewed
-  substantive candidate plus this review-result-only reconciliation. These
-  documents become canonical authority only when present on `main` through PR
-  #79 after exact-head Core and mandatory Claude QA pass. Repository history is
-  the authority for the resulting merge state. GO remains a separate human
-  Product Architect decision.
+- Historical delivery binding: PR #79 delivered the reviewed pre-GO
+  substantive candidate. The Product Architect subsequently issued the GO,
+  suspended execution for evidence resealing, and lifted that suspension only
+  after strict validation plus both targeted integrity approvals.
 
 ## Next safe action
 
-All non-review pre-GO bindings are complete, including the bound and locally
-proven three-state execution-inventory model and both offline Phase-B command
-paths.
+Canonicalize this reactivation through the bounded documentation-only PR with
+exact-head Core, mandatory Claude QA, and a normal merge. After merge, perform
+only the bounded read-only DNS/host currency spot-check. If it passes, prepare,
+test, and freeze the real promotion bundle outside the repository.
 
-The two independent fourth-round reviews and the sealed Product Architect
-reconciliation are complete. The earlier prohibition on committing, pushing,
-or opening a PR before those reviews was a `HISTORICAL PRE-REVIEW FREEZE
-CONDITION — SATISFIED / EXPIRED`.
-
-The canonical delivery protocol is completed dual review, review-result
-reconciliation, exact-head Core CI, exact-head mandatory Claude QA, and normal
-merge through PR #79. Presence of this reconciliation on `main` proves
-canonical delivery; repository history records the resulting merge state.
-Before that delivery, complete only the bounded PR #79 checks and normal merge.
-After that delivery, the next authority decision is the human Product
-Architect's environment-and-release-specific Deployment GO decision. The
-bounded read-only DNS/host currency spot-check and final GO-handoff sealing
-must complete first; repository and sealed evidence state record whether those
-conditions are satisfied. Merge does not issue GO.
+The exact final bundle must remain mechanically incapable of its first active
+promotion or host mutation until separate Operations/Security and
+Network/Runtime approvals both bind that exact final bundle hash. Bundle
+preparation and review do not themselves authorize execution.
 
 Approving or merging the Caddy edge repository preparation does not activate
 host installation.
@@ -758,9 +788,10 @@ Their pending state does not block issuing GO after every true pre-GO binding
 passes, but each gate remains mandatory in sequence and failure stops
 progression.
 
-Phase B live execution remains unstarted and external deployment remains
-unauthorized. DNS is configured; no credential is stored on the host and no
-deployment GO is issued. Do not install Caddy, contact ACME intentionally, set
-execution/TLS authorization fields, pull images, run either Phase B validator,
-start containers, or deploy until the Product Architect issues an explicit
-environment-specific deployment GO.
+Phase B live execution remains unstarted and BurningSpace remains undeployed.
+DNS is configured; no credential is stored on the host. The Product Architect
+has issued and reactivated the exact environment-specific GO, but the
+real-bundle dual-review lock and every ordered execution gate remain in force.
+Do not activate State 2/3, mutate the host, install Caddy, contact ACME, use a
+PAT, log in to GHCR, pull images, run real Phase B, start containers, execute
+external smoke, or claim deployment completion during bundle preparation.

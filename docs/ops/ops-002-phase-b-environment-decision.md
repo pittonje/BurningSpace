@@ -1,7 +1,38 @@
 # OPS-002 Phase B — External Staging Environment Decision
 
-Status: `PRE-GO DUAL REVIEW RECONCILED / PHASE B IS POST-GO / GO NOT ISSUED /
-NOT DEPLOYED`
+Status: `GO ACTIVE / CONDITIONAL / STAGE-GATED / EXECUTION BUNDLE LOCKED / NOT
+DEPLOYED`
+
+## Canonical GO status
+
+- GO reference: `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57`
+- Issued at: `2026-08-31T23:22:51Z`
+- Evidence-chain execution suspension: `LIFTED`
+- Suspension lifted at: `2026-09-01T05:17:39Z`
+- Original canonical `main`:
+  `aaba1cee1112f65d3b2330359e60a4547d251358`
+- Release target:
+  `4a774354859c036d45666496539c2fc3c24b9f1c`
+- Corrected evidence-manifest SHA-256:
+  `f4f8d272dbc56a642291c40766af5d1858a41c102d392ba29c6f68e0a743e4ec`
+- Corrected root-manifest SHA-256:
+  `157d0ac1da0e91152a90999070c94607867fd2f640cb7ebb5282ec1aa6697539`
+- Corrected binding SHA-256:
+  `e08820660acf650e199466187b6ee8e6ff5bba1d7397fd7b864b0c971bd9cd0e`
+- Semantic-equivalence SHA-256:
+  `e8b3b6ec616217b6dae0c5182309d70d15be9286039de3662d9d5a95edaea47c`
+- Strict format-contract SHA-256:
+  `b2d34846e66bab92f04500f930a9dfda7c566ad25e1722e1a26cd1c73e856be8`
+- Integrity disposition: `OPERATIONS_SECURITY_INTEGRITY_APPROVE` and
+  `NETWORK_RUNTIME_INTEGRITY_APPROVE`; substantive authority changed: `false`.
+
+The suspension existed because two transitive artifacts in the historical
+handoff failed strict JSON validation despite matching their sealed hashes.
+Corrected derivatives preserve historical bytes and semantic authority. The GO
+is now active only for the exact conditional stage sequence. The real promotion
+bundle is not yet prepared, reviewed, or executed, and the first active
+promotion or host mutation remains mechanically locked pending two independent
+approvals bound to the exact final bundle hash.
 
 Amended: 2026-08-31 — final private GHCR release reconciliation, explicit
 operator-workstation/staging-host execution boundary, three-state staged
@@ -127,9 +158,10 @@ preserved historical audit conclusion are recorded below.
   head `864d1aacb2f902e43e0395b5058fe3e970a9dc11`, evidence head
   `ee41232b4eff513ec3d3d04ee8a03845e719171d`, merge
   `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`
-- Host Caddy installation: `NOT STARTED / NOT AUTHORIZED`
-- External deployment: `NOT AUTHORIZED`
-- Deployment GO: `NOT ISSUED`
+- Host Caddy installation: `NOT STARTED / BUNDLE-LOCKED`
+- External deployment: `NOT STARTED`
+- Deployment GO: `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57 — ACTIVE /
+  CONDITIONAL / STAGE-GATED`
 - Phase B live execution: `NOT STARTED`
 - Public production launch: `NOT AUTHORIZED`
 
@@ -197,7 +229,7 @@ permission to continue.
 
 ## Authorization scope
 
-This decision authorizes:
+The environment-selection decision authorizes:
 
 - use of the existing Contabo VPS as the controlled low-traffic BurningSpace
   external staging host;
@@ -207,7 +239,7 @@ This decision authorizes:
   query-safe logging, bounded WebSocket timeouts, rollback configuration,
   health checks, and deployment validation.
 
-This decision does not authorize:
+The environment-selection decision by itself does not authorize:
 
 - public production launch;
 - general-purpose or multi-tenant deployment;
@@ -417,7 +449,7 @@ part of the BurningSpace runtime.
 - A synchronized system clock.
 - A secure update policy.
 
-## Mandatory conditions before deployment GO
+## Historical mandatory conditions before deployment GO
 
 Repository hardening, host remediation/reboot/baseline, DNS, final release
 binding, release-specific Phase A, and private manifest-only registry proof are
@@ -842,8 +874,10 @@ Repository edge preparation, the pre-GO private-registry proof, and the bound
 and locally proven pinned-worktree provisioning procedure are complete. The
 actual execution worktree and live host provisioning remain post-GO. The
 read-only credential remains solely operator-held and has no host persistence.
-External host mutation, including Caddy installation, remains closed until
-explicit Product Architect Deployment GO.
+The explicit Product Architect Deployment GO is now issued and reactivated,
+but external host mutation, including Caddy installation, remains closed until
+the exact real promotion bundle receives both required bundle-bound approvals
+and its ordered mechanical gates pass.
 
 ## Decision expiration
 
