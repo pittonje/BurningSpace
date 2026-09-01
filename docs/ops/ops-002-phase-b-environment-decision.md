@@ -34,7 +34,9 @@ bundle is not yet prepared, reviewed, or executed, and the first active
 promotion or host mutation remains mechanically locked pending two independent
 approvals bound to the exact final bundle hash.
 
-Amended: 2026-08-31 — final private GHCR release reconciliation, explicit
+Amended: 2026-09-01 — deployment-GO evidence reseal and reactivation. The
+2026-08-31 amendment established final private GHCR release reconciliation,
+explicit
 operator-workstation/staging-host execution boundary, three-state staged
 execution-inventory authority, Phase B/GO ordering, owner bindings, and
 external-smoke contract.

@@ -44,6 +44,12 @@ and Network/Runtime approvals both bind the exact final real-bundle hash.
 - Substantive authority changed: `false`
 - Bundle execution lock: `LOCKED_PENDING_EXACT_BUNDLE_DUAL_APPROVAL`
 
+The corrected evidence and targeted review directories are sealed external
+evidence, intentionally not committed to this repository. The hashes above are
+the canonical repository binding. This reactivation reconciliation verified
+the external checksum manifests, strict formats, roles, GO reference, corrected
+root, and absence of BLOCKER, HIGH, or MEDIUM findings.
+
 ## Fixed bindings
 
 - Environment ID: `burningspace-staging-01`
@@ -368,11 +374,11 @@ external smoke.
 - Fourth-round A4-F1, A4-F2, A4-F3, B4-F1, B4-F2, B4-F3, and B4-F4:
   non-blocking for GO readiness but mandatory at their assigned real-bundle
   stages; A4-F4: deferred informational evidence-retention note
-- Canonical delivery check binding: PR #79 may enter `main` only after
-  exact-head Core and mandatory Claude QA pass; repository history records the
-  resulting merge state. The historical pre-PR reconciliation review on head
+- Historical canonical delivery check binding: PR #79 entered `main` only
+  after its required exact-head checks; repository history records the merge
+  state. The historical pre-PR reconciliation review on head
   `f6a4cd3cc94435ee21a157c93df826626636cf6b` returned `Approved with
-  suggestions` with no blockers in workflow run `33374592021` but does not
+  suggestions` with no blockers in workflow run `33374592021` and did not
   replace PR #79 exact-head checks
 - Product Architect GO reference:
   `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57`
