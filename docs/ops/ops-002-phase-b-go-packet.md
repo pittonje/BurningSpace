@@ -1,17 +1,54 @@
-# OPS-002 Phase B — Draft Deployment GO Packet
+# OPS-002 Phase B — Issued Deployment GO Packet
 
-Status: `DRAFT / PRE-GO DUAL REVIEW RECONCILED / GO NOT ISSUED / NOT DEPLOYED`
+Status: `GO ACTIVE / CONDITIONAL / STAGE-GATED / EXECUTION BUNDLE LOCKED / NOT
+DEPLOYED`
 
-This packet is not a deployment authorization. Incomplete fields must be
-resolved and verified for the exact environment before the Product Architect
-can make an environment-specific GO decision.
+The Product Architect issued environment-and-release-specific GO
+`OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57` at `2026-08-31T23:22:51Z`.
+Execution was later suspended because the historical final handoff passed
+sealed-byte verification but failed strict transitive format validation in two
+JSON artifacts. After corrected-chain validation and two targeted independent
+integrity approvals, that suspension was lifted at `2026-09-01T05:17:39Z`.
 
-The substantive pre-GO authority has completed dual independent review;
-post-GO execution fields and results remain intentionally absent. These
-documents become canonical only when delivered to `main` through PR #79 after
-exact-head Core and mandatory Claude QA pass. Repository history is the
-authority for the resulting merge state. Only the human Product Architect can
-make the later environment-specific GO decision.
+The GO is conditional authority for the exact ordered stage-gated sequence; it
+is not a declaration of deployment success. The real promotion bundle is not
+yet prepared, reviewed, or executed. The first active inventory promotion or
+host mutation remains mechanically locked until separate Operations/Security
+and Network/Runtime approvals both bind the exact final real-bundle hash.
+
+## GO reactivation binding
+
+- GO reference: `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57`
+- Issued at: `2026-08-31T23:22:51Z`
+- Evidence suspension: `LIFTED`
+- Suspension lifted at: `2026-09-01T05:17:39Z`
+- Current status: `ACTIVE / CONDITIONAL / STAGE-GATED`
+- Canonical `main` at issuance:
+  `aaba1cee1112f65d3b2330359e60a4547d251358`
+- Corrected evidence-manifest SHA-256:
+  `f4f8d272dbc56a642291c40766af5d1858a41c102d392ba29c6f68e0a743e4ec`
+- Corrected root-manifest SHA-256:
+  `157d0ac1da0e91152a90999070c94607867fd2f640cb7ebb5282ec1aa6697539`
+- Corrected binding SHA-256:
+  `e08820660acf650e199466187b6ee8e6ff5bba1d7397fd7b864b0c971bd9cd0e`
+- Semantic-equivalence SHA-256:
+  `e8b3b6ec616217b6dae0c5182309d70d15be9286039de3662d9d5a95edaea47c`
+- Strict format-contract SHA-256:
+  `b2d34846e66bab92f04500f930a9dfda7c566ad25e1722e1a26cd1c73e856be8`
+- Operations/Security integrity verdict:
+  `OPERATIONS_SECURITY_INTEGRITY_APPROVE`; verdict SHA-256
+  `c68121e09229909a8b133dbf7c67e2547016b13e9b5f0fbde2a7ab42dbdd9b5d`
+- Network/Runtime integrity verdict: `NETWORK_RUNTIME_INTEGRITY_APPROVE`;
+  verdict SHA-256
+  `5bdb8b76839304e1c1f980d5116a92d911f1cd4dd2366603756b622bbb658f90`
+- Substantive authority changed: `false`
+- Bundle execution lock: `LOCKED_PENDING_EXACT_BUNDLE_DUAL_APPROVAL`
+
+The corrected evidence and targeted review directories are sealed external
+evidence, intentionally not committed to this repository. The hashes above are
+the canonical repository binding. This reactivation reconciliation verified
+the external checksum manifests, strict formats, roles, GO reference, corrected
+root, and absence of BLOCKER, HIGH, or MEDIUM findings.
 
 ## Fixed bindings
 
@@ -106,8 +143,9 @@ make the later environment-specific GO decision.
   `/run/caddy`, `caddy:caddy`, mode `0700`, service `UMask=0077`
 - Socket permission evidence: `NOT VERIFIED`
 - Host reload evidence: `NOT VERIFIED`
-- Phase B external execution authorized: `false`
-- Deployment GO issued: `false`
+- Phase B external execution authorized: `false — exact-bundle dual-review lock
+  remains unsatisfied`
+- Deployment GO issued: `true — ACTIVE / CONDITIONAL / STAGE-GATED`
 - Public production launch authorized: `false`
 
 ## Retired public generation 1 evidence
@@ -234,8 +272,9 @@ external smoke.
 - Previous release image digests: `STRUCTURALLY ABSENT —
   bootstrap-no-previous-release`
 - External validation: `NOT STARTED`
-- Deployment GO: `NOT ISSUED`
-- Packet state: `DRAFT / PRE-GO DUAL REVIEW RECONCILED / GO NOT ISSUED`
+- Deployment GO: `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57 — ACTIVE /
+  CONDITIONAL / STAGE-GATED`
+- Packet state: `ISSUED / REACTIVATED / EXECUTION BUNDLE LOCKED / NOT DEPLOYED`
 
 ## Remaining pre-GO decision bindings and post-GO execution bindings
 
@@ -248,7 +287,8 @@ external smoke.
   `478e01e65070a10eb170e41ba1ee3c85b593e3382f397fcc2108d7ae230e98f4`,
   edge plan SHA-256
   `c9168b6801ce8df86bee9ba967e77a85d5b8d79f3e31dd9cf96a631022ca5ec7`.
-- `GO_AUTHORIZED_PRE_TLS` real hashes: `NOT CREATED / GO NOT ISSUED`.
+- `GO_AUTHORIZED_PRE_TLS` real hashes: `NOT CREATED / REAL BUNDLE PREPARATION
+  PENDING`.
 - `TLS_READY_PHASE_B` real hashes: `NOT CREATED / REAL TLS EVIDENCE NOT
   AVAILABLE`.
 - GO execution bundle and `inventory-stage-manifest.json`: `FORMAT AND
@@ -334,16 +374,17 @@ external smoke.
 - Fourth-round A4-F1, A4-F2, A4-F3, B4-F1, B4-F2, B4-F3, and B4-F4:
   non-blocking for GO readiness but mandatory at their assigned real-bundle
   stages; A4-F4: deferred informational evidence-retention note
-- Canonical delivery check binding: PR #79 may enter `main` only after
-  exact-head Core and mandatory Claude QA pass; repository history records the
-  resulting merge state. The historical pre-PR reconciliation review on head
+- Historical canonical delivery check binding: PR #79 entered `main` only
+  after its required exact-head checks; repository history records the merge
+  state. The historical pre-PR reconciliation review on head
   `f6a4cd3cc94435ee21a157c93df826626636cf6b` returned `Approved with
-  suggestions` with no blockers in workflow run `33374592021` but does not
+  suggestions` with no blockers in workflow run `33374592021` and did not
   replace PR #79 exact-head checks
-- Product Architect GO reference: `NOT CREATED`
+- Product Architect GO reference:
+  `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57`
 
-The missing GO reference and all `true` execution fields are intentionally
-post-decision values, not pre-GO blockers. Host Caddy installation, real TLS,
+The remaining `true` execution fields are intentionally stage-result values,
+not GO-issuance prerequisites. Host Caddy installation, real TLS,
 Edge Phase B, Application Phase B, image pull/start, and external smoke are
 mandatory post-GO execution gates. They remain pending by design and cannot be
 used to claim deployment success.
@@ -775,20 +816,18 @@ credential is authorized or present.
 
 ## Product Architect decision
 
-GO: `NOT ISSUED`
+GO: `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57 — ACTIVE / CONDITIONAL /
+STAGE-GATED`
 
-Reason: Environment selection, repository/host hardening, controlled reboot,
-post-reboot baseline, DNS, Caddy repository preparation/local validation, final
-private publication and gates, replacement release-specific Phase A, ephemeral
-registry login, both exact manifest resolutions, and credential cleanup are
-complete. Operational owners and the exact post-deployment smoke command are
-now bound, including the provider-confirmed location `Hub Europe`. The staged
-inventory procedure and both Phase-B command paths are locally proven only with
-a non-authoritative fixture. Fourth-round Operations/Security and Network/Runtime
-reviews both returned `APPROVE PRE-GO` against the same frozen candidate, and
-the Product Architect reconciliation is `GO-READY — DUAL REVIEW RECONCILED`.
-PR #79 is the canonical delivery vehicle and must satisfy exact-head Core and
-mandatory Claude QA before normal merge; repository history is the authority
-for that merge state. Live Caddy installation, TLS, Edge/Application Phase B,
-image pull/start, and smoke execution are post-GO gates rather than pre-GO
-blockers. Deployment `GO` is not issued.
+Reason: the exact environment, release, images, owners, rollback mode, and
+stage sequence were bound; the corrected evidence chain passes strict
+transitive validation; historical bytes are preserved; semantic authority is
+unchanged; and the targeted Operations/Security and Network/Runtime integrity
+reviews both approve without BLOCKER, HIGH, or MEDIUM findings. The prior
+evidence-reseal suspension was therefore lifted at `2026-09-01T05:17:39Z`.
+
+Live State 2/3 promotion, Caddy installation, ACME/TLS, real Edge/Application
+Phase B, PAT/GHCR operations, image pull/start, external smoke, and deployment
+completion remain unperformed. The first active action requires both real-bundle
+review approvals against the same exact final bundle hash; until then execution
+must refuse mechanically.
