@@ -2,7 +2,7 @@
 
 Owner: Product Architect
 Risk: NORMAL
-Status: AUTHORIZED / TASK AUTHORITY BEFORE RUNTIME
+Status: IMPLEMENTED / AWAITING NARROW CLIENT/UX REVIEW
 Branch: `game/mobile-001c-combat-camera-refinement`
 Base/main: `175d87f47f16c6c5bf343728e29814165a2d9258` (PR #83 merged).
 
@@ -28,9 +28,13 @@ No push, PR, deployment or further MOBILE task.
 
 ## Review routing
 
+Risk fields: runtime medium; networking none; security none; protocol none;
+persistence none; performance low (local per-frame camera interpolation);
+ci none; documentation low. Overall task risk remains NORMAL.
+
 One independent narrow Client/UX review, explicitly selected by PA for this
 NORMAL client UX slice. It covers input, camera, cancellation, visual usability
-and regression evidence. Under the PA disposition, no separate Network,
+and QA/regression evidence. Under the PA disposition, no separate Network,
 Security, Architecture or Gameplay review: no wire contract, trust boundary,
 authority model, dependency or canonical simulation changes. No broader visual
 redesign. This bounded routing supersedes generic defaults in reviewer-routing.md.
@@ -48,3 +52,77 @@ dependency and no unperformed real-device claim.
 Commit this authority/CURRENT before runtime. Second commit records implementation
 and validation. Final state: IMPLEMENTED / AWAITING NARROW CLIENT/UX REVIEW.
 Next action: one independent narrow Client/UX review.
+
+## Implementation and validation — 2026-09-13
+
+Task authority was committed first (`f961b36`; exact SHA in branch history).
+Implementation HEAD is the commit containing this section on the task branch.
+
+Production: TouchInputState now provides radial 0.18 / equal 8-sector movement
+and the right-held > movement-facing > authoritative-idle heading priority.
+TouchInputSource creates exactly MOVE, AIM/FIRE and LOBBY; no separate fire
+state remains. A fresh right-stick hold begins with authoritative fallback;
+only meaningful direction within that hold updates its retained analog aim.
+
+CameraZoomInput listens only on the gameplay canvas: desktop wheel emits a
+smooth scale factor; two captured free touch pointers emit a distance ratio.
+Controls are sibling DOM surfaces and own their captures; their pointerdown
+events never target/bubble through canvas. Pinch release/cancel resets both
+gesture pointers; blur/hidden/resize/shutdown clear gesture state. Scene owns
+target/clamping and exponential interpolation `1 - exp(-12 * dt)`.
+Follow math and spectator acceleration/deceleration remain; viewport/zoom
+determines camera-center bounds. At 844x390 and zoom .40 the view is 2110x975
+world units, far smaller than the 12000x12000 world.
+
+Viewport meta includes viewport-fit=cover. All four existing safe-area insets
+remain in control placement; touch gesture suppression is scoped to the active
+canvas/controls and restored on cleanup. Default/min/max: .86/.40/1.15.
+
+Validation (all PASS):
+
+- `npm run test -w @burningspace/client -- test/touchInputState.test.ts test/touchInputSource.test.ts test/touchCombat.test.ts test/cameraZoomInput.test.ts test/multiplayerInput.test.ts test/desktopInputSource.test.ts`: **94/94**.
+- `npm run test -w @burningspace/client`: **123/123**, including all 19 original desktop tests and one explicit movement/mouse-aim independence regression.
+- `npm run typecheck:client`.
+- `npm run typecheck` (all workspaces).
+- `npm run build:client` with `VITE_BURNINGSPACE_SERVER_URL=https://game-server.burningforge.dev` (build setting only, no public request).
+- `npm run build` (all workspaces), with the same production client setting.
+- `git diff --check`.
+
+Structural checks: DesktopInputSource and GameplayInputSource bytes unchanged;
+player input send cadence/payload/neutralization unchanged; camera helper has no
+network calls or camera mutation; only authorized client/test/doc paths changed.
+
+## Resumed verification — 2026-09-13
+
+The requested branch and both task commits already existed on resumption,
+with clean worktree and implementation head `ad877304fb928e550d0e220d7457892fe5f42bc3`.
+Fetched origin, checked out main, confirmed fast-forward was already current at
+`175d87f47f16c6c5bf343728e29814165a2d9258`, then returned to the task branch.
+Repeated validation, then added one desktop regression explicitly proving that
+W/S/A/D never overrides mouse aim and that mouse aim still changes while moving.
+Final focused 94/94 (now including desktop) and full 123/123 PASS;
+client/workspace typecheck, client/workspace build and diff checks PASS.
+Runtime code was unchanged during this verification. The extra regression and
+evidence update are included in the implementation commit to retain the requested
+two-commit history.
+
+The in-app browser was available on resumption. Local Vite and local Colyseus
+were used; staging was not contacted. Browser observations:
+
+- Desktop mouse aim/LMB fire produced a projectile; wheel up enlarged the view,
+  wheel down reduced it; no touch overlay was present.
+- Forced Touch at 844x390 rendered a matching 844x390 canvas with exactly MOVE,
+  AIM / FIRE and LOBBY. Separate pointer drags exercised movement and aim/fire.
+  Both sticks stayed 16px from the bottom/side edges; LOBBY stayed 16px from
+  the top/right. Viewport meta includes viewport-fit=cover; all four safe-area
+  env() references remain in CSS. Actual notch insets require a real device.
+- LOBBY removed the touch overlay and restored the canvas touch-action value.
+  No warning/error appeared in the browser log. Temporary browser viewport,
+  input preference and local processes were cleaned up.
+
+INFO: browser automation exposes single-pointer actions, so simultaneous
+two-stick combat, independent strafe/fire and two-touch pinch were not manually
+validated. Their identity/ownership, distance-ratio, cancellation and reset
+paths pass the focused tests; no real-device validation is claimed.
+Vite retains the existing >500 kB chunk warning. Optional zoom memory deferred;
+each scene starts at .86. No push, PR, deployment or independent review executed.

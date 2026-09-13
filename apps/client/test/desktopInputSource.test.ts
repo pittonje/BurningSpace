@@ -94,6 +94,20 @@ describe('DesktopInputSource', () => {
     expect(f.context.camera.getWorldPoint).toHaveBeenLastCalledWith(5, 10);
   });
 
+  it('keeps mouse aim independent of every movement direction', () => {
+    const f = fixture();
+    for (const [key, direction] of [['W', 'up'], ['S', 'down'], ['A', 'left'], ['D', 'right']] as const) {
+      f.key(key).onDown(f.event);
+      expect(f.source.samplePlayerInput(f.context)).toMatchObject({
+        ...neutral, [direction]: true, aimAngle: Math.atan2(40, 50)
+      });
+      f.key(key).onUp(f.event);
+    }
+    f.key('A').onDown(f.event);
+    f.input.activePointer = { x: 5, y: 10, leftButtonDown: vi.fn(() => false) };
+    expect(f.source.samplePlayerInput(f.context)).toMatchObject({ left: true, aimAngle: -Math.PI / 2 });
+  });
+
   it.each(['mouse', 'space', 'both'])('preserves held %s shooting', (control) => {
     const f = fixture();
     if (control !== 'space') f.pointer.leftButtonDown.mockReturnValue(true);

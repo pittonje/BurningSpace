@@ -44,7 +44,7 @@ export class FakeDocument {
 }
 
 export function pointer(type: string, pointerId: number, clientX = 60, clientY = 60, button = 0): PointerEvent {
-  return Object.assign(new Event(type, { cancelable: true }), { pointerId, clientX, clientY, button }) as PointerEvent;
+  return Object.assign(new Event(type, { cancelable: true }), { pointerId, clientX, clientY, button, pointerType: 'touch' }) as PointerEvent;
 }
 
 export function descendants(root: FakeElement): FakeElement[] {

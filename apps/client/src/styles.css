@@ -329,11 +329,7 @@ canvas {
   box-sizing: border-box;
 }
 
-.touch-controls__fire {
-  width: clamp(64px, 18vh, 84px);
-  height: clamp(64px, 18vh, 84px);
-  right: calc(var(--control-gap) + env(safe-area-inset-right, 0px));
-  bottom: calc(var(--stick-size) + 2 * var(--control-gap) + env(safe-area-inset-bottom, 0px));
+.touch-controls__aim.is-held {
   border-color: rgb(251 146 60 / 80%);
   background: rgb(124 45 18 / 50%);
 }

@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-13
-Updated by: Codex — MOBILE-001C task authority
+Updated by: Codex — MOBILE-001C implementation and resumed verification
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -33,12 +33,32 @@ Active task: **MOBILE-001C - Combat Controls & Tactical Camera**.
 Task: [mobile-001c-combat-controls-tactical-camera.md](../tasks/mobile-001c-combat-controls-tactical-camera.md).
 Branch: `game/mobile-001c-combat-camera-refinement`.
 Base/main: `175d87f47f16c6c5bf343728e29814165a2d9258` (PR #83).
-Status: `AUTHORIZED / TASK AUTHORITY BEFORE RUNTIME`.
+Status: `IMPLEMENTED / AWAITING NARROW CLIENT/UX REVIEW`.
+Authority commit: `f961b36` (first branch commit); implementation HEAD is the
+commit containing this handoff on the named branch.
 Scope: combined touch AIM/FIRE, movement-facing heading, balanced 8-way
 movement, local wheel/pinch tactical zoom, viewport safe-area completion.
 Preserve desktop combat, 50 ms input cadence, server protocol/authority and
 spectator physics. No server/shared/protocol/deployment/dependency changes.
-Next: implement and validate, then one narrow independent Client/UX review.
+Production: `apps/client/index.html`, `src/config/gameConfig.ts`,
+`src/input/{TouchInputState,TouchInputSource,CameraZoomInput}.ts`,
+`src/scenes/MultiplayerGameScene.ts`, `src/styles.css` (all under apps/client).
+Tests: touchInputState, touchInputSource, touchCombat, cameraZoomInput,
+multiplayerInput, desktopInputSource and fakeTouchDom under apps/client/test.
+Focused tests 94/94 (including desktop) and full client tests 123/123 PASS;
+client/workspace typecheck, client/workspace production build and diff check PASS.
+Default/min/max zoom .86/.40/1.15; camera input never enters network payload.
+Resumed verification confirmed the existing branch/authority and clean current
+main at the same base after fetch/fast-forward. Added one explicit desktop
+movement/mouse-aim independence regression; final checks above PASS.
+Local browser check: desktop mouse aim/LMB fire and wheel directions; Forced
+Touch at 844x390 with MOVE, AIM/FIRE, LOBBY, separate stick drags, correct canvas
+size/edge spacing, and overlay/touch-action cleanup PASS. No browser errors.
+Multi-pointer combat/pinch and physical safe-area insets remain test-covered
+or source-checked only; browser API has no simultaneous-touch action and no
+real-phone check is claimed. Local servers and temporary browser settings
+cleaned up. Optional zoom persistence deferred; Vite chunk warning remains INFO.
+Next safe action: one narrow independent Client/UX review.
 No push, PR or deployment in this task.
 
 ## MOBILE-001B staging follow-up (2026-09-13)
