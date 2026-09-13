@@ -189,7 +189,7 @@ canvas {
 
 .network-test__form {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 18px;
 }
@@ -268,4 +268,80 @@ canvas {
   .network-test__buttons {
     grid-template-columns: 1fr;
   }
+
+  .network-test__input {
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  .network-test__button { min-height: 44px; }
+}
+
+.touch-controls {
+  --stick-size: clamp(96px, min(27vw, 34vh), 144px);
+  --control-gap: 16px;
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.touch-controls__control {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 0;
+  color: #e0f2fe;
+  background: rgb(15 23 42 / 48%);
+  border: 2px solid rgb(125 211 252 / 55%);
+  border-radius: 50%;
+  font: 700 12px ui-sans-serif, system-ui, sans-serif;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-controls__control > * { pointer-events: none; }
+.touch-controls__control.is-held { background: rgb(14 116 144 / 60%); border-color: #bae6fd; }
+.touch-controls__control:focus-visible { outline: 2px solid #f8fafc; outline-offset: 3px; }
+
+.touch-controls__movement, .touch-controls__aim {
+  width: var(--stick-size);
+  height: var(--stick-size);
+  bottom: calc(var(--control-gap) + env(safe-area-inset-bottom, 0px));
+}
+
+.touch-controls__movement { left: calc(var(--control-gap) + env(safe-area-inset-left, 0px)); }
+.touch-controls__aim { right: calc(var(--control-gap) + env(safe-area-inset-right, 0px)); }
+.touch-controls__movement .touch-controls__label,
+.touch-controls__aim .touch-controls__label { position: absolute; top: 9px; font-size: 10px; }
+
+.touch-controls__knob {
+  width: 38%;
+  height: 38%;
+  border-radius: 50%;
+  background: rgb(125 211 252 / 40%);
+  border: 1px solid rgb(224 242 254 / 70%);
+  box-sizing: border-box;
+}
+
+.touch-controls__fire {
+  width: clamp(64px, 18vh, 84px);
+  height: clamp(64px, 18vh, 84px);
+  right: calc(var(--control-gap) + env(safe-area-inset-right, 0px));
+  bottom: calc(var(--stick-size) + 2 * var(--control-gap) + env(safe-area-inset-bottom, 0px));
+  border-color: rgb(251 146 60 / 80%);
+  background: rgb(124 45 18 / 50%);
+}
+
+.touch-controls__back {
+  top: calc(var(--control-gap) + env(safe-area-inset-top, 0px));
+  right: calc(var(--control-gap) + env(safe-area-inset-right, 0px));
+  min-width: 76px;
+  min-height: 44px;
+  border-radius: 10px;
 }

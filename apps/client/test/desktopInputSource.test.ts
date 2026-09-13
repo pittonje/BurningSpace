@@ -50,7 +50,8 @@ function fixture() {
   const context: PlayerInputContext = {
     camera: { getWorldPoint: vi.fn((x, y) => ({ x: x * 2 + 100, y: y * 2 + 200 })) },
     aimOrigin: { x: 110, y: 240 },
-    canShoot: true
+    canShoot: true,
+    fallbackAimAngle: 1.2
   };
   const key = (name: string) => keys.get(codes[name]!)!;
   const event = { timeStamp: 1, altKey: false, ctrlKey: false, shiftKey: false, metaKey: false, location: 0 } as KeyboardEvent;

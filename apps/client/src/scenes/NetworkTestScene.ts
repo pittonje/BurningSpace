@@ -4,6 +4,7 @@ import type { Faction } from '@burningspace/shared';
 import { NetworkClient, type ConnectionState, type Unsubscribe } from '../network/NetworkClient';
 import { getConnectionPresentationCopy } from '../network/connectionPresentation';
 import { networkClient } from '../network/networkSession';
+import { readInputPreference, saveInputPreference } from '../input/inputMode';
 
 function createElement<K extends keyof HTMLElementTagNameMap>(
   tagName: K,
@@ -93,6 +94,16 @@ export class NetworkTestScene extends Phaser.Scene {
     );
     this.factionField = this.createField('Faction', this.factionSelect);
     form.append(this.factionField);
+
+    const controls = createElement('select', 'network-test__input');
+    this.addOption(controls, 'auto', 'Auto');
+    this.addOption(controls, 'desktop', 'Keyboard + Mouse');
+    this.addOption(controls, 'touch', 'Touch');
+    controls.value = readInputPreference();
+    controls.addEventListener('change', () => {
+      controls.value = saveInputPreference(controls.value);
+    });
+    form.append(this.createField('Controls', controls));
 
     this.connectButton = createElement('button', 'network-test__button', 'Connect');
     this.applyButton = createElement('button', 'network-test__button', 'Apply profile');

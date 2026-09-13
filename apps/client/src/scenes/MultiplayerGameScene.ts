@@ -6,6 +6,8 @@ import {
 import { NetworkProjectileView } from '../entities/NetworkProjectileView';
 import { NetworkShipView } from '../entities/NetworkShipView';
 import { DesktopInputSource } from '../input/DesktopInputSource';
+import { TouchInputSource } from '../input/TouchInputSource';
+import { readInputPreference, resolveInputMode, type ResolvedInputMode } from '../input/inputMode';
 import type { GameplayInputSource } from '../input/GameplayInputSource';
 import { networkClient } from '../network/networkSession';
 import type { ConnectionState, PlayerInputPayload, Unsubscribe } from '../network/NetworkClient';
@@ -26,6 +28,8 @@ const SPECTATOR_CAMERA_MAX_SPEED = 9500;
 
 export class MultiplayerGameScene extends Phaser.Scene {
   private inputSource?: GameplayInputSource;
+  private inputMode: ResolvedInputMode = 'desktop';
+  private touchViewportMinimum?: { width: number; height: number };
   private hudText?: Phaser.GameObjects.Text;
   private connectionBanner?: Phaser.GameObjects.Text;
   private respawnText?: Phaser.GameObjects.Text;
@@ -69,7 +73,17 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.inputSource = new DesktopInputSource(this.input);
+    this.inputMode = resolveInputMode(readInputPreference());
+    this.inputSource = this.inputMode === 'touch'
+      ? new TouchInputSource()
+      : new DesktopInputSource(this.input);
+    if (this.inputMode === 'touch') {
+      // The desktop 720x420 minimum otherwise clips the arena on phone viewports.
+      const size = this.scale.displaySize;
+      this.touchViewportMinimum = { width: size.minWidth, height: size.minHeight };
+      size.setMin(0, 0);
+      this.scale.refresh();
+    }
     this.game.events.on(Phaser.Core.Events.BLUR, this.handleFocusLost, this);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
   }
@@ -219,7 +233,8 @@ export class MultiplayerGameScene extends Phaser.Scene {
     return this.inputSource!.samplePlayerInput({
       camera: this.cameras.main,
       aimOrigin: ownShip ?? this.cameras.main.midPoint,
-      canShoot: Boolean(ownShip?.alive)
+      canShoot: Boolean(ownShip?.alive),
+      fallbackAimAngle: ownShip?.rotation ?? 0
     });
   }
 
@@ -333,16 +348,24 @@ export class MultiplayerGameScene extends Phaser.Scene {
       `Ships: ${networkClient.currentShips.length}`,
       `Projectiles: ${networkClient.currentProjectiles.length}`,
       `Participants: ${networkClient.currentParticipants.length}`,
-      profile?.mode === 'player' ? 'WASD - movement | Mouse - aim | LMB/Space - fire | Esc - lobby' : 'WASD - free camera | Esc - lobby'
+      this.inputMode === 'touch'
+        ? (profile?.mode === 'player' ? 'Left stick - movement | Right stick - aim | FIRE - fire | LOBBY - exit' : 'Left stick - free camera | LOBBY - exit')
+        : (profile?.mode === 'player' ? 'WASD - movement | Mouse - aim | LMB/Space - fire | Esc - lobby' : 'WASD - free camera | Esc - lobby')
     ]);
 
     this.updateRespawnOverlay(ownShip);
   }
 
   private layoutHud(): void {
+    if (this.inputMode === 'touch') {
+      this.hudText?.setFontSize(11);
+      this.hudText?.setWordWrapWidth(Math.max(140, this.scale.width - 120), true);
+    }
     this.connectionBanner?.setPosition(this.scale.width / 2, 14);
     this.connectionBanner?.setWordWrapWidth(
-      Math.min(520, Math.max(280, this.scale.width - 32)),
+      this.inputMode === 'touch'
+        ? Math.min(520, Math.max(120, this.scale.width - 224))
+        : Math.min(520, Math.max(280, this.scale.width - 32)),
       true
     );
     const hudTop = this.connectionBanner?.visible
@@ -415,16 +438,19 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   private handleFocusLost = (): void => {
+    this.inputSource?.reset();
     this.sendNeutralInput();
   };
 
   private handleVisibilityChange = (): void => {
     if (document.hidden) {
+      this.inputSource?.reset();
       this.sendNeutralInput();
     }
   };
 
   private cleanup(): void {
+    this.inputSource?.reset();
     this.sendNeutralInput();
     this.inputSource?.destroy();
     this.inputSource = undefined;
@@ -446,5 +472,10 @@ export class MultiplayerGameScene extends Phaser.Scene {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.layoutHud, this);
     this.game.events.off(Phaser.Core.Events.BLUR, this.handleFocusLost, this);
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    if (this.touchViewportMinimum) {
+      this.scale.displaySize.setMin(this.touchViewportMinimum.width, this.touchViewportMinimum.height);
+      this.touchViewportMinimum = undefined;
+      this.scale.refresh();
+    }
   }
 }

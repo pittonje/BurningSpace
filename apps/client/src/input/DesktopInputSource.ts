@@ -54,6 +54,10 @@ export class DesktopInputSource implements GameplayInputSource {
     return !this.destroyed && Phaser.Input.Keyboard.JustDown(this.keys.ESC);
   }
 
+  reset(): void {
+    // Phaser owns desktop key reset on blur; preserve its existing behavior.
+  }
+
   destroy(): void {
     if (this.destroyed) {
       return;
