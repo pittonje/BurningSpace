@@ -1,0 +1,28 @@
+# Ephemeral local/CI PostgreSQL for PERSIST-002 migration and persistence
+# integration tests ONLY. Not staging, not production. Data lives in tmpfs
+# and is discarded on `down`; the DB listens on loopback only.
+#
+# Image resolved via the Docker Registry HTTP API v2 (docker CLI was not
+# available in the authoring environment):
+#   curl -H "Authorization: Bearer <anonymous pull token>" \
+#     -H "Accept: application/vnd.oci.image.index.v1+json" \
+#     https://registry-1.docker.io/v2/library/postgres/manifests/17
+# Tag inspected: postgres:17 (PostgreSQL 17.11 at authoring time).
+# Immutable index digest observed: sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+
+services:
+  postgres:
+    image: postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+    environment:
+      POSTGRES_DB: burningspace_test
+      POSTGRES_USER: burningspace_test_admin
+      POSTGRES_PASSWORD: burningspace_test_password
+    ports:
+      - "127.0.0.1:${BURNINGSPACE_TEST_DB_PORT:-55432}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U burningspace_test_admin -d burningspace_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
