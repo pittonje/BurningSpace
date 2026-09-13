@@ -6,13 +6,11 @@ This registry will contain BurningSpace architecture, design, mechanics, process
 
 ## Current status
 
-DOCARCH-002C is complete. DOCARCH-002D1 merged via PR #44, and DOCARCH-002D2
-merged via PR #45. DOCARCH-002D3 is the active final reconciliation and closure
-candidate. It creates no decision records, so the accepted count remains 35.
-Active architecture and design summaries are being reconciled to the accepted
-registry, while `balance-v0.1.md` is explicitly historical and
-non-authoritative. After D3 human merge, DOCARCH-002 closes and DOCARCH-003 —
-Canonical Development Roadmap becomes the next repository task.
+PERSIST-001 records four new accepted architecture decisions under explicit
+human-delegated Product Architect authority. Current count: 39 accepted records
+(11 architecture). Independent Architecture/Security review and final PA task
+acceptance remain pending; no persistence runtime or PERSIST-002 is authorized.
+Earlier DOCARCH-002 reconciliation is historical; its baseline was 35.
 
 [`DECISION_INDEX.md`](DECISION_INDEX.md) remains the canonical decision-navigation
 source. Do not duplicate its detailed registry here.

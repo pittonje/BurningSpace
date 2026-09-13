@@ -2,7 +2,7 @@
 
 Owner: Product Architect
 Risk: NORMAL
-Status: FIX1 IMPLEMENTED / AWAITING DELTA REVIEW OF M001C-UX-01
+Status: MERGED / DEPLOYED / FIELD-TESTED (dated reconciliation below)
 Branch: `game/mobile-001c-combat-camera-refinement`
 Base/main: `175d87f47f16c6c5bf343728e29814165a2d9258` (PR #83 merged).
 
@@ -173,3 +173,14 @@ connection behavior, safe-area DOM controls and accepted physics are unchanged.
 No server/shared/protocol/deploy/workflow/dependency/lockfile edits. Existing
 Vite large-chunk warning remains INFO. No push, PR or deployment.
 Next action: delta review of M001C-UX-01.
+
+## Closure reconciliation - PERSIST-001, 2026-09-13
+
+MOBILE-001C merged through PR #84 at
+`3b3621d248a73f67e1bed89cd3c267d5539f2c34`. The human PA's PERSIST-001 handoff
+confirms bounded client-only deployment, healthy public staging and usable
+controls on a real phone. These are user-confirmed external observations; no
+new deployment/device check or independent review verdict is fabricated here.
+Previous awaiting-review/next-action/no-deployment statements above are historical
+implementation checkpoints. Mobile is no longer active. The single deferred UX
+debt entry and current persistence task are in [CURRENT](../handoffs/CURRENT.md).

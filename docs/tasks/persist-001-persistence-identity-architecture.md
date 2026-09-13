@@ -1,8 +1,8 @@
-# PERSIST-001 ? Persistent World & Durable Identity Architecture
+# PERSIST-001 - Persistent World & Durable Identity Architecture
 
 Owner: Product Architect
 Risk: HIGH ARCHITECTURE IMPACT / DOCUMENTATION-ONLY
-Status: AUTHORITY DEFINED / ARCHITECTURE NOT YET WRITTEN
+Status: ARCHITECTURE DEFINED / READY FOR ARCHITECTURE/SECURITY REVIEW
 Date: 2026-09-13
 Branch: `arch/persist-001-persistence-identity`
 Base/main: `3b3621d248a73f67e1bed89cd3c267d5539f2c34`
@@ -35,7 +35,7 @@ restriction does not override these explicit starting instructions.
 | MOBILE-001C awaiting review | CURRENT and task pre-merge state | Stale; local main merge PR #84 supersedes active-task claim |
 | Client deployed, staging healthy, real-phone controls usable | Human PA's PERSIST-001 handoff, 2026-09-13 | External-only user-confirmed evidence; no new VPS/probe evidence claimed |
 | Persistence successor | Explicit human PA task plus canonical Wave 2 gates | Authorized architecture task only |
-| Prior governance | Governance, BS-ARCH-001?007, BS-PROC-001?004 | Preserved; no historical accepted record edits |
+| Prior governance | Governance, BS-ARCH-001-007, BS-PROC-001-004 | Preserved; no historical accepted record edits |
 
 ## Exact documentation scope
 
@@ -91,9 +91,69 @@ Inspect available documentation check scripts; run build/typecheck when possible
 Read current production BattleRoom, NetworkClient and reconnect configuration
 and tests to verify migration boundaries. Do not execute deployment tooling.
 
-1. `PERSIST-001 ? Define persistence and identity architecture task`
-2. `PERSIST-001 ? Define persistent world and identity architecture`
+1. `PERSIST-001 - Define persistence and identity architecture task`
+2. `PERSIST-001 - Define persistent world and identity architecture`
 
 A third documentation-evidence commit is allowed only if necessary. No push/PR.
 Final handoff is in Russian, includes exact SHAs, files, decisions, architecture
 and proof contract, checks/limitations, clean status, and exactly one next action.
+
+## Architecture completion checkpoint - 2026-09-13
+
+Authority commit: `0dec9d546cd7289f73bff843d8cfdeda79bc87b8`.
+Architecture/final HEAD is the commit containing this checkpoint; obtain exact
+SHA from branch HEAD. Decisions BS-ARCH-008 through BS-ARCH-011 are accepted under
+the explicitly delegated PA decision authority; independent task review and final
+PA acceptance are pending. Existing 35 accepted records remain unchanged.
+
+[Architecture](../architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md) defines
+storage/identity/session/world lifecycle, concrete schema/transaction boundaries,
+credential/lease threat model, failure/rollback/restore behavior, staging topology,
+19-step PERSIST-002 proof and mandatory race/failure cases. Deferred classifications
+remain ship transform/health/respawn/cooldowns and later campaign control state;
+production HA/RPO/RTO/admin/account extensions remain future scope. No baseline
+PA default was substituted. Package ownership and accepted mechanics are preserved.
+
+MOBILE-001C closure is reconciled in its task and CURRENT, based on local PR #84
+merge history and separately attributed human PA deployment/phone observations.
+No new mobile task, deployment proof or external review verdict is fabricated.
+
+Next action: one independent Architecture/Security review bound to final HEAD.
+No PERSIST-002, push or PR in this session.
+
+## Mechanical validation evidence
+
+- `npm run build`: PASS across all workspaces, production client URL supplied
+  as build configuration only. Existing Vite >500 kB chunk warning remains INFO.
+- `npm run typecheck`: PASS across all workspaces.
+- `git diff --check`: PASS.
+- Local path-link checker: 113 relative links in changed Markdown resolve;
+  heading checker: 3 local fragments resolve.
+- Registry checker: 39 accepted files match 39 unique index rows; all four new
+  records have required decision/rationale/consequences/non-goal/relationship fields.
+- All 35 pre-existing accepted decision records have zero diff from base.
+- Scope checker: exactly 13 Markdown files, no runtime/package/deploy/workflow
+  changes. No dependency, SQL migration, Docker service or secret created.
+- No dedicated documentation linter/check command found in package scripts or
+  repository scripts/workflows; bounded path/anchor/registry/scope checks used.
+- Source audit covered BattleRoom, ParticipantState, NetworkClient, production
+  room registration, runtime readiness and NET-001 configuration/test cases.
+- No runtime test suite or persistence/DB/restore test is claimed for this
+  documentation-only task; implementation proof belongs to PERSIST-002.
+- No independent review, CI dispatch, VPS contact, push, PR or merge performed.
+
+Exact changed files (relative to recorded main base):
+
+1. PROJECT_CONTEXT.md
+2. docs/agents/ARCHITECT_TAKEOVER_PROTOCOL.md
+3. docs/architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md
+4. docs/decisions/BS-ARCH-008.md
+5. docs/decisions/BS-ARCH-009.md
+6. docs/decisions/BS-ARCH-010.md
+7. docs/decisions/BS-ARCH-011.md
+8. docs/decisions/DECISION_INDEX.md
+9. docs/decisions/README.md
+10. docs/handoffs/CURRENT.md
+11. docs/roadmap/CANONICAL_DEVELOPMENT_ROADMAP.md
+12. docs/tasks/mobile-001c-combat-controls-tactical-camera.md
+13. docs/tasks/persist-001-persistence-identity-architecture.md

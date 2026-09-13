@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-13
-Updated by: Codex — MOBILE-001C FIX1 HUD anchoring
+Updated by: Product Architect / Codex - PERSIST-001
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -34,15 +34,27 @@ Task: [PERSIST-001](../tasks/persist-001-persistence-identity-architecture.md).
 Owner: Product Architect (explicit human delegation).
 Branch: `arch/persist-001-persistence-identity`.
 Base/main: `3b3621d248a73f67e1bed89cd3c267d5539f2c34`.
-Status: `AUTHORITY DEFINED / ARCHITECTURE NOT YET WRITTEN`.
+Status: `ARCHITECTURE DEFINED / READY FOR ARCHITECTURE/SECURITY REVIEW`.
+Authority commit: `0dec9d546cd7289f73bff843d8cfdeda79bc87b8`.
+Architecture/final HEAD: commit containing this handoff on the named branch;
+resolve with `git rev-parse HEAD` (no self-referencing commit SHA).
+[Architecture contract](../architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md)
+and accepted BS-ARCH-008 through BS-ARCH-011 define PostgreSQL/pg, durable guest
+proof, immutable world faction, fenced ownership and world boot/restore.
+Accepted decision count is 39; no historical accepted record was modified.
+Validation: workspace build/typecheck and diff check PASS; 113 local path links,
+3 anchors and 39 unique indexed accepted records verified; 35 prior records
+unchanged. Exactly 13 Markdown files differ from base. Existing Vite chunk-size
+warning only. Detailed evidence and exact file list are in the task. Independent
+review and final task acceptance remain pending; no CI/review verdict invented.
 Scope: architecture/decision documentation only; no persistence runtime,
 dependencies, deployment, secrets, VPS contact, push or PR.
 One independent Architecture/Security review is required after authoring;
 PERSIST-002 remains unauthorized until PA accepts PERSIST-001.
-Next safe action: define the persistence and durable identity architecture
-within the committed PERSIST-001 task.
+Next safe action: one independent Architecture/Security review of the final
+PERSIST-001 commit, covering the task's declared review focus.
 
-## MOBILE-001C closure reconciliation ? 2026-09-13
+## MOBILE-001C closure reconciliation - 2026-09-13
 
 MOBILE-001A/B/C are merged; MOBILE-001C entered main through PR #84 at the base
 SHA above. The human PA confirms the merged client was deployed through the

@@ -230,6 +230,14 @@ Make the existing multiplayer foundation safe to extend.
 
 ### Wave 2 — Persistent World and Identity Foundation
 
+**PERSIST-001 gate disposition, 2026-09-13:** storage, identity, sessions, world
+lifecycle, migration/rollback and consistency are defined by accepted BS-ARCH-008
+through BS-ARCH-011 under explicitly delegated PA authority. The architecture
+task is in REVIEW, pending independent Architecture/Security review and final PA
+task acceptance. PERSIST-002 is not started or authorized. This does not complete
+Wave 2 or classify future campaign battle state. See the
+[architecture and acceptance contract](../architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md).
+
 **Purpose**
 
 Create durable ownership and lifecycle foundations for campaign state.
@@ -861,15 +869,15 @@ prerequisites or unresolved decisions.
 
 | Gate | Required before wave | Question | Current authority | Blocking effect | Expected resolution vehicle |
 |---|---|---|---|---|---|
-| Reconnect ownership behavior | Wave 1 minimum; Wave 2 durable binding | What server-owned state and identity may a reconnecting client resume, and how are duplication and expiry handled? | DOCARCH-003 MVP scope requires reconnect; exact behavior is unresolved. | Blocks safe reconnect implementation and later durable session binding. | Dedicated Product Architect-approved architecture/security decision task. |
+| Reconnect ownership behavior | Wave 1 minimum; Wave 2 durable binding | What server-owned state and identity may a reconnecting client resume, and how are duplication and expiry handled? | NET-001 implements transient continuity; BS-ARCH-010 defines durable binding. | Transient path implemented; reviewed durable binding and implementation proof remain required. | Dedicated Product Architect-approved architecture/security decision task. |
 | WebSocket origin policy | Wave 1 | Which production origins are accepted and how does the server fail closed? | Security hardening scope is approved; exact policy is unresolved. | Blocks public exposure of the current WebSocket service. | Bounded security task with Security and Network review. |
 | Profile-message rate limits | Wave 1 | What limits, windows, and enforcement behavior apply to profile messages? | Rate limiting is required by this roadmap; values are unresolved. | Blocks completion of the Wave 1 abuse-control boundary. | Bounded security/balance task with measured validation. |
 | Branch protection / possible CI-004 | Wave 1 completion | Which GitHub protections are absent, and is dedicated CI-004 required to enforce governed merge gates? | `BS-PROC-001`, `BS-PROC-004`, and `CI-003-D1` govern process; technical protection is not established. | Blocks a claim that process requirements are technically enforced. | Read-only settings assessment followed by a separately accepted CI task if needed. |
-| Storage/database technology | Wave 2 | Which storage technology satisfies world-state, consistency, recovery, and operational requirements? | No accepted storage selection exists. | Blocks persistence implementation. | Dedicated Product Architect-approved architecture decision task. |
-| Identity/account/session model | Wave 2 | What durable identity exists, how is it authenticated, and how are sessions bound to it? | MVP requires minimum identity/session; exact model is unresolved. | Blocks durable player ownership and faction participation. | Dedicated Product Architect-approved identity/security decision task. |
-| World-instance lifecycle | Wave 2 | How are worlds created, identified, started, stopped, recovered, and retired? | Server authority is accepted; lifecycle model is unresolved. | Blocks durable world ownership and restart recovery. | Dedicated architecture/product decision task. |
-| Persistence migration strategy | Wave 2 | How are schema versions migrated, rolled back, backed up, and restored? | Recovery expectations are roadmap requirements; strategy is unresolved. | Blocks production-safe persistent schema evolution. | Persistence architecture decision plus bounded implementation task. |
-| Persistence consistency boundary | Wave 2 | Which transitions are atomic and how are conflicts or partial failures recovered? | `BS-ARCH-001` requires server authority; transaction boundary is unresolved. | Blocks reliable campaign transitions and recovery tests. | Dedicated persistence architecture decision task. |
+| Storage/database technology | Wave 2 | Which storage technology satisfies world-state, consistency, recovery, and operational requirements? | PERSIST-001 / BS-ARCH-008 selects PostgreSQL and explicit pg repositories. | Defined; PERSIST-001 independent review and PA acceptance still block implementation. | Dedicated Product Architect-approved architecture decision task. |
+| Identity/account/session model | Wave 2 | What durable identity exists, how is it authenticated, and how are sessions bound to it? | BS-ARCH-009/010 define durable guest proof and one gameplay lease per world/player. | Defined; implementation needs reviewed PERSIST-001 and a new bounded task. | Dedicated Product Architect-approved identity/security decision task. |
+| World-instance lifecycle | Wave 2 | How are worlds created, identified, started, stopped, recovered, and retired? | BS-ARCH-011 defines explicit bootstrap and readiness-gated singleton recovery. | Defined; implementation and restart proof remain required. | Dedicated architecture/product decision task. |
+| Persistence migration strategy | Wave 2 | How are schema versions migrated, rolled back, backed up, and restored? | BS-ARCH-008 defines serialized SQL migrations and compatible rollback/restore. | Defined; migration/restore implementation proof remains required. | Persistence architecture decision plus bounded implementation task. |
+| Persistence consistency boundary | Wave 2 | Which transitions are atomic and how are conflicts or partial failures recovered? | BS-ARCH-008/010 define semantic transactions, revision and writer fencing. | Defined; implementation/failure tests remain required. | Dedicated persistence architecture decision task. |
 | Sector capture rates | Wave 3 | At what rates do attacker and defender pressure change the accepted signed meter? | `BS-MECH-019`/`020` define behavior but intentionally omit rates. | Blocks deterministic sector progression implementation. | Dedicated Product Architect-approved balance decision. |
 | Player/creep weights | Wave 3 | What numeric capture weight does each eligible player or creep contribute? | `BS-MECH-019` includes both but omits numeric weights. | Blocks authoritative capture-pressure calculation. | Dedicated Product Architect-approved balance decision. |
 | Minimum creep participation rules | Wave 3 | How are MVP creeps spawned, made eligible, assigned, and counted for sector control? | `BS-MECH-019` requires creep participation; exact rules are unresolved. | Blocks the minimum territorial MVP implementation. | Dedicated gameplay/architecture decision task. |
@@ -883,8 +891,8 @@ prerequisites or unresolved decisions.
 | MVP tuning and placeholder disposition | Wave 6 | Which approved values replace or retire every active historical or embedded placeholder? | `BS-ARCH-006` preserves the boundary; historical values are non-authoritative. | Blocks release-candidate balance authority. | Dedicated balance decisions and bounded migration tasks. |
 | Post-MVP economy/logistics/portal mechanics | Wave 7 | What exact mechanics, boundaries, and dependencies apply to each deferred domain? | No accepted exact mechanics exist for these deferred domains. | Blocks any implementation of those domains. | Separate Product Architect decisions and bounded tasks per domain. |
 
-The table records blockers; it does not resolve them or assign canonical IDs to
-unnamed future work.
+The table records gates and their cited resolutions. PERSIST-001 updates only
+Wave 2-related gates; later domain gates remain unresolved.
 
 ## 9. Roadmap status model
 
@@ -906,7 +914,7 @@ blocking criterion remains unmet. `CURRENT.md` identifies active work and
 exactly one next safe action; this roadmap may summarize status but does not
 replace `CURRENT.md` operationally.
 
-Initial status after this roadmap is human-merged:
+Historical initial statuses after roadmap merge (not current operational state):
 
 | Wave | Initial status | Reason |
 |---|---|---|
@@ -919,6 +927,10 @@ Initial status after this roadmap is human-merged:
 | Wave 7 | `DEFERRED` | It requires MVP completion and explicit post-MVP authorization. |
 
 Wave 1 is not `ACTIVE` or `COMPLETE` merely because the roadmap exists.
+
+Current Wave 2 update (PERSIST-001): `REVIEW` for the architecture gate package;
+implementation remains not started. No later wave is unlocked by documentation
+alone. CURRENT identifies the sole next action.
 
 ## 10. Dependency view
 

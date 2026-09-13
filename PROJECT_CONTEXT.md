@@ -68,7 +68,11 @@ Accepted architecture is recorded in
 [`BS-ARCH-004`](docs/decisions/BS-ARCH-004.md),
 [`BS-ARCH-005`](docs/decisions/BS-ARCH-005.md),
 [`BS-ARCH-006`](docs/decisions/BS-ARCH-006.md), and
-[`BS-ARCH-007`](docs/decisions/BS-ARCH-007.md), with current summaries in
+[`BS-ARCH-007`](docs/decisions/BS-ARCH-007.md), plus persistence decisions
+[`BS-ARCH-008`](docs/decisions/BS-ARCH-008.md),
+[`BS-ARCH-009`](docs/decisions/BS-ARCH-009.md),
+[`BS-ARCH-010`](docs/decisions/BS-ARCH-010.md), and
+[`BS-ARCH-011`](docs/decisions/BS-ARCH-011.md). Current summaries are in
 [Package Boundaries](docs/architecture/package-boundaries.md) and the
 [Shared Dependency Map](docs/architecture/shared-dependency-map.md).
 
@@ -102,15 +106,21 @@ Exact immutable image digests and execution provenance are recorded in the
 This is non-persistent Public Arena staging, not production or campaign MVP.
 Server/world state remains in-memory and may reset on restart; world/player
 campaign persistence and durable identity are not implemented. Campaign
-systems remain future incremental work. After POSTDEPLOY-001 documentation
-closure, the next development tracks are MOBILE-001 adaptive input/touch
-controls and the existing Wave 2 persistence/identity foundation. Mobile touch
-controls are planned, not implemented; no database or new accepted decision
-is selected by this closure. The accepted decision count remains 35.
+systems remain future incremental work. MOBILE-001A/B/C are merged; MOBILE-001C
+entered main through PR #84. The human PA confirms its bounded client-only
+staging update and successful real-phone usability test. These are supplied
+observations, not fresh deployment verification in PERSIST-001. Original OPS-002
+release evidence above remains historical server/deployment baseline.
 
-The local `GameScene` remains preserved non-authoritative prototype material.
-Use [CURRENT](docs/handoffs/CURRENT.md) for the bounded task and the separate
-manual phone-browser observation; it is not mobile-control completion.
+Wave 2 persistence/identity is the active program. PERSIST-001 selects PostgreSQL,
+explicit pg repositories, durable guest UUID/credential, world/faction membership
+and fenced session/world lifecycle. See
+[Persistent World and Identity Architecture](docs/architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md).
+The registry now has 39 accepted decisions under explicit delegated PA authority;
+independent Architecture/Security review and final PERSIST-001 acceptance remain
+pending. Runtime persistence and PERSIST-002 have not started. Use
+[CURRENT](docs/handoffs/CURRENT.md) for exact task/review state and deferred mobile
+UX. Local GameScene remains preserved non-authoritative prototype material.
 
 DOCARCH-005 — Role and Model Portability remains deferred. Use
 [CURRENT](docs/handoffs/CURRENT.md) as the live operational source.
@@ -119,7 +129,7 @@ DOCARCH-005 — Role and Model Portability remains deferred. Use
 
 - Branch protection and possible CI-004 remain dedicated CI work.
 - AGENT-004 and detailed role/model portability remain deferred to DOCARCH-005.
-- Persistence, accounts, and database work remain future implementation work.
+- Persistence/database implementation remains future PERSIST-002 work after architecture acceptance; broad accounts remain deferred.
 - Exact unresolved balance parameters remain outside the accepted mechanics until separately approved.
 
 ## Safe resumption
