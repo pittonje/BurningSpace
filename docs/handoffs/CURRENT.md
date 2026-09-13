@@ -1,7 +1,74 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-09-01
-Updated by: Codex — OPS-002 deployment-GO reactivation canonicalization
+Last updated: 2026-09-13
+Updated by: Codex — POSTDEPLOY-001 deployment closure / repository truth reconciliation
+
+## Current state — Public Arena external staging: ONLINE
+
+- OPS-002: `COMPLETE — EXTERNAL STAGING DEPLOYED AND VALIDATED`.
+- Frozen controller: `DEPLOYMENT_COMPLETE`, recorded 2026-09-13.
+- Client: https://game.burningforge.dev
+- Server origin: https://game-server.burningforge.dev
+- Environment: `burningspace-staging-01`, Contabo shared existing VPS.
+- Deployed application release: `4a774354859c036d45666496539c2fc3c24b9f1c`.
+- Runtime: exact immutable images, started with `--pull never`; both
+  application containers healthy; health/readiness PASS.
+- One external hash-bound smoke: **18/18 PASS**, including reconnect
+  continuity. Registry credential cleanup completed; owner PAT revocation
+  recorded; unrelated VPS services preserved.
+- Persistence: **NOT IMPLEMENTED** — server/world state remains in-memory
+  and may reset on restart. World/player campaign persistence and durable
+  identity are absent. This is non-persistent staging, **not production** or
+  campaign MVP.
+
+The [OPS-002 completion record](../tasks/ops-002-public-arena-external-staging-deployment.md#2026-09-13--phase-b-execution-closure)
+contains the exact deployed image digests, primary execution report location
+and SHA-256 bindings. The [execution closure](../reviews/ops-002-public-arena-external-staging-deployment-review.md#2026-09-13--final-execution-closure)
+preserves the earlier review bindings. Online status is the recorded deployment
+result; POSTDEPLOY-001 does not repeat a public probe or contact the VPS.
+
+## Current bounded task and next action
+
+POSTDEPLOY-001: documentation reconciliation ready for human review. Base/main
+is `45e6cce4ef189c403287ce96d03907eff4ddc2ac`; branch
+`docs/postdeploy-001-public-arena-closure`. This base is repository documentation
+truth, not a change to the deployed application release above.
+
+One normal human review before merge is sufficient under the PA's LOW-risk
+scope. Architecture, Claude QA, Network/Runtime and Operations/Security review
+are not required for this documentation-only closure; gameplay/visual review
+is not applicable. No runtime, deployment, infrastructure, CI, accepted
+mechanics or architecture changes are included. Do not merge autonomously.
+
+After this closure, product development returns to two planned tracks:
+
+- **MOBILE-001:** client-side adaptive input foundation and touch controls.
+- **Wave 2:** persistent world and durable player identity foundation before
+  territorial campaign state, following the existing
+  [canonical roadmap](../roadmap/CANONICAL_DEVELOPMENT_ROADMAP.md#wave-2--persistent-world-and-identity-foundation)
+  and its unresolved decision gates. No database is selected here.
+
+Neither track is implemented or started by POSTDEPLOY-001. Existing accepted
+decisions and the paused DOCARCH work remain unchanged.
+
+## Manual phone-browser observation
+
+The user reported that the public site loads from a phone browser, rendering
+works sufficiently for initial testing, and the multiplayer/network path
+operates. Keyboard controls are naturally unavailable there. This is a limited
+manual observation, not automated mobile coverage or accepted architectural /
+mechanical authority. Mobile touch controls are **not implemented**; they are
+MOBILE-001 follow-up work.
+
+## Historical handoff — through 2026-09-01
+
+The earlier GO/preparation snapshots below are retained as historical evidence.
+Their pending/NOT DEPLOYED statements and next-action instructions describe
+that period and are superseded by the dated current state above. They are not
+current execution instructions or authority to restart deployment work.
+
+<details>
+<summary>Preserved GO, preparation, review and earlier handoff details</summary>
 
 ## OPS-002 canonical GO authority
 
@@ -795,3 +862,5 @@ real-bundle dual-review lock and every ordered execution gate remain in force.
 Do not activate State 2/3, mutate the host, install Caddy, contact ACME, use a
 PAT, log in to GHCR, pull images, run real Phase B, start containers, execute
 external smoke, or claim deployment completion during bundle preparation.
+
+</details>

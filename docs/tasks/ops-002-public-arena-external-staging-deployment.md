@@ -6,7 +6,72 @@ Track: `Public Arena Alpha launch track`
 
 ## Status
 
-`ACTIVE — PRE-GO OPERATIONAL EVIDENCE PARTIAL; PHASE B POST-GO; DEPLOYMENT NOT AUTHORIZED`
+`COMPLETE — EXTERNAL STAGING DEPLOYED AND VALIDATED`
+
+## 2026-09-13 — Phase B execution closure
+
+OPS-002 V2 completed under separately approved frozen deployment authority.
+The terminal controller state is `DEPLOYMENT_COMPLETE` (16 journal entries).
+This dated record supersedes historical pre-deployment status below; it does
+not retroactively authorize or rebind earlier repository-preparation work.
+
+| Deployment binding | Recorded result |
+| --- | --- |
+| Completion date | 2026-09-13 |
+| Environment | `burningspace-staging-01`, Contabo shared existing VPS |
+| Public client | https://game.burningforge.dev |
+| Public server origin | https://game-server.burningforge.dev |
+| Deployed application release | `4a774354859c036d45666496539c2fc3c24b9f1c` |
+| Runtime start | `--pull never`; both application containers healthy |
+| Health / readiness | PASS / PASS |
+| External validation | One hash-bound smoke, 18/18 PASS; reconnect continuity PASS |
+| Registry credentials | Logout and temporary Docker config destruction complete; owner PAT revocation recorded |
+| Shared host | Unrelated VPS containers/services preserved |
+
+Exact approved and deployed immutable images:
+
+- Server: `ghcr.io/pittonje/burningspace-deploy-server@sha256:816062e5165f3d02aed2b1d5524c1bc53de85bd0709fb92b0ef421d3be626085`
+- Client: `ghcr.io/pittonje/burningspace-deploy-client@sha256:ae65d4c6faadd55b04549a4a070ac5cd6ba1e5d4288a6adb1f6b2a541b9d789f`
+
+This is non-persistent Public Arena staging, **not production**. Server/world
+state is in-memory and may reset on restart. World/player campaign persistence
+and durable identity are not implemented; deployment completion does not close
+campaign MVP or authorize a production launch.
+
+Primary execution evidence retained outside the repository:
+
+- Directory: `D:\Temp\burningspace-ops002-v2-execution-20260913T034247Z\evidence`
+- Primary report: `DEPLOYMENT_FINAL_REPORT.md`, SHA-256
+  `b261358132e257a439f66b8df7123eda4ec7ea3bd6432c7e54023bd55d4f7cd6`.
+- Structured results: `DEPLOYMENT_FINAL_RESULTS.json`, SHA-256
+  `fcce934b98b849626e2c9ab858f6a21c213c757702c8d6d956a52ca5748f9c43`.
+- Supporting files: `DEPLOYMENT_COMPLETE_VERIFIED.json`,
+  `EXTERNAL_SMOKE_PASS.json`, `GHCR_CURRENT2_PAT_REVOKED.json`; their hashes
+  were checked against `DEPLOYMENT_FINAL_SHA256SUMS.txt` for this closure.
+
+These are local retained artifacts, not repository-hosted attachments or a
+new review verdict. Historical failed attempts and reconciliation evidence
+remain unchanged. See the [final execution closure](../reviews/ops-002-public-arena-external-staging-deployment-review.md#2026-09-13--final-execution-closure) for the distinction from earlier reviews.
+
+POSTDEPLOY-001 records these facts only, based on `origin/main`
+`45e6cce4ef189c403287ce96d03907eff4ddc2ac`. Risk is LOW; one normal human
+review is required before merge. Under the explicit PA disposition and
+[reviewer routing](../agents/reviewer-routing.md), Architecture, Claude QA,
+Network/Runtime and Operations/Security reviews are not required: no runtime,
+architecture, network/security behavior, deployment tooling or CI changes.
+Gameplay and Visual review are not applicable because mechanics and
+presentation are unchanged. No deployment reviews or suites are rerun.
+
+After documentation closure, product development returns to MOBILE-001
+adaptive input/touch controls and Wave 2 persistence/identity work. Neither
+track is implemented or newly architecturally decided here. The
+[current handoff](../handoffs/CURRENT.md) records the limited phone-browser
+observation separately from those planned capabilities.
+
+The remaining sections preserve the original milestone scope, gates and
+repository-preparation snapshot. Statements about work then unperformed and
+the original unchecked acceptance checklist are historical; current execution
+completion is recorded above without inventing new tests or review verdicts.
 
 ## Risk
 
@@ -18,7 +83,7 @@ This authority becomes effective only after the OPS-002 authority bootstrap
 containing this document is merged into `main`. Bootstrap merge does not
 authorize external staging execution.
 
-## Baseline and milestone authority
+## Historical baseline and milestone authority
 
 - SEC-007 is `COMPLETE` and owns the fail-closed production Origin, CORS,
   WebSocket, and bounded-message boundary.
@@ -180,7 +245,7 @@ installation and ACME/TLS evidence precede Edge Phase B; Edge Phase B PASS
 precedes Application Phase B; Application Phase B PASS precedes image pull and
 startup. A successful Phase A merge alone is not deployment authorization.
 
-### Current edge-preparation authority
+### Historical edge-preparation authority
 
 The authorized bounded repository task selected a host-managed Caddy systemd
 service and defined versioned configuration, TLS ownership, HTTP-to-HTTPS
@@ -412,7 +477,7 @@ Product Architect authorization says otherwise.
 - permanent production credentials in Git; and
 - destructive infrastructure changes unrelated to this staging stack.
 
-## Acceptance criteria
+## Historical acceptance checklist
 
 - [ ] One controlled external staging environment exists and is labelled
       alpha/non-persistent.
