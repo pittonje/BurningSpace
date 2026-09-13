@@ -1,6 +1,6 @@
 # BurningSpace Project Context
 
-Last updated: 2026-08-11
+Last updated: 2026-09-13
 
 ## Purpose of this document
 
@@ -88,13 +88,29 @@ is canonical after merged PR #50. DOCARCH-004 remains open but is paused;
 DOCARCH-004C v1 / PR #51 remains frozen draft historical evidence,
 DOCARCH-004C Attempt 5 is not authorized, and DOCARCH-004D is not active.
 
-Runtime-first Wave 1 — Authority and Security Hardening development is active.
-SEC-006 is merged, production diagnostic isolation is established, and real
-production `BattleRoom` authority coverage is being expanded. The accepted
-decision count remains 35. The current server-authoritative multiplayer arena
-remains the implementation foundation, while the local `GameScene` remains
-preserved non-authoritative prototype material. Use `CURRENT.md` for the exact
-active bounded task.
+OPS-002 is `COMPLETE — EXTERNAL STAGING DEPLOYED AND VALIDATED` as of
+2026-09-13. Public Arena external staging is online at
+[game.burningforge.dev](https://game.burningforge.dev), with server origin
+`https://game-server.burningforge.dev`. Release
+`4a774354859c036d45666496539c2fc3c24b9f1c` completed the frozen deployment
+controller sequence through `DEPLOYMENT_COMPLETE`; health/readiness and the
+one external hash-bound smoke passed (18/18, including reconnect continuity).
+The server-authoritative arena is now proven through the public TLS edge.
+Exact immutable image digests and execution provenance are recorded in the
+[OPS-002 completion record](docs/tasks/ops-002-public-arena-external-staging-deployment.md#2026-09-13--phase-b-execution-closure).
+
+This is non-persistent Public Arena staging, not production or campaign MVP.
+Server/world state remains in-memory and may reset on restart; world/player
+campaign persistence and durable identity are not implemented. Campaign
+systems remain future incremental work. After POSTDEPLOY-001 documentation
+closure, the next development tracks are MOBILE-001 adaptive input/touch
+controls and the existing Wave 2 persistence/identity foundation. Mobile touch
+controls are planned, not implemented; no database or new accepted decision
+is selected by this closure. The accepted decision count remains 35.
+
+The local `GameScene` remains preserved non-authoritative prototype material.
+Use [CURRENT](docs/handoffs/CURRENT.md) for the bounded task and the separate
+manual phone-browser observation; it is not mobile-control completion.
 
 DOCARCH-005 — Role and Model Portability remains deferred. Use
 [CURRENT](docs/handoffs/CURRENT.md) as the live operational source.

@@ -2,7 +2,9 @@
 
 ## Metadata
 
-- Status: `PHASE A COMPLETE / PHASE B EDGE REPOSITORY PREPARATION REVIEW
+- Current execution status (2026-09-13): `DEPLOYMENT_COMPLETE`; see the
+  [final execution closure](#2026-09-13--final-execution-closure).
+- Historical repository-preparation status: `PHASE A COMPLETE / PHASE B EDGE REPOSITORY PREPARATION REVIEW
   COMPLETE / HOST INSTALLATION AND EXTERNAL EXECUTION NOT AUTHORIZED`
 - Task: `OPS-002 — Public Arena External Staging Deployment and Validation`
 
@@ -11,6 +13,12 @@ configuration, provider secrets, or complete environment dumps in this file.
 
 Each reviewed commit recorded below is an implementation head. Neither is the
 documentation evidence commit that records this review.
+
+The Phase A / edge-preparation bindings and sections 1–29 below are retained
+historical review evidence. Their then-pending deployment statements and
+checkboxes describe those reviewed milestones, not the current live staging
+state. The dated final section records subsequent execution; it is not a new
+review verdict and does not change any historical reviewed binding.
 
 ### Phase A reviewed binding
 
@@ -795,3 +803,32 @@ sub-stage and does not start Phase B external execution.
 Closure status: `PHASE A COMPLETE / PHASE B EDGE REPOSITORY PREPARATION REVIEW
 COMPLETE / HOST INSTALLATION AND EXTERNAL EXECUTION NOT AUTHORIZED`. Phase B
 is not closed and OPS-002 overall is not closed.
+
+## 2026-09-13 — Final execution closure
+
+OPS-002 is `COMPLETE — EXTERNAL STAGING DEPLOYED AND VALIDATED`. Live Phase B
+subsequently completed under separately approved frozen OPS-002 V2 deployment
+authority. The frozen controller recorded terminal `DEPLOYMENT_COMPLETE`.
+This records execution evidence only: repository-preparation reviews remain
+historical, and neither Phase A nor edge-preparation approvals are
+retroactively rebound to new bytes. No new reviewer verdict is manufactured.
+
+The deployed application release is
+`4a774354859c036d45666496539c2fc3c24b9f1c` in `burningspace-staging-01`.
+The public client is https://game.burningforge.dev and the server origin is
+https://game-server.burningforge.dev. Exact server/client image digests and
+the retained primary report path/hashes are in the
+[dated task completion record](../tasks/ops-002-public-arena-external-staging-deployment.md#2026-09-13--phase-b-execution-closure).
+
+Runtime started with `--pull never`; both application containers were healthy.
+Health and readiness passed. One external hash-bound smoke passed all 18/18
+assertions, including reconnect continuity. Registry credential cleanup
+completed, owner PAT revocation was recorded, and unrelated VPS services were
+preserved. These claims come from `DEPLOYMENT_FINAL_REPORT.md` and its bound
+final supporting artifacts, not a new live probe in POSTDEPLOY-001.
+
+The result is non-persistent Public Arena staging, not production. World/player
+campaign persistence and durable identity are still absent; in-memory
+server/world state may reset on restart. Mobile touch controls remain planned
+MOBILE-001 work. This closure changes no accepted decision, roadmap semantics,
+runtime, deployment tooling, infrastructure or CI behavior.
