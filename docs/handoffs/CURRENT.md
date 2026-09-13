@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-13
-Updated by: Codex — POSTDEPLOY-001 deployment closure / repository truth reconciliation
+Updated by: Codex — MOBILE-001A client input abstraction
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -29,18 +29,23 @@ result; POSTDEPLOY-001 does not repeat a public probe or contact the VPS.
 
 ## Current bounded task and next action
 
-POSTDEPLOY-001: documentation reconciliation ready for human review. Base/main
-is `45e6cce4ef189c403287ce96d03907eff4ddc2ac`; branch
-`docs/postdeploy-001-public-arena-closure`. This base is repository documentation
-truth, not a change to the deployed application release above.
+POSTDEPLOY-001 is human-merged through PR #81. Active task: **MOBILE-001A —
+input abstraction**, implemented and ready for narrow independent runtime/client
+review. Branch: `game/mobile-001a-input-abstraction`; actual base/main:
+`b18a53dc64a4cbc86a8dc41b779733b8c96b587d`. This local refactor does not change
+the deployed application release above.
 
-One normal human review before merge is sufficient under the PA's LOW-risk
-scope. Architecture, Claude QA, Network/Runtime and Operations/Security review
-are not required for this documentation-only closure; gameplay/visual review
-is not applicable. No runtime, deployment, infrastructure, CI, accepted
-mechanics or architecture changes are included. Do not merge autonomously.
+Scope: desktop bindings behind `GameplayInputSource` / `DesktopInputSource`;
+preserve player/spectator input, aim/fire, Esc and lifecycle neutralization.
+The scene retains 50 ms sends, camera physics, transitions and network safety.
+No touch controls, device detection, server/protocol/shared, deployment or
+accepted decision changes. Risk: NORMAL client runtime change. The PA requires
+one narrow independent runtime/client review, then PA approval and human merge;
+Claude QA is advisory if routed. Separate specialist reviews are not selected:
+authority/protocol/security and visual/mechanical behavior are unchanged.
 
-After this closure, product development returns to two planned tracks:
+Next safe action: narrow independent runtime/client review of MOBILE-001A.
+Do not start MOBILE-001B or merge on this branch. Product follow-up remains:
 
 - **MOBILE-001:** client-side adaptive input foundation and touch controls.
 - **Wave 2:** persistent world and durable player identity foundation before
