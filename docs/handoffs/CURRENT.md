@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-13
-Updated by: Codex — POSTDEPLOY-001 deployment closure / repository truth reconciliation
+Updated by: Codex — MOBILE-001A client input abstraction
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -29,18 +29,34 @@ result; POSTDEPLOY-001 does not repeat a public probe or contact the VPS.
 
 ## Current bounded task and next action
 
-POSTDEPLOY-001: documentation reconciliation ready for human review. Base/main
-is `45e6cce4ef189c403287ce96d03907eff4ddc2ac`; branch
-`docs/postdeploy-001-public-arena-closure`. This base is repository documentation
-truth, not a change to the deployed application release above.
+POSTDEPLOY-001 is human-merged through PR #81.
 
-One normal human review before merge is sufficient under the PA's LOW-risk
-scope. Architecture, Claude QA, Network/Runtime and Operations/Security review
-are not required for this documentation-only closure; gameplay/visual review
-is not applicable. No runtime, deployment, infrastructure, CI, accepted
-mechanics or architecture changes are included. Do not merge autonomously.
+- Active task: **MOBILE-001A — Client Input Abstraction**.
+- Task file: [`docs/tasks/mobile-001a-client-input-abstraction.md`](../tasks/mobile-001a-client-input-abstraction.md).
+- Status: `IMPLEMENTED / RUNTIME REVIEW APPROVED / AWAITING HUMAN PR REVIEW`.
+- Branch: `game/mobile-001a-input-abstraction`.
+- Base: `b18a53dc64a4cbc86a8dc41b779733b8c96b587d`.
+- Reviewed implementation: `fda1f0782ea1ebfcbe74329e9bbb52ab792e2e2b`.
+- Expected reviewers: Runtime/Client — completed APPROVE (0 BLOCKER / 0 HIGH /
+  0 MEDIUM); Product Architect — APPROVE; human merge authority — pending.
 
-After this closure, product development returns to two planned tracks:
+The task file is recorded after implementation under an explicit external PA
+brief; it was not committed beforehand. This documentation conformance closes
+that process LOW without changing or rebinding reviewed runtime bytes. The
+deployed application release above is unchanged.
+
+Scope: desktop bindings behind `GameplayInputSource` / `DesktopInputSource`;
+preserve player/spectator input, aim/fire, Esc and lifecycle neutralization.
+The scene retains 50 ms sends, camera physics, transitions and network safety.
+No touch controls, device detection, server/protocol/shared, deployment or
+accepted decision changes. Risk: NORMAL client runtime change. No additional
+runtime review is required for this documentation-only follow-up. Claude QA is
+advisory if routed. Separate specialist reviews are not selected:
+authority/protocol/security and visual/mechanical behavior are unchanged.
+
+Next safe action: documentation conformance commit → push → PR → human
+review/merge. MOBILE-001B — Touch Controls is future work, not part of this
+task and not authorized here. Product follow-up remains:
 
 - **MOBILE-001:** client-side adaptive input foundation and touch controls.
 - **Wave 2:** persistent world and durable player identity foundation before

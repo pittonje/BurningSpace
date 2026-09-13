@@ -5,6 +5,8 @@ import {
 } from '../config/gameConfig';
 import { NetworkProjectileView } from '../entities/NetworkProjectileView';
 import { NetworkShipView } from '../entities/NetworkShipView';
+import { DesktopInputSource } from '../input/DesktopInputSource';
+import type { GameplayInputSource } from '../input/GameplayInputSource';
 import { networkClient } from '../network/networkSession';
 import type { ConnectionState, PlayerInputPayload, Unsubscribe } from '../network/NetworkClient';
 import { getConnectionPresentationCopy } from '../network/connectionPresentation';
@@ -23,13 +25,7 @@ const SPECTATOR_CAMERA_DECELERATION = 9000;
 const SPECTATOR_CAMERA_MAX_SPEED = 9500;
 
 export class MultiplayerGameScene extends Phaser.Scene {
-  private keyW?: Phaser.Input.Keyboard.Key;
-  private keyA?: Phaser.Input.Keyboard.Key;
-  private keyS?: Phaser.Input.Keyboard.Key;
-  private keyD?: Phaser.Input.Keyboard.Key;
-  private keySpace?: Phaser.Input.Keyboard.Key;
-  private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
-  private keyEsc?: Phaser.Input.Keyboard.Key;
+  private inputSource?: GameplayInputSource;
   private hudText?: Phaser.GameObjects.Text;
   private connectionBanner?: Phaser.GameObjects.Text;
   private respawnText?: Phaser.GameObjects.Text;
@@ -66,24 +62,14 @@ export class MultiplayerGameScene extends Phaser.Scene {
     this.updateCamera(deltaSeconds);
     this.updateHud();
 
-    if (this.keyEsc && Phaser.Input.Keyboard.JustDown(this.keyEsc)) {
+    if (this.inputSource?.consumeBackRequest()) {
       this.sendNeutralInput();
       this.scene.start('NetworkTestScene');
     }
   }
 
   private setupInput(): void {
-    if (!this.input.keyboard) {
-      throw new Error('Keyboard input is unavailable.');
-    }
-
-    this.keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-    this.keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    this.keyS = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-    this.keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
-    this.keySpace = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    this.keyEsc = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
-    this.cursors = this.input.keyboard.createCursorKeys();
+    this.inputSource = new DesktopInputSource(this.input);
     this.game.events.on(Phaser.Core.Events.BLUR, this.handleFocusLost, this);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
   }
@@ -228,20 +214,13 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   private createPlayerInput(): PlayerInputPayload {
-    const pointer = this.input.activePointer;
-    const pointerWorld = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const ownShip = this.getOwnShipSnapshot();
-    const originX = ownShip?.x ?? this.cameras.main.midPoint.x;
-    const originY = ownShip?.y ?? this.cameras.main.midPoint.y;
 
-    return {
-      up: Boolean(this.keyW?.isDown || this.cursors?.up.isDown),
-      down: Boolean(this.keyS?.isDown || this.cursors?.down.isDown),
-      left: Boolean(this.keyA?.isDown || this.cursors?.left.isDown),
-      right: Boolean(this.keyD?.isDown || this.cursors?.right.isDown),
-      aimAngle: Phaser.Math.Angle.Between(originX, originY, pointerWorld.x, pointerWorld.y),
-      shooting: Boolean(ownShip?.alive && (pointer.leftButtonDown() || this.keySpace?.isDown))
-    };
+    return this.inputSource!.samplePlayerInput({
+      camera: this.cameras.main,
+      aimOrigin: ownShip ?? this.cameras.main.midPoint,
+      canShoot: Boolean(ownShip?.alive)
+    });
   }
 
   private sendNeutralInput(): void {
@@ -281,8 +260,9 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   private updateSpectatorCamera(deltaSeconds: number): void {
-    const inputX = (this.keyD?.isDown || this.cursors?.right.isDown ? 1 : 0) - (this.keyA?.isDown || this.cursors?.left.isDown ? 1 : 0);
-    const inputY = (this.keyS?.isDown || this.cursors?.down.isDown ? 1 : 0) - (this.keyW?.isDown || this.cursors?.up.isDown ? 1 : 0);
+    const movement = this.inputSource?.getMovement();
+    const inputX = (movement?.right ? 1 : 0) - (movement?.left ? 1 : 0);
+    const inputY = (movement?.down ? 1 : 0) - (movement?.up ? 1 : 0);
     const length = Math.hypot(inputX, inputY);
 
     if (length > 0) {
@@ -446,6 +426,8 @@ export class MultiplayerGameScene extends Phaser.Scene {
 
   private cleanup(): void {
     this.sendNeutralInput();
+    this.inputSource?.destroy();
+    this.inputSource = undefined;
 
     for (const dispose of this.disposers.splice(0)) {
       dispose();
