@@ -16,12 +16,11 @@ describe('touch overlay Pointer Events and resource lifecycle', () => {
     const f = fixture();
     f.control('movement').dispatchEvent(pointer('pointerdown', 1, 100, 60));
     f.control('aim').dispatchEvent(pointer('pointerdown', 2, 60, 100));
-    f.control('fire').dispatchEvent(pointer('pointerdown', 3));
     expect(f.source.samplePlayerInput(context)).toMatchObject({ right: true, aimAngle: Math.PI / 2, shooting: true });
-    f.control('fire').dispatchEvent(pointer(event, 3));
-    expect(f.source.samplePlayerInput(context)).toMatchObject({ right: true, aimAngle: Math.PI / 2, shooting: false });
+    f.control('aim').dispatchEvent(pointer(event, 2));
+    expect(f.source.samplePlayerInput(context)).toMatchObject({ right: true, aimAngle: 0, shooting: false });
     expect(f.control('movement').captured.has(1)).toBe(true);
-    expect(f.control('aim').captured.has(2)).toBe(true);
+    expect(f.control('aim').captured.has(2)).toBe(false);
   });
   it.each(['movement', 'aim'])('cancelled %s pointer cannot be revived by late moves', control => {
     const f = fixture(); const element = f.control(control);
@@ -56,11 +55,10 @@ describe('touch overlay Pointer Events and resource lifecycle', () => {
     expect(f.doc.body.children).toHaveLength(1);
   });
   it('creates one fresh overlay per source; destroy removes listeners and DOM exactly once', () => {
-    const f = fixture(); f.control('fire').dispatchEvent(pointer('pointerdown', 3));
+    const f = fixture(); f.control('aim').dispatchEvent(pointer('pointerdown', 3));
     f.source.destroy(); f.source.destroy();
     expect(f.doc.body.children).toHaveLength(0);
     expect(f.root.children.every(c => c.listenerCount === 0 && c.captured.size === 0)).toBe(true);
-    f.control('fire').dispatchEvent(pointer('pointerdown', 3));
     expect(f.source.samplePlayerInput(context).shooting).toBe(false);
     const next = new TouchInputSource(f.doc.body as unknown as HTMLElement);
     expect(f.doc.body.children).toHaveLength(1); expect(f.doc.body.children[0]).not.toBe(f.root);
@@ -71,8 +69,8 @@ describe('touch overlay Pointer Events and resource lifecycle', () => {
     expect(f.source.consumeBackRequest()).toBe(true); expect(f.source.consumeBackRequest()).toBe(false);
   });
   it('fails safe if pointer capture fails', () => {
-    const f = fixture(); f.control('fire').captureFails = true;
-    f.control('fire').dispatchEvent(pointer('pointerdown', 1));
+    const f = fixture(); f.control('aim').captureFails = true;
+    f.control('aim').dispatchEvent(pointer('pointerdown', 1));
     expect(f.source.samplePlayerInput(context).shooting).toBe(false);
     f.control('back').captureFails = true; f.control('back').dispatchEvent(pointer('pointerdown', 2));
     expect(f.source.consumeBackRequest()).toBe(false);

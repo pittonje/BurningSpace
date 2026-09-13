@@ -15,7 +15,7 @@ export class TouchInputSource implements GameplayInputSource {
     this.root.className = 'touch-controls';
     this.root.setAttribute('aria-label', 'Touch gameplay controls');
     for (const [control, label] of [
-      ['movement', 'MOVE'], ['aim', 'AIM'], ['fire', 'FIRE'], ['back', 'LOBBY']
+      ['movement', 'MOVE'], ['aim', 'AIM / FIRE'], ['back', 'LOBBY']
     ] as const) {
       const element = doc.createElement('button');
       element.type = 'button';

@@ -28,6 +28,8 @@ export const PROJECTILE_COLLISION_RADIUS = 18;
 
 export const CAMERA_LERP = 0.12;
 export const CAMERA_ZOOM = 0.86;
+export const CAMERA_ZOOM_MIN = 0.40;
+export const CAMERA_ZOOM_MAX = 1.15;
 
 export const PLAYER_SPAWN_X = SHARED_RED_BASE_X;
 export const PLAYER_SPAWN_Y = SHARED_RED_BASE_Y;

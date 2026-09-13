@@ -1,6 +1,6 @@
 import type { MovementIntent, PlayerInputContext } from './GameplayInputSource';
 
-export type TouchControl = 'movement' | 'aim' | 'fire' | 'back';
+export type TouchControl = 'movement' | 'aim' | 'back';
 export const STICK_DEAD_ZONE = 0.18;
 export interface StickVector { x: number; y: number }
 
@@ -27,6 +27,7 @@ export class TouchInputState {
   begin(control: TouchControl, pointerId: number): boolean {
     if (this.owners.has(control) || [...this.owners.values()].includes(pointerId)) return false;
     this.owners.set(control, pointerId);
+    if (control === 'aim') this.lastAimAngle = undefined;
     if (control === 'back') this.backRequested = true;
     return true;
   }
@@ -55,16 +56,27 @@ export class TouchInputState {
   }
 
   getMovement(): MovementIntent {
+    if (Math.hypot(this.movement.x, this.movement.y) <= STICK_DEAD_ZONE) {
+      return { up: false, down: false, left: false, right: false };
+    }
+    // Eight equal 45-degree sectors; exact boundaries choose the clockwise sector.
+    const sector = (Math.round(Math.atan2(this.movement.y, this.movement.x) / (Math.PI / 4)) + 8) % 8;
     return {
-      up: this.movement.y < -STICK_DEAD_ZONE, down: this.movement.y > STICK_DEAD_ZONE,
-      left: this.movement.x < -STICK_DEAD_ZONE, right: this.movement.x > STICK_DEAD_ZONE
+      up: sector >= 5, down: sector >= 1 && sector <= 3,
+      left: sector >= 3 && sector <= 5, right: sector === 0 || sector === 1 || sector === 7
     };
   }
 
   samplePlayerInput(context: PlayerInputContext) {
+    const movement = this.getMovement();
+    const x = Number(movement.right) - Number(movement.left);
+    const y = Number(movement.down) - Number(movement.up);
+    const aiming = this.owners.has('aim');
+    const aimAngle = aiming
+      ? this.lastAimAngle ?? context.fallbackAimAngle
+      : (x || y) ? Math.atan2(y, x) : context.fallbackAimAngle;
     return {
-      ...this.getMovement(), aimAngle: this.lastAimAngle ?? context.fallbackAimAngle,
-      shooting: context.canShoot && this.owners.has('fire')
+      ...movement, aimAngle, shooting: context.canShoot && aiming
     };
   }
 
@@ -79,6 +91,6 @@ export class TouchInputState {
     this.movement = { x: 0, y: 0 };
     this.aim = { x: 0, y: 0 };
     this.backRequested = false;
-    // Keep the last meaningful heading; reset releases controls, not orientation.
+    this.lastAimAngle = undefined;
   }
 }

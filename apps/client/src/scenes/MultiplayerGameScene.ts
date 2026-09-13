@@ -7,6 +7,7 @@ import { NetworkProjectileView } from '../entities/NetworkProjectileView';
 import { NetworkShipView } from '../entities/NetworkShipView';
 import { DesktopInputSource } from '../input/DesktopInputSource';
 import { TouchInputSource } from '../input/TouchInputSource';
+import { CameraZoomInput, clampCameraZoom, smoothCameraZoom } from '../input/CameraZoomInput';
 import { readInputPreference, resolveInputMode, type ResolvedInputMode } from '../input/inputMode';
 import type { GameplayInputSource } from '../input/GameplayInputSource';
 import { networkClient } from '../network/networkSession';
@@ -29,6 +30,8 @@ const SPECTATOR_CAMERA_MAX_SPEED = 9500;
 export class MultiplayerGameScene extends Phaser.Scene {
   private inputSource?: GameplayInputSource;
   private inputMode: ResolvedInputMode = 'desktop';
+  private cameraInput?: CameraZoomInput;
+  private targetZoom = CAMERA_ZOOM;
   private touchViewportMinimum?: { width: number; height: number };
   private hudText?: Phaser.GameObjects.Text;
   private connectionBanner?: Phaser.GameObjects.Text;
@@ -46,6 +49,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.targetZoom = CAMERA_ZOOM;
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.setZoom(CAMERA_ZOOM);
     this.cameras.main.centerOn(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
@@ -65,6 +69,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
     this.updateInput(deltaMs);
     this.updateCamera(deltaSeconds);
     this.updateHud();
+    this.anchorHud();
 
     if (this.inputSource?.consumeBackRequest()) {
       this.sendNeutralInput();
@@ -77,6 +82,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
     this.inputSource = this.inputMode === 'touch'
       ? new TouchInputSource()
       : new DesktopInputSource(this.input);
+    this.cameraInput = new CameraZoomInput(this.game.canvas, this.inputMode);
     if (this.inputMode === 'touch') {
       // The desktop 720x420 minimum otherwise clips the arena on phone viewports.
       const size = this.scale.displaySize;
@@ -254,6 +260,8 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   private updateCamera(deltaSeconds: number): void {
+    this.targetZoom = clampCameraZoom(this.targetZoom * (this.cameraInput?.consumeScaleFactor() ?? 1));
+    this.cameras.main.setZoom(smoothCameraZoom(this.cameras.main.zoom, this.targetZoom, deltaSeconds));
     const ownShip = this.getOwnShipSnapshot();
 
     if (ownShip) {
@@ -306,9 +314,9 @@ export class MultiplayerGameScene extends Phaser.Scene {
     }
 
     const camera = this.cameras.main;
-    const minX = camera.width / camera.zoom / 2;
+    const minX = Math.min(WORLD_WIDTH / 2, camera.width / camera.zoom / 2);
     const maxX = WORLD_WIDTH - minX;
-    const minY = camera.height / camera.zoom / 2;
+    const minY = Math.min(WORLD_HEIGHT / 2, camera.height / camera.zoom / 2);
     const maxY = WORLD_HEIGHT - minY;
     const rawNextX = camera.midPoint.x + this.spectatorCameraVelocityX * deltaSeconds;
     const rawNextY = camera.midPoint.y + this.spectatorCameraVelocityY * deltaSeconds;
@@ -349,30 +357,50 @@ export class MultiplayerGameScene extends Phaser.Scene {
       `Projectiles: ${networkClient.currentProjectiles.length}`,
       `Participants: ${networkClient.currentParticipants.length}`,
       this.inputMode === 'touch'
-        ? (profile?.mode === 'player' ? 'Left stick - movement | Right stick - aim | FIRE - fire | LOBBY - exit' : 'Left stick - free camera | LOBBY - exit')
-        : (profile?.mode === 'player' ? 'WASD - movement | Mouse - aim | LMB/Space - fire | Esc - lobby' : 'WASD - free camera | Esc - lobby')
+        ? (profile?.mode === 'player' ? 'Left stick - movement | Right stick - aim/fire | Pinch - zoom | LOBBY - exit' : 'Left stick - free camera | Pinch - zoom | LOBBY - exit')
+        : (profile?.mode === 'player' ? 'WASD - movement | Mouse - aim | LMB/Space - fire | Wheel - zoom | Esc - lobby' : 'WASD - free camera | Wheel - zoom | Esc - lobby')
     ]);
 
     this.updateRespawnOverlay(ownShip);
   }
 
   private layoutHud(): void {
+    this.targetZoom = clampCameraZoom(this.targetZoom);
     if (this.inputMode === 'touch') {
       this.hudText?.setFontSize(11);
       this.hudText?.setWordWrapWidth(Math.max(140, this.scale.width - 120), true);
     }
-    this.connectionBanner?.setPosition(this.scale.width / 2, 14);
     this.connectionBanner?.setWordWrapWidth(
       this.inputMode === 'touch'
         ? Math.min(520, Math.max(120, this.scale.width - 224))
         : Math.min(520, Math.max(280, this.scale.width - 32)),
       true
     );
+    this.anchorHud();
+  }
+
+  private anchorHud(): void {
+    const camera = this.cameras.main;
+    const zoom = camera.zoom;
+    const originX = camera.width * camera.originX;
+    const originY = camera.height * camera.originY;
+    const anchor = (text: Phaser.GameObjects.Text | undefined, screenX: number, screenY: number): void => {
+      if (!text) return;
+      // These objects retain scrollFactor(0). Invert the camera's origin/zoom
+      // transform directly, without getWorldPoint's previous preRender matrix.
+      // Main camera has no rotation; its origin translation is pixel-rounded by Phaser.
+      text.setScale(1 / zoom);
+      text.setPosition(
+        originX + (screenX - Math.floor(camera.x + originX + 0.5)) / zoom,
+        originY + (screenY - Math.floor(camera.y + originY + 0.5)) / zoom
+      );
+    };
+    anchor(this.connectionBanner, this.scale.width / 2, 14);
     const hudTop = this.connectionBanner?.visible
-      ? 26 + this.connectionBanner.displayHeight
+      ? 26 + this.connectionBanner.displayHeight * zoom
       : 14;
-    this.hudText?.setPosition(16, hudTop);
-    this.respawnText?.setPosition(this.scale.width / 2, this.scale.height * 0.42);
+    anchor(this.hudText, 16, hudTop);
+    anchor(this.respawnText, this.scale.width / 2, this.scale.height * 0.42);
   }
 
   private renderConnectionPresentation(): void {
@@ -438,18 +466,22 @@ export class MultiplayerGameScene extends Phaser.Scene {
   }
 
   private handleFocusLost = (): void => {
+    this.cameraInput?.reset();
     this.inputSource?.reset();
     this.sendNeutralInput();
   };
 
   private handleVisibilityChange = (): void => {
     if (document.hidden) {
+      this.cameraInput?.reset();
       this.inputSource?.reset();
       this.sendNeutralInput();
     }
   };
 
   private cleanup(): void {
+    this.cameraInput?.destroy();
+    this.cameraInput = undefined;
     this.inputSource?.reset();
     this.sendNeutralInput();
     this.inputSource?.destroy();
