@@ -4,7 +4,7 @@ Owner: `Product Architect`
 
 Risk: `NORMAL`
 
-Status: `AUTHORIZED / TASK AUTHORITY BOOTSTRAP BEFORE IMPLEMENTATION`
+Status: `IMPLEMENTED / AWAITING NARROW CLIENT/UX REVIEW`
 
 Branch: `game/mobile-001b-touch-controls`
 
@@ -65,3 +65,35 @@ Commit this task and CURRENT before runtime implementation. Then implement on
 the same branch and record validation/status in these documents in the runtime
 commit. No push, PR or merge in this task. Next safe action after implementation:
 one independent Client/UX review.
+
+## Implementation evidence (2026-09-13)
+
+Authority committed before runtime: `8b8ed9c2cdd63d477fdb927f22cef06ee7444196`.
+Implementation head: the commit containing this section on the task branch.
+
+Implemented the scoped input modules, lobby preference, independent pointer
+controls and lifecycle integration. `TouchInputState` is the one additional
+pure helper, isolating stick math and ownership without a DOM dependency.
+Touch scene entry temporarily removes the desktop canvas minimum to fit phone
+viewports; cleanup restores it. Desktop mappings and spectator physics remain
+unchanged. No source replacement occurs during resize.
+
+Validation:
+
+- `npm run test -w @burningspace/client -- test/inputMode.test.ts test/touchInputState.test.ts test/touchInputSource.test.ts test/lobbyControls.test.ts test/multiplayerInput.test.ts`: **57/57 PASS**.
+- `npm run test -w @burningspace/client`: **87/87 PASS**, including the existing 19 desktop tests.
+- `npm run typecheck:client`: **PASS**.
+- `npm run typecheck`: **PASS** across workspaces.
+- `npm run build:client` with `VITE_BURNINGSPACE_SERVER_URL=https://game-server.burningforge.dev`: **PASS** (build configuration only; no staging request).
+- `git diff --check`: **PASS**.
+- Local HTTP client, input module, server health and readiness endpoints: **200**.
+
+Structural inspection confirms one selected source, no touch networking or
+additional send loop, unchanged 50 ms cadence/profile payload/camera physics,
+scoped overlay capture and destruction, and no forbidden-domain changes.
+
+Limitations: browser automation was unavailable, so local HTTP checks and fake
+DOM tests do not constitute visual browser or actual-phone validation. The
+production build retains Vite's >500 kB chunk warning (INFO). No new dependency,
+VPS action, deployment suite, push, PR or merge. Next action: one independent
+Client/UX review, including visual touch layout and real browser interaction.

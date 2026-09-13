@@ -12,10 +12,15 @@ const mocks = vi.hoisted(() => ({
     getEstimatedServerTime: vi.fn(() => 0),
     sendPlayerInput: vi.fn()
   },
-  desktop: vi.fn()
+  desktop: vi.fn(),
+  touch: vi.fn(),
+  preference: vi.fn(() => 'auto'),
+  resolve: vi.fn(() => 'desktop')
 }));
 vi.mock('../src/network/networkSession', () => ({ networkClient: mocks.network }));
 vi.mock('../src/input/DesktopInputSource', () => ({ DesktopInputSource: mocks.desktop }));
+vi.mock('../src/input/TouchInputSource', () => ({ TouchInputSource: mocks.touch }));
+vi.mock('../src/input/inputMode', () => ({ readInputPreference: mocks.preference, resolveInputMode: mocks.resolve }));
 vi.mock('../src/entities/NetworkShipView', () => ({ NetworkShipView: class {} }));
 vi.mock('../src/entities/NetworkProjectileView', () => ({ NetworkProjectileView: class {} }));
 vi.mock('../src/world/SpaceMap', () => ({ SpaceMap: class {} }));
@@ -44,19 +49,22 @@ interface SceneInputInternals {
 
 function fixture() {
   mocks.network.profile = { mode: 'player' };
+  mocks.resolve.mockReturnValue('desktop');
   mocks.network.getOwnShipSnapshot.mockReturnValue(undefined);
   const source = {
     getMovement: vi.fn(() => ({ up: false, down: false, left: false, right: false })),
     samplePlayerInput: vi.fn((_context: PlayerInputContext) => ({ up: true, down: false, left: false, right: false, aimAngle: 0.7, shooting: true })),
     consumeBackRequest: vi.fn(() => false),
-    destroy: vi.fn()
+    destroy: vi.fn(),
+    reset: vi.fn()
   };
   const camera = { width: 100, height: 100, zoom: 1, midPoint: { x: 1000, y: 1000 }, getWorldPoint: vi.fn(), centerOn: vi.fn() };
   const scene = new MultiplayerGameScene();
   const internals = scene as unknown as SceneInputInternals;
   Object.assign(scene, {
     cameras: { main: camera }, scene: { start: vi.fn() },
-    game: { events: { on: vi.fn(), off: vi.fn() } }, scale: { off: vi.fn() },
+    game: { events: { on: vi.fn(), off: vi.fn() } },
+    scale: { off: vi.fn(), displaySize: { minWidth: 720, minHeight: 420, setMin: vi.fn() }, refresh: vi.fn() },
     input: {}
   });
   internals.inputSource = source;
@@ -90,15 +98,15 @@ describe('MultiplayerGameScene semantic input integration', () => {
 
   it.each([true, false])('passes snapshot position and alive=%s eligibility, not display position', alive => {
     const f = fixture();
-    const ship = { x: 12, y: 34, alive } as ShipSnapshot;
+    const ship = { x: 12, y: 34, rotation: 1.2, alive } as ShipSnapshot;
     mocks.network.getOwnShipSnapshot.mockReturnValue(ship);
     f.internals.createPlayerInput();
-    expect(f.source.samplePlayerInput).toHaveBeenCalledWith({ camera: f.camera, aimOrigin: ship, canShoot: alive });
+    expect(f.source.samplePlayerInput).toHaveBeenCalledWith({ camera: f.camera, aimOrigin: ship, canShoot: alive, fallbackAimAngle: 1.2 });
   });
 
   it('uses camera midpoint and disables shooting without an own ship', () => {
     const f = fixture(); f.internals.createPlayerInput();
-    expect(f.source.samplePlayerInput).toHaveBeenCalledWith({ camera: f.camera, aimOrigin: f.camera.midPoint, canShoot: false });
+    expect(f.source.samplePlayerInput).toHaveBeenCalledWith({ camera: f.camera, aimOrigin: f.camera.midPoint, canShoot: false, fallbackAimAngle: 0 });
   });
 
   it('preserves normalized diagonal spectator acceleration from semantic intent', () => {
@@ -157,8 +165,37 @@ describe('MultiplayerGameScene semantic input integration', () => {
     f.internals.cleanup();
     expect(mocks.network.sendPlayerInput).toHaveBeenCalledTimes(3);
     expect(f.source.destroy).toHaveBeenCalledTimes(1);
+    expect(f.source.reset).toHaveBeenCalledTimes(3);
+    for (let i = 0; i < 3; i++) {
+      expect(f.source.reset.mock.invocationCallOrder[i]).toBeLessThan(mocks.network.sendPlayerInput.mock.invocationCallOrder[i]!);
+    }
     expect(f.internals.inputSource).toBeUndefined();
     expect(f.scene.game.events.off).toHaveBeenCalledWith('blur', f.internals.handleFocusLost, f.scene);
     expect(documentStub.removeEventListener).toHaveBeenCalledWith('visibilitychange', f.internals.handleVisibilityChange);
+  });
+
+  it.each(['desktop', 'touch'])('creates exactly one %s source and retains the mode until scene re-entry', mode => {
+    const f = fixture();
+    vi.stubGlobal('document', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    mocks.resolve.mockReturnValue(mode);
+    mocks.desktop.mockImplementation(function () { return f.source; });
+    mocks.touch.mockImplementation(function () { return f.source; });
+    f.internals.setupInput();
+    expect(mocks.desktop).toHaveBeenCalledTimes(mode === 'desktop' ? 1 : 0);
+    expect(mocks.touch).toHaveBeenCalledTimes(mode === 'touch' ? 1 : 0);
+    if (mode === 'touch') expect(f.scene.scale.displaySize.setMin).toHaveBeenCalledWith(0, 0);
+    else expect(f.scene.scale.displaySize.setMin).not.toHaveBeenCalled();
+    mocks.resolve.mockReturnValue(mode === 'touch' ? 'desktop' : 'touch');
+    f.scene.update(0, 50);
+    expect(mocks.resolve).toHaveBeenCalledTimes(1);
+    expect(f.internals.inputSource).toBe(f.source);
+    f.internals.cleanup();
+    expect(f.source.reset).toHaveBeenCalledTimes(1);
+    expect(f.source.destroy).toHaveBeenCalledTimes(1);
+    if (mode === 'touch') expect(f.scene.scale.displaySize.setMin).toHaveBeenLastCalledWith(720, 420);
+    f.internals.setupInput();
+    expect(mocks.resolve).toHaveBeenCalledTimes(2);
+    expect(mocks.desktop).toHaveBeenCalledTimes(1);
+    expect(mocks.touch).toHaveBeenCalledTimes(1);
   });
 });

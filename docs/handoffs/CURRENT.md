@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-13
-Updated by: Codex — MOBILE-001B task authority
+Updated by: Codex — MOBILE-001B implementation
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -33,16 +33,29 @@ Active task: **MOBILE-001B — Adaptive Touch Controls**.
 Task file: [docs/tasks/mobile-001b-adaptive-touch-controls.md](../tasks/mobile-001b-adaptive-touch-controls.md).
 Branch: `game/mobile-001b-touch-controls`; base/main:
 `232966797ac34575fecfb808bbc2d67847048266` (human-merged MOBILE-001A / PR #82).
-Status: `AUTHORIZED / TASK AUTHORITY BOOTSTRAP BEFORE IMPLEMENTATION`.
+Status: `IMPLEMENTED / AWAITING NARROW CLIENT/UX REVIEW`.
+Authority commit: `8b8ed9c2cdd63d477fdb927f22cef06ee7444196`.
+Head: implementation commit containing this handoff on the named branch.
 
 Scope: capability-based input preference, TouchInputSource and responsive
 multitouch controls, lobby selector, lifecycle reset and focused regression
 coverage. Preserve desktop behavior, 50 ms cadence, camera physics and server
 contract. No server/shared/protocol/deployment/dependency changes.
 
-Commit this authority before runtime work; then implement and validate on this
-branch. Expected review: one narrow independent Client/UX review, PA approval,
-then human merge. Do not push/open PR, redeploy staging or start MOBILE-001C.
+Production: `apps/client/src/input/{GameplayInputSource,DesktopInputSource,
+TouchInputSource,TouchInputState,inputMode}.ts`,
+`apps/client/src/scenes/{MultiplayerGameScene,NetworkTestScene}.ts`, and
+`apps/client/src/styles.css`.
+Tests: inputMode, touchInputState, touchInputSource, lobbyControls,
+multiplayerInput and desktopInputSource under `apps/client/test/`, plus the
+small fakeTouchDom helper. Focused tests 57/57; all client tests 87/87; client
+and workspace typecheck, production client build and diff check PASS.
+Local HTTP smoke PASS; visual browser/actual-phone validation unavailable.
+Vite's existing large-chunk warning remains INFO.
+
+Next safe action: one narrow independent Client/UX review. Subsequent PA
+approval and human merge remain required. No push/PR or staging redeployment
+was performed; do not start MOBILE-001C.
 Persistence/identity remains future Wave 2 work under existing decision gates.
 
 ## Manual phone-browser observation
@@ -51,8 +64,9 @@ The user reported that the public site loads from a phone browser, rendering
 works sufficiently for initial testing, and the multiplayer/network path
 operates. Keyboard controls are naturally unavailable there. This is a limited
 manual observation, not automated mobile coverage or accepted architectural /
-mechanical authority. Mobile touch controls are **not implemented**; they are
-MOBILE-001 follow-up work.
+mechanical authority. This observation predates MOBILE-001B: touch controls
+are now implemented on the task branch, awaiting review, and have not been
+deployed to staging.
 
 ## Historical handoff — through 2026-09-01
 
