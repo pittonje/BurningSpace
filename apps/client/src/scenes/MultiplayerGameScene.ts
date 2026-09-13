@@ -69,6 +69,7 @@ export class MultiplayerGameScene extends Phaser.Scene {
     this.updateInput(deltaMs);
     this.updateCamera(deltaSeconds);
     this.updateHud();
+    this.anchorHud();
 
     if (this.inputSource?.consumeBackRequest()) {
       this.sendNeutralInput();
@@ -369,18 +370,37 @@ export class MultiplayerGameScene extends Phaser.Scene {
       this.hudText?.setFontSize(11);
       this.hudText?.setWordWrapWidth(Math.max(140, this.scale.width - 120), true);
     }
-    this.connectionBanner?.setPosition(this.scale.width / 2, 14);
     this.connectionBanner?.setWordWrapWidth(
       this.inputMode === 'touch'
         ? Math.min(520, Math.max(120, this.scale.width - 224))
         : Math.min(520, Math.max(280, this.scale.width - 32)),
       true
     );
+    this.anchorHud();
+  }
+
+  private anchorHud(): void {
+    const camera = this.cameras.main;
+    const zoom = camera.zoom;
+    const originX = camera.width * camera.originX;
+    const originY = camera.height * camera.originY;
+    const anchor = (text: Phaser.GameObjects.Text | undefined, screenX: number, screenY: number): void => {
+      if (!text) return;
+      // These objects retain scrollFactor(0). Invert the camera's origin/zoom
+      // transform directly, without getWorldPoint's previous preRender matrix.
+      // Main camera has no rotation; its origin translation is pixel-rounded by Phaser.
+      text.setScale(1 / zoom);
+      text.setPosition(
+        originX + (screenX - Math.floor(camera.x + originX + 0.5)) / zoom,
+        originY + (screenY - Math.floor(camera.y + originY + 0.5)) / zoom
+      );
+    };
+    anchor(this.connectionBanner, this.scale.width / 2, 14);
     const hudTop = this.connectionBanner?.visible
-      ? 26 + this.connectionBanner.displayHeight
+      ? 26 + this.connectionBanner.displayHeight * zoom
       : 14;
-    this.hudText?.setPosition(16, hudTop);
-    this.respawnText?.setPosition(this.scale.width / 2, this.scale.height * 0.42);
+    anchor(this.hudText, 16, hudTop);
+    anchor(this.respawnText, this.scale.width / 2, this.scale.height * 0.42);
   }
 
   private renderConnectionPresentation(): void {

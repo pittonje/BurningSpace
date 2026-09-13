@@ -2,7 +2,7 @@
 
 Owner: Product Architect
 Risk: NORMAL
-Status: IMPLEMENTED / AWAITING NARROW CLIENT/UX REVIEW
+Status: FIX1 IMPLEMENTED / AWAITING DELTA REVIEW OF M001C-UX-01
 Branch: `game/mobile-001c-combat-camera-refinement`
 Base/main: `175d87f47f16c6c5bf343728e29814165a2d9258` (PR #83 merged).
 
@@ -126,3 +126,50 @@ validated. Their identity/ownership, distance-ratio, cancellation and reset
 paths pass the focused tests; no real-device validation is claimed.
 Vite retains the existing >500 kB chunk warning. Optional zoom memory deferred;
 each scene starts at .86. No push, PR, deployment or independent review executed.
+
+## FIX1 — M001C-UX-01 (2026-09-13)
+
+PA accepted the sole MEDIUM finding from independent Client/UX review of
+`1ec9532d54fea69aeab8750708edfb65c6bceaed`: camera zoom scaled/displaced hudText,
+connectionBanner and respawnText. All other reviewed areas remain accepted.
+One additive FIX1 commit; no rebase or prior commit rewrite.
+
+Runtime change is confined to MultiplayerGameScene. The three texts retain
+scrollFactor(0); layout computes inverse camera origin/zoom positions and applies
+scale 1/zoom. This algebraic inverse uses current camera properties, avoiding
+the stale preRender matrix that getWorldPoint could otherwise read during update.
+It matches this scene's unrotated main camera, including Phaser's pixel-rounded
+camera-origin translation. No additional camera or generic UI helper.
+
+Frame order: views -> input -> camera movement/zoom -> HUD content -> anchoring.
+The per-frame anchorHud method only updates position/scale; word-wrap/font
+layout remains on the existing resize/presentation path, avoiding text rebuilds
+solely because the camera changed.
+Resize and connection presentation also retain immediate layout. Word wrapping
+uses screen width. Banner is inverse-scaled before its displayHeight * zoom is
+used as screen-space height for the normal HUD's top offset.
+
+Regression: installed Phaser TransformMatrix and GetCalcMatrix calculate final
+rendered anchors, object axes and banner bounds, rather than only asserting
+object positions/scales. At 844x390, zoom .40/.86/1.15 and camera scroll
+(800,1400)/(9300,8700), HUD stays at (16,14), or (16,62) below a visible 36px
+banner. Banner stays centered at x=422, top y=14; respawn stays centered at
+(422,163.8). Effective rendered scale remains 1. The matrix is refreshed after
+layout, matching render timing. A same-frame camera/content-change test covers
+ordering; a negative control reproduces the reviewed old placement and proves
+its .40 scale and displaced visual anchors fail the invariant.
+
+Validation:
+
+- `npm run test -w @burningspace/client -- test/hudAnchoring.test.ts test/cameraZoomInput.test.ts test/multiplayerInput.test.ts`: **43/43 PASS** (14 HUD regression cases).
+- `npm run test -w @burningspace/client`: **137/137 PASS** (previous 123 plus 14).
+- `npm run typecheck:client`: **PASS**.
+- `npm run typecheck`: **PASS**.
+- `npm run build:client` with `VITE_BURNINGSPACE_SERVER_URL=https://game-server.burningforge.dev`: **PASS**.
+- `git diff --check`: **PASS**.
+
+Combat sources, camera input helper/constants, protocol, 50 ms input schedule,
+connection behavior, safe-area DOM controls and accepted physics are unchanged.
+No server/shared/protocol/deploy/workflow/dependency/lockfile edits. Existing
+Vite large-chunk warning remains INFO. No push, PR or deployment.
+Next action: delta review of M001C-UX-01.

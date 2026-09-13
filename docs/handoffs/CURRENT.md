@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-13
-Updated by: Codex — MOBILE-001C implementation and resumed verification
+Updated by: Codex — MOBILE-001C FIX1 HUD anchoring
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -33,7 +33,7 @@ Active task: **MOBILE-001C - Combat Controls & Tactical Camera**.
 Task: [mobile-001c-combat-controls-tactical-camera.md](../tasks/mobile-001c-combat-controls-tactical-camera.md).
 Branch: `game/mobile-001c-combat-camera-refinement`.
 Base/main: `175d87f47f16c6c5bf343728e29814165a2d9258` (PR #83).
-Status: `IMPLEMENTED / AWAITING NARROW CLIENT/UX REVIEW`.
+Status: `FIX1 IMPLEMENTED / AWAITING DELTA REVIEW OF M001C-UX-01`.
 Authority commit: `f961b36` (first branch commit); implementation HEAD is the
 commit containing this handoff on the named branch.
 Scope: combined touch AIM/FIRE, movement-facing heading, balanced 8-way
@@ -58,7 +58,17 @@ Multi-pointer combat/pinch and physical safe-area insets remain test-covered
 or source-checked only; browser API has no simultaneous-touch action and no
 real-phone check is claimed. Local servers and temporary browser settings
 cleaned up. Optional zoom persistence deferred; Vite chunk warning remains INFO.
-Next safe action: one narrow independent Client/UX review.
+Independent Client/UX review of `1ec9532d54fea69aeab8750708edfb65c6bceaed`
+requested changes for M001C-UX-01 only (0 BLOCKER / 0 HIGH / 1 MEDIUM).
+FIX1 retains scrollFactor(0), inverse-scales the three Phaser HUD texts and
+inverts camera origin/zoom for screen anchors every frame after camera/content
+updates. Banner height is converted back to screen pixels before HUD placement.
+Runtime delta: MultiplayerGameScene.ts only. Regression: hudAnchoring.test.ts,
+real Phaser GetCalcMatrix/TransformMatrix at 844x390, three zooms and two scroll
+positions. Focused 43/43; full client 137/137; client/workspace typecheck,
+production client build and diff check PASS. Accepted combat/zoom input remains
+unchanged. FIX1 HEAD is the commit containing this handoff.
+Next safe action: delta review of M001C-UX-01.
 No push, PR or deployment in this task.
 
 ## MOBILE-001B staging follow-up (2026-09-13)
