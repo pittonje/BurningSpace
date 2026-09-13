@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-13
-Updated by: Codex — MOBILE-001B implementation
+Updated by: Codex — MOBILE-001C task authority
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -29,44 +29,26 @@ result; POSTDEPLOY-001 does not repeat a public probe or contact the VPS.
 
 ## Current bounded task and next action
 
-Active task: **MOBILE-001B — Adaptive Touch Controls**.
-Task file: [docs/tasks/mobile-001b-adaptive-touch-controls.md](../tasks/mobile-001b-adaptive-touch-controls.md).
-Branch: `game/mobile-001b-touch-controls`; base/main:
-`232966797ac34575fecfb808bbc2d67847048266` (human-merged MOBILE-001A / PR #82).
-Status: `IMPLEMENTED / AWAITING NARROW CLIENT/UX REVIEW`.
-Authority commit: `8b8ed9c2cdd63d477fdb927f22cef06ee7444196`.
-Head: implementation commit containing this handoff on the named branch.
+Active task: **MOBILE-001C - Combat Controls & Tactical Camera**.
+Task: [mobile-001c-combat-controls-tactical-camera.md](../tasks/mobile-001c-combat-controls-tactical-camera.md).
+Branch: `game/mobile-001c-combat-camera-refinement`.
+Base/main: `175d87f47f16c6c5bf343728e29814165a2d9258` (PR #83).
+Status: `AUTHORIZED / TASK AUTHORITY BEFORE RUNTIME`.
+Scope: combined touch AIM/FIRE, movement-facing heading, balanced 8-way
+movement, local wheel/pinch tactical zoom, viewport safe-area completion.
+Preserve desktop combat, 50 ms input cadence, server protocol/authority and
+spectator physics. No server/shared/protocol/deployment/dependency changes.
+Next: implement and validate, then one narrow independent Client/UX review.
+No push, PR or deployment in this task.
 
-Scope: capability-based input preference, TouchInputSource and responsive
-multitouch controls, lobby selector, lifecycle reset and focused regression
-coverage. Preserve desktop behavior, 50 ms cadence, camera physics and server
-contract. No server/shared/protocol/deployment/dependency changes.
+## MOBILE-001B staging follow-up (2026-09-13)
 
-Production: `apps/client/src/input/{GameplayInputSource,DesktopInputSource,
-TouchInputSource,TouchInputState,inputMode}.ts`,
-`apps/client/src/scenes/{MultiplayerGameScene,NetworkTestScene}.ts`, and
-`apps/client/src/styles.css`.
-Tests: inputMode, touchInputState, touchInputSource, lobbyControls,
-multiplayerInput and desktopInputSource under `apps/client/test/`, plus the
-small fakeTouchDom helper. Focused tests 57/57; all client tests 87/87; client
-and workspace typecheck, production client build and diff check PASS.
-Local HTTP smoke PASS; visual browser/actual-phone validation unavailable.
-Vite's existing large-chunk warning remains INFO.
-
-Next safe action: one narrow independent Client/UX review. Subsequent PA
-approval and human merge remain required. No push/PR or staging redeployment
-was performed; do not start MOBILE-001C.
-Persistence/identity remains future Wave 2 work under existing decision gates.
-
-## Manual phone-browser observation
-
-The user reported that the public site loads from a phone browser, rendering
-works sufficiently for initial testing, and the multiplayer/network path
-operates. Keyboard controls are naturally unavailable there. This is a limited
-manual observation, not automated mobile coverage or accepted architectural /
-mechanical authority. This observation predates MOBILE-001B: touch controls
-are now implemented on the task branch, awaiting review, and have not been
-deployed to staging.
+MOBILE-001B is merged and its static client deployed from `175d87f...`.
+Server remains on the OPS-002 approved release above. The client-only update
+completed one external smoke 18/18 PASS; credentials were cleaned and owner PAT
+revocation confirmed. Evidence: `D:/Temp/burningspace-mobile-001b-client-update-20260913T092517Z/FINAL_REPORT.md`.
+PA's field-tested touch feedback is the authority for MOBILE-001C refinement.
+Persistence/identity remains future work. No staging action is part of MOBILE-001C.
 
 ## Historical handoff — through 2026-09-01
 
