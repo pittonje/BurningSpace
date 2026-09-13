@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-13
-Updated by: Product Architect — PERSIST-001 evidence reconciliation
+Updated by: Product Architect — PERSIST-002 Packet 1 authority + PERSIST-001 lifecycle reconciliation
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -19,21 +19,27 @@ Canonical historical deployment details remain in the OPS-002 task/review eviden
 
 ## Active program — Wave 2 persistence / durable identity
 
+PERSIST-001 — Persistent World & Durable Identity Architecture: **MERGED / CLOSED**.
+
 Task: [PERSIST-001 — Persistent World & Durable Identity Architecture](../tasks/persist-001-persistence-identity-architecture.md)
 
 Architecture: [Persistent World & Durable Identity Architecture](../architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md)
 
 Review evidence: [PERSIST-001 Architecture / Security Review](../reviews/persist-001-architecture-security-review.md)
 
-Branch: `arch/persist-001-persistence-identity`
+Merged branch: `arch/persist-001-persistence-identity`
 
-Base/main: `3b3621d248a73f67e1bed89cd3c267d5539f2c34`
+Base/main at architecture authoring: `3b3621d248a73f67e1bed89cd3c267d5539f2c34`
 
 Authority commit: `0dec9d546cd7289f73bff843d8cfdeda79bc87b8`
 
 Reviewed architecture commit: `356b2f94573c3be641296a26fff727158063ed36`
 
-Status: **ARCHITECTURE/SECURITY REVIEW APPROVED / PRODUCT ARCHITECT ACCEPTED / AWAITING HUMAN MERGE**
+PR #85 merge commit (current `origin/main`): `98bda8f5bed41112f5687eb4ef2fd52a0c82950a`
+
+Status: **ARCHITECTURE/SECURITY REVIEW APPROVED / PRODUCT ARCHITECT ACCEPTED / MERGED / CLOSED**
+
+Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`. Packet 1 (authority + reconciliation) is in progress; runtime implementation begins with Packet 2.
 
 ## PERSIST-001 accepted architecture
 
@@ -75,7 +81,7 @@ The review confirmed identity/session separation, credential security, faction c
 
 Product Architect subsequently accepted PERSIST-001 at that reviewed architecture commit.
 
-PERSIST-002 is a separate runtime implementation task. It must not start until PR #85 is human-merged and a new bounded implementation task is opened.
+PR #85 is human-merged (merge commit `98bda8f5bed41112f5687eb4ef2fd52a0c82950a`). PERSIST-002 is now open as a separate bounded implementation task; see [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md).
 
 ## PR #85 checks and QA reconciliation
 
@@ -97,7 +103,7 @@ The failed Claude wrapper is not represented as a successful automated-QA run. E
 
 ## PERSIST-002 acceptance direction
 
-After PERSIST-001 merge, PERSIST-002 must prove at minimum:
+PERSIST-002 must prove at minimum:
 
 1. PostgreSQL starts and an empty DB migrates successfully.
 2. Canonical world bootstraps and readiness becomes true only after persistence initialization.
@@ -139,8 +145,6 @@ No mobile-control task is currently active.
 
 ## Current next safe action
 
-Wait for exact-head Core and automated QA to rerun on the PERSIST-001 documentation evidence follow-up.
+PERSIST-001 is merged and closed. PERSIST-002 Packet 1 (authority + reconciliation) opened this handoff update and the PERSIST-002 task file.
 
-If required checks are green and no new substantive blocker appears, the only next action is **human merge of PR #85**.
-
-Do not start PERSIST-002 before that merge.
+The only next action is **Execute PERSIST-002 Packet 2 — Migration foundation**, on branch `feat/persist-002-durable-world-identity-foundation`.

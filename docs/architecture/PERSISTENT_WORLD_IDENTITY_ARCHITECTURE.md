@@ -2,7 +2,7 @@
 
 Date: 2026-09-13
 Owner: Product Architect (explicit delegation under PERSIST-001)
-Status: ARCHITECTURE DEFINED / AWAITING ARCHITECTURE/SECURITY REVIEW
+Status: ACCEPTED / MERGED
 Base inspected: `3b3621d248a73f67e1bed89cd3c267d5539f2c34`
 
 Authority: [PERSIST-001](../tasks/persist-001-persistence-identity-architecture.md),

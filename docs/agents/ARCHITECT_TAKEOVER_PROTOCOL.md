@@ -149,8 +149,9 @@ The original point-in-time baseline for this protocol was 35 accepted records:
 
 PERSIST-001 updates the current count to 39: 18 BS-MECH, 5 GAME-001,
 11 BS-ARCH, 4 BS-PROC, 1 CI. The four added architecture decisions are recorded
-under explicit delegated PA authority; independent task review remains pending.
-The original baseline above remains historical evidence.
+under explicit delegated PA authority; independent Architecture/Security review
+APPROVED and Product Architect task acceptance is complete, and PERSIST-001 is
+MERGED / CLOSED via PR #85. The original baseline above remains historical evidence.
 
 Future legitimate accepted-decision work may change these counts only through
 its governed process. If this protocol continues to state a baseline count,
