@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { Server, matchMaker } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
+import type { Pool } from 'pg';
 import {
   createOperationalLogger,
   operationalErrorDetails,
@@ -10,12 +11,23 @@ import {
   RuntimeLifecycle,
   type OperationalLogSink
 } from './ops/runtimeLifecycle.js';
-import type { PersistenceEnv } from './persistence/config.js';
+import { readMigrationStatusDatabaseUrl, type PersistenceEnv } from './persistence/config.js';
+import { createPersistencePool } from './persistence/pool.js';
 import {
   bootPersistenceRuntime,
   type PersistenceRuntime,
   type PersistenceRuntimeOptions
 } from './persistence/persistenceRuntime.js';
+import {
+  handleIdentityGuestRequest,
+  matchesIdentityGuestPath,
+  type IdentityGuestEndpointContext
+} from './http/identityGuestEndpoint.js';
+import {
+  handleWorldDiscoveryRequest,
+  matchesWorldDiscoveryPath,
+  type WorldDiscoveryEndpointContext
+} from './http/worldDiscoveryEndpoint.js';
 import { registerProductionRooms } from './rooms/productionRoomRegistry.js';
 import {
   createWebSocketVerifyClient,
@@ -24,11 +36,17 @@ import {
   parseNetworkBoundaryConfig,
   type NetworkBoundaryEnvironment
 } from './security/networkBoundary.js';
+import { PeerRateLimiter } from './security/peerRateLimiter.js';
+import type { MonotonicClock } from './security/tokenBucketRateLimiter.js';
 
 const DEFAULT_PORT = 2567;
 const HEALTH_BODY = JSON.stringify({ ok: true, service: 'burningspace-server' });
 const CANONICAL_BATTLE_ROOM_NAME = 'battle';
 const CANONICAL_ROOM_WATCH_INTERVAL_MILLIS = 5_000;
+const GUEST_IDENTITY_LIMITER_CAPACITY = 3;
+const GUEST_IDENTITY_LIMITER_REFILL_PER_SECOND = 1 / 60;
+const GUEST_IDENTITY_LIMITER_MAX_BUCKETS = 10_000;
+const GUEST_IDENTITY_LIMITER_IDLE_EVICTION_MILLIS = 10 * 60 * 1000;
 
 export interface ProductionServerEnvironment extends NetworkBoundaryEnvironment, PersistenceEnv {
   readonly PORT?: string;
@@ -44,6 +62,8 @@ export interface StartProductionServerOptions {
   readonly persistence?: Omit<PersistenceRuntimeOptions, 'environment' | 'onAuthorityLost'>;
   /** Set false in tests: real production always terminates the process on authority loss. */
   readonly exitOnAuthorityLoss?: boolean;
+  /** Test-only: injects a monotonic clock into the single per-process /identity/guest limiter to avoid real sleeps. */
+  readonly guestIdentityLimiterClock?: MonotonicClock;
 }
 
 export interface ProductionServerHandle {
@@ -102,20 +122,50 @@ function withTimeout(operation: Promise<void>, timeoutSeconds: number): Promise<
   });
 }
 
+export interface RuntimeRequestListenerContext {
+  readonly lifecycle: RuntimeLifecycle;
+  readonly identityGuest: IdentityGuestEndpointContext;
+  readonly worldDiscovery: WorldDiscoveryEndpointContext;
+}
+
+/**
+ * Accepts either a bare RuntimeLifecycle (the pre-Packet-4 calling
+ * convention, still used directly by productionReadiness.test.ts for
+ * health/ready-only scenarios) or the full endpoint-routing context. This
+ * keeps that existing test's direct call working unchanged while
+ * production composition uses the richer context.
+ */
 export function createRuntimeRequestListener(
-  lifecycle: RuntimeLifecycle
+  lifecycleOrContext: RuntimeLifecycle | RuntimeRequestListenerContext
 ): RequestListener {
+  const context: RuntimeRequestListenerContext | undefined =
+    lifecycleOrContext instanceof RuntimeLifecycle ? undefined : lifecycleOrContext;
+  const lifecycle: RuntimeLifecycle =
+    lifecycleOrContext instanceof RuntimeLifecycle ? lifecycleOrContext : lifecycleOrContext.lifecycle;
+
   return (request, response) => {
-    if (request.url === '/health') {
+    const pathname = (request.url ?? '/').split('?')[0] ?? '/';
+
+    if (pathname === '/health') {
       response.writeHead(200, { 'content-type': 'application/json' });
       response.end(HEALTH_BODY);
       return;
     }
 
-    if (request.url === '/ready') {
+    if (pathname === '/ready') {
       const readiness = lifecycle.readiness;
       response.writeHead(readiness.status, { 'content-type': 'application/json' });
       response.end(JSON.stringify(readiness.body));
+      return;
+    }
+
+    if (context && matchesIdentityGuestPath(pathname)) {
+      void handleIdentityGuestRequest(request, response, context.identityGuest);
+      return;
+    }
+
+    if (context && matchesWorldDiscoveryPath(pathname)) {
+      handleWorldDiscoveryRequest(request, response, context.worldDiscovery);
       return;
     }
 
@@ -142,6 +192,7 @@ export async function startProductionServer(
   let gameServer: Server | undefined;
   let restoreNetworkBoundary: (() => void) | undefined;
   let persistenceRuntime: PersistenceRuntime | undefined;
+  let identityPool: Pool | undefined;
   let canonicalRoomWatcher: ReturnType<typeof setInterval> | undefined;
 
   try {
@@ -155,7 +206,42 @@ export async function startProductionServer(
       shutdownTimeoutSeconds
     } as const;
 
-    httpServer = createServer(createRuntimeRequestListener(lifecycle));
+    const isLifecycleReady = (): boolean => lifecycle.state === 'ready';
+    const getWriterAuthority = () => persistenceRuntime?.writer;
+    const getCanonicalRoomId = (): string | undefined => persistenceRuntime?.getCanonicalRoomId();
+    // createOperationalLogger's event parameter is intentionally narrowed to
+    // the existing lifecycle event union (runtimeLifecycle.ts is out of
+    // scope for this packet); the underlying JSON-log implementation and
+    // bounded-value truncation are otherwise identical, so widen the type
+    // at this one integration seam for the endpoints' own event names.
+    const identityLog: IdentityGuestEndpointContext['log'] = log as unknown as IdentityGuestEndpointContext['log'];
+    const guestIdentityLimiter = new PeerRateLimiter({
+      capacity: GUEST_IDENTITY_LIMITER_CAPACITY,
+      refillRatePerSecond: GUEST_IDENTITY_LIMITER_REFILL_PER_SECOND,
+      maxBuckets: GUEST_IDENTITY_LIMITER_MAX_BUCKETS,
+      idleEvictionMs: GUEST_IDENTITY_LIMITER_IDLE_EVICTION_MILLIS,
+      monotonicNow: options.guestIdentityLimiterClock
+    });
+
+    const requestListenerContext: RuntimeRequestListenerContext = {
+      lifecycle,
+      identityGuest: {
+        isLifecycleReady,
+        getWriterAuthority,
+        getPool: () => identityPool,
+        networkBoundaryConfig,
+        limiter: guestIdentityLimiter,
+        log: identityLog
+      },
+      worldDiscovery: {
+        isLifecycleReady,
+        getWriterAuthority,
+        getCanonicalRoomId,
+        networkBoundaryConfig
+      }
+    };
+
+    httpServer = createServer(createRuntimeRequestListener(requestListenerContext));
     const networkBoundary = installNetworkBoundary(networkBoundaryConfig);
     restoreNetworkBoundary = networkBoundary.restore;
 
@@ -193,6 +279,7 @@ export async function startProductionServer(
         await closed;
         restoreNetworkBoundary?.();
         await persistenceRuntime?.shutdown();
+        await identityPool?.end().catch(() => undefined);
       })();
       return teardownPromise;
     };
@@ -224,6 +311,13 @@ export async function startProductionServer(
       environment,
       onAuthorityLost: handleAuthorityLost
     });
+
+    // A separate pool dedicated to HTTP identity writes: PersistenceRuntime
+    // does not expose its own internal pool, and Packet 3's boot/fencing
+    // semantics are intentionally not touched by this packet. Same
+    // connection string PersistenceRuntime itself resolved (pure function
+    // of the same environment).
+    identityPool = createPersistencePool(readMigrationStatusDatabaseUrl(environment));
 
     registerProductionRooms(gameServer);
 
@@ -329,6 +423,7 @@ export async function startProductionServer(
     await gameServer?.gracefullyShutdown(false).catch(() => undefined);
     restoreNetworkBoundary?.();
     await persistenceRuntime?.shutdown().catch(() => undefined);
+    await identityPool?.end().catch(() => undefined);
     log('error', 'startup_failed', operationalErrorDetails(error));
     throw error;
   }
