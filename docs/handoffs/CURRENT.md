@@ -1,886 +1,146 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-13
-Updated by: Codex — MOBILE-001C FIX1 HUD anchoring
+Updated by: Product Architect — PERSIST-001 evidence reconciliation
 
 ## Current state — Public Arena external staging: ONLINE
 
-- OPS-002: `COMPLETE — EXTERNAL STAGING DEPLOYED AND VALIDATED`.
-- Frozen controller: `DEPLOYMENT_COMPLETE`, recorded 2026-09-13.
 - Client: https://game.burningforge.dev
 - Server origin: https://game-server.burningforge.dev
-- Environment: `burningspace-staging-01`, Contabo shared existing VPS.
-- Deployed application release: `4a774354859c036d45666496539c2fc3c24b9f1c`.
-- Runtime: exact immutable images, started with `--pull never`; both
-  application containers healthy; health/readiness PASS.
-- One external hash-bound smoke: **18/18 PASS**, including reconnect
-  continuity. Registry credential cleanup completed; owner PAT revocation
-  recorded; unrelated VPS services preserved.
-- Persistence: **NOT IMPLEMENTED** — server/world state remains in-memory
-  and may reset on restart. World/player campaign persistence and durable
-  identity are absent. This is non-persistent staging, **not production** or
-  campaign MVP.
+- Environment: `burningspace-staging-01` on the existing shared Contabo VPS.
+- OPS-002 external staging deployment is complete and validated.
+- Original deployed application release: `4a774354859c036d45666496539c2fc3c24b9f1c`.
+- Server runtime remains on the approved immutable server image from OPS-002.
+- Subsequent MOBILE-001B/C updates replaced only the static client container; server, Caddy, TLS and network remained unchanged during those bounded client-only updates.
+- Public health/readiness and the bounded external multiplayer smoke passed after the client updates.
+- Persistence remains **NOT IMPLEMENTED** in runtime: world/player campaign state is still in-memory and may reset on server restart. Staging is not production or campaign MVP.
 
-The [OPS-002 completion record](../tasks/ops-002-public-arena-external-staging-deployment.md#2026-09-13--phase-b-execution-closure)
-contains the exact deployed image digests, primary execution report location
-and SHA-256 bindings. The [execution closure](../reviews/ops-002-public-arena-external-staging-deployment-review.md#2026-09-13--final-execution-closure)
-preserves the earlier review bindings. Online status is the recorded deployment
-result; POSTDEPLOY-001 does not repeat a public probe or contact the VPS.
+Canonical historical deployment details remain in the OPS-002 task/review evidence and Git history. `CURRENT.md` intentionally records only the latest operational/task state.
 
-## Current bounded task and next action
+## Active program — Wave 2 persistence / durable identity
 
-Active task: **MOBILE-001C - Combat Controls & Tactical Camera**.
-Task: [mobile-001c-combat-controls-tactical-camera.md](../tasks/mobile-001c-combat-controls-tactical-camera.md).
-Branch: `game/mobile-001c-combat-camera-refinement`.
-Base/main: `175d87f47f16c6c5bf343728e29814165a2d9258` (PR #83).
-Status: `FIX1 IMPLEMENTED / AWAITING DELTA REVIEW OF M001C-UX-01`.
-Authority commit: `f961b36` (first branch commit); implementation HEAD is the
-commit containing this handoff on the named branch.
-Scope: combined touch AIM/FIRE, movement-facing heading, balanced 8-way
-movement, local wheel/pinch tactical zoom, viewport safe-area completion.
-Preserve desktop combat, 50 ms input cadence, server protocol/authority and
-spectator physics. No server/shared/protocol/deployment/dependency changes.
-Production: `apps/client/index.html`, `src/config/gameConfig.ts`,
-`src/input/{TouchInputState,TouchInputSource,CameraZoomInput}.ts`,
-`src/scenes/MultiplayerGameScene.ts`, `src/styles.css` (all under apps/client).
-Tests: touchInputState, touchInputSource, touchCombat, cameraZoomInput,
-multiplayerInput, desktopInputSource and fakeTouchDom under apps/client/test.
-Focused tests 94/94 (including desktop) and full client tests 123/123 PASS;
-client/workspace typecheck, client/workspace production build and diff check PASS.
-Default/min/max zoom .86/.40/1.15; camera input never enters network payload.
-Resumed verification confirmed the existing branch/authority and clean current
-main at the same base after fetch/fast-forward. Added one explicit desktop
-movement/mouse-aim independence regression; final checks above PASS.
-Local browser check: desktop mouse aim/LMB fire and wheel directions; Forced
-Touch at 844x390 with MOVE, AIM/FIRE, LOBBY, separate stick drags, correct canvas
-size/edge spacing, and overlay/touch-action cleanup PASS. No browser errors.
-Multi-pointer combat/pinch and physical safe-area insets remain test-covered
-or source-checked only; browser API has no simultaneous-touch action and no
-real-phone check is claimed. Local servers and temporary browser settings
-cleaned up. Optional zoom persistence deferred; Vite chunk warning remains INFO.
-Independent Client/UX review of `1ec9532d54fea69aeab8750708edfb65c6bceaed`
-requested changes for M001C-UX-01 only (0 BLOCKER / 0 HIGH / 1 MEDIUM).
-FIX1 retains scrollFactor(0), inverse-scales the three Phaser HUD texts and
-inverts camera origin/zoom for screen anchors every frame after camera/content
-updates. Banner height is converted back to screen pixels before HUD placement.
-Runtime delta: MultiplayerGameScene.ts only. Regression: hudAnchoring.test.ts,
-real Phaser GetCalcMatrix/TransformMatrix at 844x390, three zooms and two scroll
-positions. Focused 43/43; full client 137/137; client/workspace typecheck,
-production client build and diff check PASS. Accepted combat/zoom input remains
-unchanged. FIX1 HEAD is the commit containing this handoff.
-Next safe action: delta review of M001C-UX-01.
-No push, PR or deployment in this task.
+Task: [PERSIST-001 — Persistent World & Durable Identity Architecture](../tasks/persist-001-persistence-identity-architecture.md)
 
-## MOBILE-001B staging follow-up (2026-09-13)
+Architecture: [Persistent World & Durable Identity Architecture](../architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md)
 
-MOBILE-001B is merged and its static client deployed from `175d87f...`.
-Server remains on the OPS-002 approved release above. The client-only update
-completed one external smoke 18/18 PASS; credentials were cleaned and owner PAT
-revocation confirmed. Evidence: `D:/Temp/burningspace-mobile-001b-client-update-20260913T092517Z/FINAL_REPORT.md`.
-PA's field-tested touch feedback is the authority for MOBILE-001C refinement.
-Persistence/identity remains future work. No staging action is part of MOBILE-001C.
+Review evidence: [PERSIST-001 Architecture / Security Review](../reviews/persist-001-architecture-security-review.md)
 
-## Historical handoff — through 2026-09-01
+Branch: `arch/persist-001-persistence-identity`
 
-The earlier GO/preparation snapshots below are retained as historical evidence.
-Their pending/NOT DEPLOYED statements and next-action instructions describe
-that period and are superseded by the dated current state above. They are not
-current execution instructions or authority to restart deployment work.
+Base/main: `3b3621d248a73f67e1bed89cd3c267d5539f2c34`
 
-<details>
-<summary>Preserved GO, preparation, review and earlier handoff details</summary>
+Authority commit: `0dec9d546cd7289f73bff843d8cfdeda79bc87b8`
 
-## OPS-002 canonical GO authority
+Reviewed architecture commit: `356b2f94573c3be641296a26fff727158063ed36`
 
-- Deployment GO reference: `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57`.
-- Originally issued: `2026-08-31T23:22:51Z` against canonical `main`
-  `aaba1cee1112f65d3b2330359e60a4547d251358` and release target
-  `4a774354859c036d45666496539c2fc3c24b9f1c`.
-- Evidence-chain execution suspension: `LIFTED` at
-  `2026-09-01T05:17:39Z`. The suspension had been imposed because the
-  historical final handoff passed sealed-byte verification but failed strict
-  transitive format validation in two JSON artifacts.
-- Current GO status: `ACTIVE / CONDITIONAL / STAGE-GATED`.
-- Corrected evidence: strict transitive validation `PASS`, semantic authority
-  unchanged, and historical bytes preserved. Corrected evidence-manifest
-  SHA-256:
-  `f4f8d272dbc56a642291c40766af5d1858a41c102d392ba29c6f68e0a743e4ec`.
-  Corrected root-manifest SHA-256:
-  `157d0ac1da0e91152a90999070c94607867fd2f640cb7ebb5282ec1aa6697539`.
-  Corrected binding SHA-256:
-  `e08820660acf650e199466187b6ee8e6ff5bba1d7397fd7b864b0c971bd9cd0e`.
-  Semantic-equivalence SHA-256:
-  `e8b3b6ec616217b6dae0c5182309d70d15be9286039de3662d9d5a95edaea47c`.
-  Format-contract SHA-256:
-  `b2d34846e66bab92f04500f930a9dfda7c566ad25e1722e1a26cd1c73e856be8`.
-- Targeted integrity reviews: Operations/Security
-  `OPERATIONS_SECURITY_INTEGRITY_APPROVE` and Network/Runtime
-  `NETWORK_RUNTIME_INTEGRITY_APPROVE`; neither reports a BLOCKER, HIGH, or
-  MEDIUM finding.
-- Reactivation is not deployment success. The real promotion bundle is not yet
-  prepared, reviewed, or executed. State 2/3 activation, host mutation, Caddy,
-  ACME/TLS, real Phase B, credentials, image pull/start, and external smoke are
-  all unperformed.
-- The first active promotion or host mutation remains mechanically locked until
-  separate Operations/Security and Network/Runtime approvals both bind the
-  exact final real-promotion-bundle hash.
-- Reviewer routing for this documentation-only reconciliation: exact-head Core
-  and mandatory Claude QA are required. Architecture is not a separate gate
-  because topology and authority boundaries do not change; Gameplay and Visual
-  are not applicable because gameplay and presentation do not change.
+Status: **ARCHITECTURE/SECURITY REVIEW APPROVED / PRODUCT ARCHITECT ACCEPTED / AWAITING HUMAN MERGE**
 
-## Repository state
+## PERSIST-001 accepted architecture
 
-- PR #56 / NET-001 is human-merged at baseline
-  `87ea2a5abe77c3548cded6347d0650c31e8bd72c`.
-- The Wave 1 authority/security foundation required for Public Arena Alpha is
-  complete at this baseline.
-- The Public Arena Alpha launch track is active.
-- SEC-007: `COMPLETE`.
-- NET-001: `COMPLETE`.
-- OPS-001: `MERGED / CLOSED` through PR #57 and normal merge commit
-  `dd558a7648dca8c8a735f285257f4a317ce9a846`.
-- OPS-001 implementation head:
-  `ab74ea9fde13061ba68667e28c4f78b271b45bd8`.
-- OPS-001 evidence head:
-  `2f1ca4e389031a1bc23d9c6b68aaaa31f3add4af`.
-- Final OPS-001 evidence-head Core run `31515348143` completed with `SUCCESS`.
-- Final OPS-001 evidence-head Claude QA run `31515348155` completed with
-  `SUCCESS`; its substantive verdict was `Approved with suggestions`, with no
-  blockers.
-- OPS-001-F1 is CLOSED. Generated fingerprinted `index-*.js` and
-  `index-*.css` are immutable and long-lived; stable-name assets require
-  revalidation; `index.html` is not long-lived; missing assets remain uncached
-  404 responses.
-- UX-001: `MERGED / CLOSED` through PR #60 and normal merge commit
-  `c365b0b81cdda80e5f8aa5e499dee0baa26bf207`.
-- OPS-002 — Public Arena External Staging Deployment and Validation is the
-  active bounded milestone. Its authority bootstrap is merged on `main`
-  through PR #62.
-- OPS-002 Phase A: `MERGED / COMPLETE` through PR #63 and normal merge commit
-  `33bff5009926bb5247acad5ebcf85ba8b7f626ce`.
-- OPS-002 shared-host repository hardening: `MERGED / COMPLETE` through PR #67
-  and normal merge commit `21a4ce2fe796f655d20911d8a52a60c69eec432d`.
-- OPS-002 host-gate discovery, remediation, controlled reboot, and post-reboot
-  baseline: `COMPLETE / PASS`. Deployment GO is `ACTIVE / CONDITIONAL /
-  STAGE-GATED`; external deployment and Phase B live execution remain `NOT
-  STARTED` pending the exact-bundle dual-review lock and all execution gates.
-- OPS-002 Caddy edge repository preparation: `MERGED / COMPLETE` through PR
-  #69 and normal merge commit
-  `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. DNS is complete. Host
-  installation, TLS, external validation, and deployment remain unperformed and
-  bundle-locked; the first image publication completed later through workflow
-  run `33310151475` but is now retired from deployment authority.
-- OPS-002 first-deployment bootstrap rollback: `MERGED / COMPLETE` through PR
-  #71 and normal merge commit
-  `0a90effcd11d6745a6a3ad36c2bf5069a1b8d82b`.
-- OPS-002 GHCR staging publication workflow: `MERGED / COMPLETE` through PR
-  #72 and normal merge commit
-  `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`. First publication workflow run
-  `33310151475`: `SUCCESS / PUBLIC NAMESPACES / RETIRED CANDIDATE`.
-- OPS-002 GHCR generation 2 publication workflow run `33323488162`:
-  `SUCCESS / PUBLIC NAMESPACES / RETIRED CANDIDATE`. Package settings showed
-  source repository `pittonje/BurningSpace` and inherited access enabled.
-- OPS-002 private GHCR policy: final repositories
-  `ghcr.io/pittonje/burningspace-deploy-server` and
-  `ghcr.io/pittonje/burningspace-deploy-client` must be `PRIVATE — PRODUCT
-  ARCHITECT DECIDED`. Bootstrap, Gate 1, Manage Actions access `WRITE`, final
-  publication run `33340075681`, Gate 2, and replacement release-specific
-  Phase A are complete. Both packages are private, inheritance is off, and the
-  observed repository source `pittonje/BurningSpace` is accepted. The separate
-  ephemeral read-only host-pull model remains defined; no host credential
-  exists and no persistent VPS registry credential is authorized.
-- The accepted decision count remains 35: 18 `BS-MECH`, 5 `GAME-001`,
-  7 `BS-ARCH`, 4 `BS-PROC`, and 1 `CI`.
-- Campaign systems remain deferred and the canonical campaign roadmap is
-  unchanged.
-- DOCARCH-004: `PAUSED`.
-- PR #51 remains a historical draft; PR #52 remains closed.
+PERSIST-001 defines and Product Architect accepts:
 
-## UX-001 completion
+- PostgreSQL as the canonical durable campaign store;
+- Node `pg`, explicit SQL and typed server-side repository boundaries;
+- durable player UUID separate from transient Colyseus `sessionId`;
+- opaque random guest recovery credential with at least 256 bits of entropy and verifier-only database storage;
+- immutable durable faction membership for the initial foundation;
+- one active gameplay ownership lease per player/world;
+- server-instance identity plus writer-epoch fencing and stale-lease recovery;
+- one initial canonical world with explicit durable world UUID;
+- semantic transactional durability rather than per-tick persistence;
+- explicit versioned SQL migrations, serialized migration execution and fail-closed schema compatibility checks;
+- expand/migrate/contract compatibility and restore-based recovery for destructive schema changes;
+- internal-only staging PostgreSQL topology with persistent storage and runtime/migration privilege separation;
+- tested backup/restore as a required PERSIST-002 acceptance proof.
 
-- Status: `MERGED / CLOSED`.
-- Pull request: #60, merged into `main` on 2026-08-23.
-- Reviewed implementation head:
-  `96b6c27b36159a019629ecbaa37ddcc9ab35a10f`.
-- Evidence head:
-  `74053b29c3049dc4875854cc59831271dbdee4e4`.
-- Merge commit:
-  `c365b0b81cdda80e5f8aa5e499dee0baa26bf207`.
-- PR #60 entered `main` through a normal merge commit. The merge used an
-  explicit one-time Product Architect autonomous merge authorization applying
-  only to PR #60; no administrative fallback was required.
-- Final-head Core run `32612275194`: `SUCCESS`, 13 test files and 163/163
-  tests, including all 11 UX lifecycle tests and the client test TypeScript
-  configuration in mandatory workspace typecheck.
-- Independent Network/Runtime review: `APPROVE`.
-- Independent Visual/UX review: `APPROVE`.
-- Product Architect: `APPROVE`.
-- `UX-001-PA-F1`: `CLOSED`.
-- Blocking findings: none. No HIGH or MEDIUM finding remains open.
-- Accessibility live-region semantics: `LOW / DEFERRED`.
-- Review artifact:
-  `docs/reviews/ux-001-public-arena-connection-error-reconnect-ux-review.md`.
+New accepted architecture records:
 
-## UX-001 Claude QA advisory
+- `BS-ARCH-008`
+- `BS-ARCH-009`
+- `BS-ARCH-010`
+- `BS-ARCH-011`
 
-- Run: `32612275281`.
-- Reviewed head: `74053b29c3049dc4875854cc59831271dbdee4e4`.
-- Wrapper: `FAILURE — output validation / summary-length failure`.
-- Usable substantive blocker: None.
-- Disposition: `ADVISORY / NON-BLOCKING`.
-- No valid substantive Claude approval is claimed.
+Accepted decision registry count: **39**. The 35 previously accepted decision records remain unchanged.
 
-## Authorization and boundaries
+## Independent review / PA acceptance
 
-- OPS-001 completed the deployment/readiness foundation for one in-memory
-  server container and one static-client container, loopback-only staging
-  Compose, explicit production client origin, health/readiness, structured
-  lifecycle logs, bounded graceful shutdown, real arena smoke coverage, Core
-  container validation, and an operations runbook.
-- The arena remains one in-memory server process with no persistence or
-  accounts; it is server-authoritative and unsuitable for horizontal scaling.
-  Restart resets active rooms and world state.
-- TLS and the public reverse proxy remain outside the application containers.
-- External launch remains a separate operation requiring explicit
-  authorization.
-- UX-001 preserves NET-001 reconnect semantics, SEC-007 boundaries, server
-  authority, and the protocol. It introduced no server, protocol, schema,
-  shared-contract, dependency, lockfile, gameplay, campaign, account,
-  persistence, accepted-decision, or deployment change.
-- UX-001 introduced no accepted game-design decision. The accepted decision
-  count remains 35, the campaign roadmap remains unchanged, and DOCARCH-004
-  remains paused.
-- External Public Arena deployment was not performed. No public hostname, TLS
-  edge, production proxy, production credential, or external infrastructure
-  was configured. Neither UX-001 completion nor OPS-002 Phase A merge launches
-  Public Arena externally.
+Independent combined Architecture/Security review of commit `356b2f94573c3be641296a26fff727158063ed36` concluded:
 
-## OPS-002 authority
+- BLOCKER: 0
+- HIGH: 0
+- MEDIUM: 0
+- verdict: **APPROVE**
 
-- Task: `OPS-002 — Public Arena External Staging Deployment and Validation`.
-- Durable state of the authority bootstrap: `AUTHORITY DEFINED`, merged on
-  `main` through PR #62.
-- Implementation risk: `HIGH`.
-- Task authority:
-  `docs/tasks/ops-002-public-arena-external-staging-deployment.md`.
-- Integrated review artifact:
-  `docs/reviews/ops-002-public-arena-external-staging-deployment-review.md`.
-- OPS-002 separates Phase A repository/dry-run preparation from Phase B
-  controlled external staging execution. Product Architect disposition now
-  defines Phase B as mandatory post-GO execution-time validation, not a
-  prerequisite for issuing GO.
-- External execution requires reviewed and merged Phase A implementation,
-  green required checks, approved Operations/Security and Network/Runtime
-  evidence, mandatory Claude QA or a policy-compliant Product Architect
-  infrastructure disposition, and an explicit environment-specific Product
-  Architect deployment `GO`.
-- External Public Arena deployment remains `NOT PERFORMED`. No staging service
-  is online or claimed. The provider, environment class, DNS zone, public
-  hostnames, and derived public origins are recorded as authority decisions.
-  DNS is configured and verified; TLS remains unconfigured. No credential, SSH
-  material, or secret environment value is recorded.
-- No other runtime task is active.
+The review confirmed identity/session separation, credential security, faction concurrency semantics, duplicate-session prevention, stale-process fencing, database failure behavior, migration/rollback, secrets/network boundaries, backup/restore and PERSIST-002 implementability without unresolved Product Architect decisions.
 
-## OPS-002 Phase A completion
+Product Architect subsequently accepted PERSIST-001 at that reviewed architecture commit.
 
-- Status: `MERGED / COMPLETE`.
-- Pull request: #63 — `OPS-002 Phase A — External Staging Preparation`,
-  `MERGED` into `main` on 2026-08-23.
-- Branch: `ops/ops-002-phase-a-external-staging-preparation`.
-- Base: `45c7f2e12aaa45548829239eacfc18333d855ce5`.
-- Implementation head:
-  `3522116d62d8fb93a4a4ca1756aec6818280f0bb`.
-- Evidence head:
-  `d2322e24ac2ff0525d5b6332143098bb048d6262`.
-- Phase A merge commit:
-  `33bff5009926bb5247acad5ebcf85ba8b7f626ce`.
-- PR #63 entered `main` through a normal two-parent merge commit preserving
-  all four pull-request commits. The merge used an exact one-time Product
-  Architect autonomous merge authorization applying only to PR #63 at evidence
-  head `d2322e24ac2ff0525d5b6332143098bb048d6262`; no administrative fallback
-  was required.
-- Phase A delivered exactly seven implementation paths plus two documentation
-  evidence paths: the PR-checks workflow, the external staging preflight and
-  smoke scripts and their TypeScript configuration, the provider-neutral
-  environment and plan templates, the external staging runbook, this handoff,
-  and the OPS-002 review artifact. No runtime server or client source,
-  protocol, schema, gameplay, persistence, identity, dependency, or lockfile
-  change was made.
-- Implementation-head Core run `32615914407`: `SUCCESS` on
-  `3522116d62d8fb93a4a4ca1756aec6818280f0bb`.
-- Final evidence-head Core run `32616866513`: `SUCCESS` on
-  `d2322e24ac2ff0525d5b6332143098bb048d6262`, with 13 test files and 163/163
-  tests, workspace build and typecheck, protocol compatibility, existing
-  callback/movement/combat diagnostics, external script typecheck, 24
-  preflight self-tests, 3 smoke self-tests, template validation, high-signal
-  secret scans, machine-readable Compose validation proving exact `127.0.0.1`
-  binds for both services with no privileged mode, host networking, Docker
-  socket, or named persistent volume, both images built, real containers
-  started, Public Arena smoke passed, external loopback smoke passed with all
-  18 checks true, hostile raw WebSocket rejected, authoritative movement
-  passed, reconnect retained the same session and room with coherent ship
-  continuity and no duplicate participant or ship, reconnect token output
-  absent, graceful shutdown passed, and cleanup passed.
-- Operations/Security: `APPROVE`.
-- Network/Runtime: `APPROVE`.
-- Product Architect: `APPROVE PHASE A`.
-- Blocking findings: none. No HIGH or MEDIUM finding remains open. Earlier
-  implementation-review MEDIUM findings were closed by the hardening commit
-  `3522116d62d8fb93a4a4ca1756aec6818280f0bb`.
-- Non-blocking: two Operations/Security LOW items, one Network/Runtime NOTE,
-  and the Claude QA suggestions remain `DEFERRED / NON-BLOCKING` and were not
-  implemented.
-- Review artifact:
-  `docs/reviews/ops-002-public-arena-external-staging-deployment-review.md`,
-  status `PHASE A REVIEW COMPLETE / PHASE B NOT AUTHORIZED`. It is historical
-  evidence bound to the reviewed implementation head and is not rewritten by
-  this reconciliation.
-- Phase A external execution: `NONE`. No VPS, DNS provider, certificate
-  service, Cloudflare account, firewall, reverse proxy, public hostname, or
-  external staging environment was accessed at any point.
+PERSIST-002 is a separate runtime implementation task. It must not start until PR #85 is human-merged and a new bounded implementation task is opened.
 
-## OPS-002 Phase A Claude QA record
+## PR #85 checks and QA reconciliation
 
-- Implementation-head run `32615914388` on
-  `3522116d62d8fb93a4a4ca1756aec6818280f0bb`: usable substantive verdict
-  `Approved with suggestions` with `0` blockers, followed by a wrapper
-  conclusion of `FAILURE — summary exceeds max length 2000`. The Product
-  Architect recorded an explicit Category-C infrastructure and
-  output-packaging disposition; the mandatory Claude QA gate was satisfied and
-  a manual rerun was not required. Wrapper success is not claimed for this
-  run.
-- Evidence-head run `32616866496` on
-  `d2322e24ac2ff0525d5b6332143098bb048d6262`: wrapper conclusion `SUCCESS`,
-  substantive verdict `Approved with suggestions`, `0` blockers. Its
-  suggestions concern the deferred generated-client chunk-scan LOW, the
-  `fetch-depth: 0` checkout tradeoff, an explanatory maintenance comment for
-  the secret regexes, and PR-description wording. None alleges inaccurate or
-  misleading evidence and none is blocking.
-- The PR #63 description retains a generic `HUMAN MERGE ONLY` sentence that
-  the exact one-time Product Architect authorization superseded for that pull
-  request and head only. A clarifying pull-request metadata note was
-  authorized but could not be applied; the authorization of record is the
-  Product Architect decision, not the pull-request body. This is a `LOW`
-  audit-clarity item with no repository effect.
+PR #85: `PERSIST-001 — Define persistent world and durable identity architecture`.
 
-## OPS-002 Caddy edge repository preparation
+Core Pull Request Checks run `34759176294` completed **SUCCESS** on reviewed architecture HEAD `356b2f94573c3be641296a26fff727158063ed36`.
 
-- Status: `MERGED / COMPLETE`.
-- Pull request: #69 — `OPS-002 — Prepare Caddy external staging edge`, merged
-  normally into `main` on 2026-08-24.
-- Branch: `ops/ops-002-caddy-edge-preparation`.
-- Base: `4533291d8b042858a0bcb143aadfec7061d44984`.
-- Corrected reviewed implementation head:
-  `864d1aacb2f902e43e0395b5058fe3e970a9dc11`.
-- Evidence head: `ee41232b4eff513ec3d3d04ee8a03845e719171d`.
-- Merge commit: `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`.
-- Implementation-head Core run `32740776653`: `SUCCESS` on
-  `864d1aacb2f902e43e0395b5058fe3e970a9dc11`, with 13 test files and 163/163
-  repository tests, workspace build and typecheck, protocol compatibility,
-  existing callback/movement/combat diagnostics, external script typecheck, 47
-  existing external-staging preflight self-tests, 58 corrected edge preflight
-  self-tests, immutable Caddy `2.11.4` artifact verification against recorded
-  SHA-256, SHA-512, and checksum-manifest bindings, Caddy format/adapt/validate
-  of the rendered configuration, eight rejected Origin-mutation negative cases,
-  `systemd-analyze verify` of the drop-in against a safe temporary unit tree,
-  and a Unix admin runtime contract of 28 tests with all 26 required
-  assertions true.
-- Mandatory Claude QA run `32740776780` on
-  `864d1aacb2f902e43e0395b5058fe3e970a9dc11`: wrapper `SUCCESS`, substantive
-  verdict `Approved with suggestions`, `0` blockers.
-- Final evidence-head Core run `32746509383`: `SUCCESS` on
-  `ee41232b4eff513ec3d3d04ee8a03845e719171d`, with all required repository,
-  edge-preflight, immutable-artifact, Caddy validation, systemd, and Unix-admin
-  runtime checks passing.
-- Evidence-head Claude QA run `32746509019` had wrapper `FAILURE` only because
-  output validation rejected an overlength minor suggestion. Its substantive
-  verdict was `Approved with suggestions, pending final-head Core success`;
-  that temporal condition was closed by Core run `32746509383`, and the run
-  identified no factual blocker. This is not recorded as wrapper success.
-- Operations/Security: `APPROVE`.
-- Network/Runtime: `APPROVE`.
-- Product Architect: `APPROVE FOR MERGE`.
-- `OPS-002-EDGE-PA-F1`: `CLOSED`. The Caddy admin API no longer uses an
-  unauthenticated loopback TCP listener on the shared host.
-- Blocking findings: none. No HIGH or MEDIUM finding remains open.
-- Non-blocking: host ownership and socket-mode verification deferred to
-  installation, deliberate checksum duplication, the CI unrelated-test-user
-  runner assumption, duplicated Origin-negative coverage, and documentation
-  suggestions all remain `DEFERRED / NON-BLOCKING` and were not implemented.
-- Selected implementation: host-managed Caddy systemd service.
-- Caddy validation baseline: `2.11.4`, bound to the official immutable
-  `linux/amd64` release archive with recorded SHA-256 and SHA-512 values.
-- Admin control plane: permission-restricted Unix-domain socket, with a
-  `/run/caddy` runtime directory at mode `0700` and service `UMask=0077`.
-- Admin socket: `unix//run/caddy/burningspace-admin.sock`.
-- TCP Caddy admin listener: `FORBIDDEN`. Linux Core verified none is present,
-  including the Caddy default TCP `2019`.
-- Client upstream: `127.0.0.1:18080`.
-- Server upstream: `127.0.0.1:2567`.
-- Host installation: `NOT PERFORMED / EXACT-BUNDLE DUAL-REVIEW LOCKED`.
-- DNS: `CONFIGURED / VERIFIED`.
-- TLS: `NOT CONFIGURED`.
-- Images: final private deploy-server/deploy-client digests `PUBLISHED /
-  IMMUTABLY BOUND` by workflow run `33340075681`; earlier run `33310151475` is
-  retired historical evidence only.
-- External validation: `POST-GO / NOT STARTED`.
-- Deployment: `NOT STARTED`.
-- Deployment `GO`: `ACTIVE / CONDITIONAL / STAGE-GATED` under reference
-  `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57`; first active action remains
-  locked pending dual approval of the exact real promotion bundle.
-- Evidence state: the authorized documentation-only evidence commit and its
-  final-head checks are complete. The exact one-time merge authorization was
-  used for PR #69 and is exhausted.
-- Accepted decision count: `35`, unchanged. The campaign roadmap is unchanged
-  and DOCARCH-004 remains `PAUSED`.
-- Review artifact:
-  `docs/reviews/ops-002-public-arena-external-staging-deployment-review.md`.
-- Edge external execution: `NONE`. During that edge task there was no Contabo
-  access, host installation, public TCP 80/443 binding, DNS or certificate
-  service contact, image publication, or deployment.
+Claude QA run `34759176306` had a wrapper `FAILURE`, but the Claude invocation itself completed successfully. Its structured review was rejected by the deterministic publisher because one blocker string exceeded the 500-character limit.
 
-## Deployment boundary
+The substantive QA concern was an evidence/state mismatch, not an architecture defect: the PR body already referenced the completed independent Architecture/Security review while the repository still contained the pre-review `READY FOR REVIEW` status and no committed review artifact.
 
-- OPS-002 Phase B live execution: `NOT STARTED`. The issued GO does not waive
-  any stage gate and does not declare deployment success.
-- Target provider/environment: `SELECTED` — Contabo,
-  `burningspace-staging-01`, class
-  `shared-existing-vps-with-isolated-compose-staging`. Selection is not
-  deployment authorization.
-- Deployment `GO`: `ACTIVE / CONDITIONAL / STAGE-GATED`; issued
-  `2026-08-31T23:22:51Z`, evidence suspension lifted
-  `2026-09-01T05:17:39Z`.
-- External staging: `NOT DEPLOYED`. No staging service is online.
-- Public production launch: `NOT AUTHORIZED`.
-- No credential was requested, supplied, or stored. The four active real
-  inventory files exist only as Git-ignored local state and remain untracked.
-- Merging Phase A is repository preparation only. It is not a deployment `GO`
-  and does not authorize any external execution.
+That mismatch is closed by:
 
-## OPS-002 Phase B environment decision
+- `docs/reviews/persist-001-architecture-security-review.md`;
+- this reconciled `CURRENT.md`;
+- the reconciled PERSIST-001 task status/evidence ledger.
 
-- Environment ID: `burningspace-staging-01`.
-- Environment class: `shared-existing-vps-with-isolated-compose-staging`.
-- Superseded environment class: `dedicated-isolated-single-host-vps`.
-- Selection status: `ENVIRONMENT SELECTED`.
-- Provider: `Contabo`.
-- Host: `SELECTED — existing shared VPS`.
-- Physical isolation: `NO`. Kernel, CPU, RAM, disk, Docker daemon, public IP,
-  host firewall, maintenance domain, and security failure domain remain
-  shared with unrelated workloads.
-- Operational isolation repository contract: `MERGED / COMPLETE` through PR
-  #67. Host-side deployment and verification: `NOT STARTED`.
-- DNS zone: `CONFIGURED / VERIFIED` — `burningforge.dev`.
-- Client hostname: `game.burningforge.dev` — A `164.68.107.13`, no AAAA,
-  verified through both authoritative Cloudflare nameservers, `1.1.1.1`, and
-  `8.8.8.8`.
-- Server hostname: `game-server.burningforge.dev` — same exact verified state.
-- Public origins: `https://game.burningforge.dev` client and
-  `https://game-server.burningforge.dev` server.
-- Authority transition: `MERGED / COMPLETE`.
-- Shared-host repository hardening: `MERGED / COMPLETE`.
-- Host-gate discovery: `COMPLETE`.
-- Host remediation: `COMPLETE`; controlled reboot and post-reboot baseline
-  `PASS`.
-- Root firewall review: `PASS`; UFW active.
-- Edge repository design/preparation: `MERGED / COMPLETE` through PR #69 and
-  merge `4d691b056a8fa5cc558f52ae81da51d69aff2fc1`. Host edge installation and
-  ownership: `NOT STARTED / EXACT-BUNDLE DUAL-REVIEW LOCKED`.
-- Edge host installation, TLS, Edge/Application Phase B, image pull/start, and
-  external validation: `POST-GO / NOT STARTED`. Immutable target images are
-  published and bound; DNS is complete.
-- GO packet: `ISSUED / REACTIVATED / CONDITIONAL / STAGE-GATED`.
-- Deployment GO: `OPS002-DEPLOY-GO-20260831T232251Z-B04ECC57`.
-- External deployment: `NOT STARTED / EXECUTION BUNDLE LOCKED`.
-- Phase B live execution: `NOT STARTED`.
-- External staging: `NOT DEPLOYED`.
-- Public production launch: `NOT AUTHORIZED`.
-- The earlier rejection of this shared host is superseded for controlled
-  low-traffic staging only. It was driven primarily by the forum container
-  owning public TCP 80/443 and the effective edge; the forum is now stopped,
-  autostart-disabled, restart policy `no`, preserved, recoverable through an
-  out-of-band operational procedure, and no longer owns 80/443. Public 80/443
-  is reserved conceptually for a future independently managed BurningSpace
-  staging edge. The rejection is not superseded for public production.
-- Measured audit evidence after forum shutdown: Ubuntu 24.04.4 LTS, 4 vCPU,
-  approximately 7.8 GiB total RAM with approximately 6.9 GiB available,
-  approximately 48 GiB free disk, root filesystem approximately 35% used,
-  very low observed load, healthy Docker, and unrelated stable services still
-  operational. This is a point-in-time capacity observation, not guaranteed
-  capacity. The selected-host loopback pair is `127.0.0.1:2567` server and
-  `127.0.0.1:18080` client; `18080` is an environment-specific override of the
-  valid generic `8080` default because a preserved legacy container reserves
-  host port `8080` in its Docker metadata.
-- The selected public address is `164.68.107.13` and host asset identifier is
-  `vmi3266913`; no SSH fingerprint, private key, credential, or unrelated-service
-  private identifier is recorded in canonical documentation.
-- The forum and all other unrelated host workloads remain outside BurningSpace
-  ownership and must not be modified by BurningSpace deployment operations.
-- Host selection is `APPROVED`; repository hardening is `MERGED / COMPLETE`.
-  Repository-only edge design/preparation is `MERGED / COMPLETE` through PR
-  #69. Selecting, preparing, approving, or merging the repository edge contract
-  authorizes no external access, credential collection, host installation,
-  public binding, DNS/TLS change, container creation, image publication, or
-  deployment.
-- Host maintenance, root-level firewall review, dashboard/Cockpit remediation,
-  TeamSpeak administrative/query review, controlled reboot, post-reboot
-  baseline, DNS, immutable release/rollback authority, and the forum standstill
-  are complete. Remaining true pre-GO bindings are recorded in the GO packet;
-  live edge/TLS, Phase B, image pull/start, and external validation are post-GO.
+The failed Claude wrapper is not represented as a successful automated-QA run. Exact-head PR checks must rerun on the documentation evidence follow-up commits.
 
-## Review and merge gate
+## PERSIST-002 acceptance direction
 
-OPS-001 review and human merge of PR #57 are complete.
+After PERSIST-001 merge, PERSIST-002 must prove at minimum:
 
-UX-001 implementation review, final-head Core, required independent reviews,
-Product Architect approval, and merge are complete. `UX-001-PA-F1` is closed,
-the accessibility live-region LOW remains deferred, and the invalid advisory
-Claude wrapper result remains non-blocking.
+1. PostgreSQL starts and an empty DB migrates successfully.
+2. Canonical world bootstraps and readiness becomes true only after persistence initialization.
+3. A new client can obtain a durable guest identity and credential.
+4. First faction choice persists transactionally.
+5. Application-only restart preserves player UUID, world UUID and faction while transient sessionId changes.
+6. A duplicate concurrently active durable identity cannot own two gameplay sessions.
+7. Stale lease recovery after crash/restart is bounded and safe.
+8. Invalid/revoked credentials and forged UUIDs cannot claim another identity.
+9. Backup is created and restored into a fresh isolated DB.
+10. Restore proves identity/world/faction/revision/revocation state without reviving stale active sessions.
 
-OPS-002 Phase A review, final evidence-head Core, evidence-head Claude QA,
-required independent reviews, Product Architect approval, and merge are
-complete.
+No territorial/outpost implementation is authorized by PERSIST-001.
 
-OPS-002 shared-host repository hardening is merged and complete through PR
-#67. The host-gate audit is complete. This post-hardening reconciliation is a
-`NORMAL RISK`, docs-only change requiring documentation validation, one
-independent read-only Operations/Architecture review, Product Architect
-approval, and human merge. Network, Security, QA, Gameplay, and Visual review
-are not applicable because it changes no executable behavior, infrastructure,
-security implementation, acceptance test, gameplay, or presentation surface.
+## Deferred classifications / non-goals
 
-OPS-002 Caddy edge repository preparation is merged and complete through PR
-#69. Corrected implementation head
-`864d1aacb2f902e43e0395b5058fe3e970a9dc11`, evidence head
-`ee41232b4eff513ec3d3d04ee8a03845e719171d`, and merge commit
-`4d691b056a8fa5cc558f52ae81da51d69aff2fc1` are the fixed bindings.
-Independent Operations/Security and Network/Runtime reviews approve; Product
-Architect approval is recorded; `OPS-002-EDGE-PA-F1` is closed; implementation
-Claude run `32740776780` succeeded with `Approved with suggestions` and `0`
-blockers; and final-head Core run `32746509383` succeeded. Evidence-head Claude
-run `32746509019` failed output validation after a substantively approving
-review whose only temporal condition was closed by that Core success; it is
-not represented as wrapper success and establishes no factual blocker. The
-exact one-time merge authorization used for PR #69 is exhausted. Merge of the
-repository preparation authorizes no host installation, Contabo mutation, DNS
-or TLS change, image publication, external execution, or deployment `GO`.
+Still intentionally deferred:
 
-The one-time autonomous merge authorizations used for PR #60, PR #62, PR #63,
-and PR #69 are exhausted. PR #67 entered `main` through a normal human merge.
-None of those actions authorizes any later runtime task, any future
-implementation PR, OPS-002 Phase B, or any external execution. Future OPS-002
-work remains human-merge-only unless a later exact Product Architect
-authorization states otherwise.
+- durable ship transform semantics;
+- combat health persistence semantics;
+- respawn/cooldown persistence semantics;
+- future sector/outpost/campaign state implementation;
+- production HA and final RPO/RTO policy;
+- email/password/OAuth/social accounts;
+- Sybil resistance for anonymous guest creation;
+- horizontal server scaling.
 
-## OPS-002 first-deployment bootstrap rollback implementation
+## MOBILE-001C closure / UX debt
 
-- Status: `MERGED / COMPLETE`.
-- Branch: `ops/ops-002-first-deployment-bootstrap-rollback`.
-- Implementation HEAD: `ea216e3be1f6f98776bd66b00162c70f3ca5c501`.
-- Evidence HEAD: `84d36aeb577ec31501b82bde488f610d08ef855d`.
-- Merge commit: `0a90effcd11d6745a6a3ad36c2bf5069a1b8d82b`.
-- Base: `c1daa96aefce961ec6b595af058b8f105ac98800` from exact local
-  `origin/main`.
-- Historical implementation bindings: GHCR repositories
-  `ghcr.io/pittonje/burningspace-server` and
-  `ghcr.io/pittonje/burningspace-client`; first edge ID
-  `burningspace-staging-01-edge-v1`. The concrete deployment target is now
-  governed by the successful publication workflow `GITHUB_SHA`, not this
-  implementation branch's historical base.
-- Rollback modes: first deployment uses exactly
-  `bootstrap-no-previous-release` with previous image, commit, and edge fields
-  structurally absent; later deployments retain strict
-  `previous-approved-release` requirements.
-- Bootstrap rollback restores `PRE_BURNINGSPACE_DEPLOYMENT_STATE` and may touch
-  only the BurningSpace staging Compose project and BurningSpace Caddy edge
-  configuration. Unrelated services and the stopped forum remain preserved;
-  prune and unrelated cleanup remain forbidden.
-- Reboot ordering is documented as completed maintenance, separately
-  Product-Architect-authorized reboot, shared-host baseline revalidation, then
-  image/edge deployment. No reboot, host contact, image publication, DNS, or
-  deployment occurred.
-- Focused validation passed: external staging preflight `56/56`; edge preflight
-  `64/64`. Core Pull Request Checks run `33277932406`: `PASS`.
-- Reviewer declaration: Security and QA required; Architecture and Network
-  recommended; Gameplay and Visual not applicable. Independent Claude
-  targeted/final review: `APPROVE`, with `0 BLOCKER / 0 HIGH / 0 MEDIUM`.
-- Final-head Core run `33303715791`: `PASS`.
-- PR #71: `MERGED / CLOSED`.
-- Protected stash `6dd950c5829db8a88150d3b08217277e17274187` remains present and untouched.
+MOBILE-001A/B/C are merged. MOBILE-001C was deployed through the bounded client-only staging update and field-tested on a real phone.
 
-## OPS-002 GHCR publication and retired public generations
+Current touch controls are usable for continued development. Known non-blocking UX debt:
 
-- Status: `MERGED / CLOSED / FIRST PUBLICATION COMPLETE / CANDIDATE RETIRED`.
-- Branch: `ops/ops-002-ghcr-staging-publish`.
-- Base: `0a90effcd11d6745a6a3ad36c2bf5069a1b8d82b` from exact local
-  `origin/main`.
-- PR #72 implementation head: `7f20d5a434725bb04e1d204a67b5371e1b6316a3`.
-- PR #72 hostname reconciliation head:
-  `55997ae5afeed1bccb723b0d39c8c34d2f84516d`.
-- PR #72 merge commit: `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`.
-- Workflow: `.github/workflows/publish-staging-images.yml`, manual
-  `workflow_dispatch` only, guarded to `refs/heads/main`, on `ubuntu-latest`.
-- Authentication: repository-scoped `GITHUB_TOKEN` with only
-  `contents: read` and `packages: write`; no PAT or repository GHCR secret.
-- Release binding: the checked-out `HEAD` must equal `GITHUB_SHA`; both
-  `linux/amd64` images use commit-derived tags, retain the OCI revision label,
-  use buildx metadata digest capture, and receive independent
-  immutable-reference inspection. No `latest` tag is published. The final
-  private publication path omits `org.opencontainers.image.source` and any
-  replacement repository-linking label.
-- The workflow emits bounded non-secret `phaseb-image-release.json` evidence
-  in the job log and step summary. It does not change package visibility.
-- Final PR #72 Core run `33309831684`: `SUCCESS`. Claude QA run `33309831735`:
-  `SUCCESS / Approved with suggestions / 0 blockers`.
-- Targeted local checks pass: `git diff --check`, YAML structure and trigger
-  inspection, embedded Bash syntax, Dockerfile existence, client build-arg
-  consumption, and static credential-output scan.
-- First publication workflow run `33310151475`: `SUCCESS` at exact target
-  commit `75e4cd0ca71ca0b104067e19e0b7bfb2b5b3c81a`, platform `linux/amd64`.
-- Server image: `PUBLISHED / IMMUTABLE DIGEST BOUND` —
-  `ghcr.io/pittonje/burningspace-server@sha256:9bcd2855cb588c326af72d10a634921db05b0729197e477c6862cc9e8aaddd58`.
-- Client image: `PUBLISHED / IMMUTABLE DIGEST BOUND` —
-  `ghcr.io/pittonje/burningspace-client@sha256:118ebff019677c11654fef002cb6ca9c2eed8fd6821400994cd0f755eb8508c2`.
-- First server/client provider state: `PUBLIC — MANUALLY OBSERVED BY PRODUCT
-  ARCHITECT`.
-- Generation 1 disposition: `PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY /
-  FORBIDDEN DEPLOYMENT TARGET`.
-- Generation 2 workflow run: `33323488162 / SUCCESS`, exact target commit
-  `f9c1d86348a9ff572c7068433aa4295cb92befc2`.
-- Generation 2 server image:
-  `ghcr.io/pittonje/burningspace-staging-server@sha256:0150c4ad32d4a2976502dda68d4507b4bf64eefc9ea7d4f2d23b3740c11c95a1`.
-- Generation 2 client image:
-  `ghcr.io/pittonje/burningspace-staging-client@sha256:bf14e873b82d9b419559f48ddac63bf2e2cebeb8c908e108d466b662d8db2968`.
-- Generation 2 provider state: `PUBLIC — MANUALLY OBSERVED BY PRODUCT
-  ARCHITECT`; package settings showed source repository
-  `pittonje/BurningSpace` and inherited access enabled.
-- Generation 2 disposition: `PUBLIC / RETIRED / HISTORICAL EVIDENCE ONLY /
-  FORBIDDEN DEPLOYMENT TARGET`.
-- Approved hostile smoke Origin: `https://hostile.burningforge.dev`; this is an
-  Origin-header test identity and requires no Phase A DNS record or TLS
-  certificate.
-- Final server namespace: `ghcr.io/pittonje/burningspace-deploy-server`.
-- Final client namespace: `ghcr.io/pittonje/burningspace-deploy-client`.
-- Final package visibility policy: `PRIVATE — PRODUCT ARCHITECT DECIDED`.
-- Final bootstrap: `COMPLETE`; tag `bootstrap-20260830T212613Z`, digest
-  `sha256:1a243e5af4508768fad72a909b1f5173594327caae724af8ae483803e816d197`,
-  `NON-RELEASE / NEVER DEPLOYMENT EVIDENCE`.
-- Bootstrap PAT: `REVOKED`; credential cleanup `PASS`.
-- Final package existence: `VERIFIED`.
-- Final Gate 1: `PASS`.
-- Manage Actions access before publication: `pittonje/BurningSpace → WRITE`,
-  both packages.
-- Final publication: `33340075681 / SUCCESS / exactly one dispatch / no retry`.
-- Final target commit: `4a774354859c036d45666496539c2fc3c24b9f1c`.
-- Final server image:
-  `ghcr.io/pittonje/burningspace-deploy-server@sha256:816062e5165f3d02aed2b1d5524c1bc53de85bd0709fb92b0ef421d3be626085`.
-- Final client image:
-  `ghcr.io/pittonje/burningspace-deploy-client@sha256:ae65d4c6faadd55b04549a4a070ac5cd6ba1e5d4288a6adb1f6b2a541b9d789f`.
-- Final Gate 2: `PASS`, both packages — `PRIVATE`, repository source
-  `pittonje/BurningSpace` observed and accepted, inherited access `OFF`,
-  Manage Actions role `WRITE`.
-- Final release-specific Phase A: `COMPLETE`.
-- The retired generation 1 inventory is archived byte-for-byte at
-  `D:\Temp\burningspace-ops002-retired-inventory-20260830T233138Z`; its
-  `SHA256SUMS.txt` SHA-256 is
-  `0275a1d578842bc47a0de317b88b037aaaabbeb250017dc94057ee10722dd116`.
-- The canonical ignored inventory is the immutable `PRE_GO_BASE` for the final
-  release. It is never edited after GO; post-GO authorization exists only in a
-  unique detached pinned execution worktree. Canonical hashes:
-  application env
-  `8e989f048fa5c80f15b672c5de3638c81d48cbb2f6e1a0f471d60a1a0759b08e`,
-  application plan
-  `0ffa473d762230f084f6d239e7fb5a328069cbba0ae9409c7b712e9a3fb29607`,
-  edge env
-  `478e01e65070a10eb170e41ba1ee3c85b593e3382f397fcc2108d7ae230e98f4`,
-  edge plan
-  `c9168b6801ce8df86bee9ba967e77a85d5b8d79f3e31dd9cf96a631022ca5ec7`.
-- Host pull authority: `DEFINED — ephemeral PAT classic with read:packages
-  only`; Claude security review moved from `REQUEST_CHANGES` to conditional
-  approval on the contained F1/F2 documentation corrections, which are now
-  applied. Disposition: `APPROVED FOR COMMIT/PR`.
-- Persistent host registry credential: `NONE`.
-- Registry credential created: `NO`.
-- No Docker daemon was required for reconciliation. No package mutation,
-  provider API, DNS, TLS, host Caddy, firewall, VPS, host credential, image
-  pull, Phase B, GO, or deployment operation occurred in this task.
+**8-way touch movement feels somewhat stepped.**
 
-## OPS-002 final private GHCR bootstrap and pull authority
+Disposition: **DEFERRED UX TUNING / NON-BLOCKING FOR PERSISTENCE**.
 
-- Phase A implementation/tooling: `COMPLETE`.
-- Generation 1 release-specific Phase A: `PASS EVIDENCE EXISTS / RETIRED`.
-- Generation 2 release-specific Phase A: `NEVER CREATED / RETIRED`.
-- Final replacement release-specific Phase A: `COMPLETE` — application `PASS`,
-  edge `PASS`, Caddy local validation `REUSED / INPUTS BYTE-IDENTICAL`.
-- Final Phase A evidence:
-  `D:\Temp\burningspace-ops002-final-private-phasea-20260830T233259Z`;
-  `SHA256SUMS.txt` SHA-256
-  `3b78b2861450a1e39aa7dc729dd1cb065c80dcee1cbd8858c1ff04e829838a2e`.
-- Compose CLI: official Docker Compose `v5.5.0`, binary SHA-256
-  `51e1e61195f3616896265487ed64551095f3bd27ac7fbd5758d3538c3bfa1b19`;
-  normalized config SHA-256
-  `febad24ee7e164efdca95d33ecb6a72d71133241289423f8a946d39d41298375`.
-- Never keep multiple active candidate variants under `deploy/`.
-- Final server GHCR visibility policy: `PRIVATE`.
-- Final client GHCR visibility policy: `PRIVATE`.
-- Product Architect visibility decision: `COMPLETE`.
-- Final bootstrap environment/tool: `LOCAL WINDOWS WORKSTATION / crane`.
-- Final bootstrap: `COMPLETE`.
-- Final package existence: `VERIFIED`.
-- Final provider visibility check: `PRIVATE / VERIFIED`, both packages.
-- Gate 1: `PASS`.
-- Bootstrap credential: `PAT classic / write:packages only / ephemeral`.
-- Bootstrap PAT: `REVOKED`.
-- Bootstrap artifact: `MINIMAL STANDARD OCI/DOCKER IMAGE MANIFEST /
-  NON-RELEASE / NEVER DEPLOYMENT EVIDENCE`, retained.
-- Manage Actions access for `pittonje/BurningSpace`: `WRITE / VERIFIED`, both
-  packages.
-- Repository-source association: `pittonje/BurningSpace / OBSERVED PROVIDER
-  BEHAVIOR / ACCEPTED`; do not remove it or click **Connect repository**.
-- Inherited access: `OFF / REQUIRED / VERIFIED`, both packages.
-- Final canonical publication: `33340075681 / SUCCESS`.
-- Final target commit and digests: `BOUND` to the exact final references above.
-- Gate 2: `PASS`.
-- Private host pull model: `DEFINED / CLAUDE SECURITY REVIEW APPROVE`; the
-  exact F1/F2 corrections required by that review are applied.
-- Host-pull credential: `PAT classic / read:packages only / ephemeral /
-  OPERATOR-HELD / NOT STORED ON HOST`.
-- Pre-GO proof PAT: `REVOKED / MUST NOT BE REUSED`.
-- Future post-GO pull PAT: `FRESH SHORT-LIVED PAT CLASSIC / read:packages ONLY /
-  NOT CREATED`; it is created only after GO immediately before exact-digest
-  pull, then logout/config destruction and manual revocation are mandatory.
-- Persistent VPS credential: `NONE`.
-- Pre-GO registry boundary: read-only private-state confirmation and exact
-  immutable manifest inspection only; no image-layer pull.
-- Post-GO registry boundary: explicit exact-digest pulls, local `RepoDigests`
-  verification, logout and temporary-config destruction before Compose starts
-  with `--pull never`.
-- DNS: `PASS / CONFIGURED / PUBLICLY VERIFIED`.
-- Controlled reboot: `COMPLETE` at `2026-08-31T07:10:25Z`; boot ID
-  `088f9941-7056-488e-a0fb-b25f8e87a0c7`.
-- Post-reboot baseline: `PASS`; reboot-required `CLEARED`.
-- Root firewall/listener evidence:
-  `D:\Temp\burningspace-ops002-controlled-reboot-20260831T070724Z`, manifest
-  SHA-256
-  `509a4b066d30ea7cae38edcf62dd9dc58c6e6b0dfa0867593d1893b480ee438d`.
-- Private GHCR pre-GO proof: `PASS` — ephemeral login and exact server/client
-  immutable manifest resolution succeeded without pulling layers; logout and
-  isolated-config destruction passed; persistent host credential `NONE`.
-- Proof evidence:
-  `D:\Temp\burningspace-ops002-private-ghcr-prego-retry-20260831T081129Z`.
-- Management-access owner: `pittonje / Product Architect operator`.
-- Abort owner: `pittonje / Product Architect operator`.
-- Rollback owner: `pittonje / Product Architect operator`.
-- Exact external smoke command: `BOUND` to the existing
-  `apps/server/scripts/external-staging-smoke.ts` production invocation with
-  exact client/server/allowed/hostile origins and a 15000 ms bound. It is not
-  executed pre-GO. Its pinned-worktree provisioning procedure is `BOUND /
-  LOCALLY PROVEN` on the Product Architect/operator Windows workstation in Git
-  for Windows Bash. The same detached target worktree receives all four exact
-  hash-bound ignored inventories, uses verified standalone Compose, and runs
-  both validator families and smoke tooling. No Git/Node/npm/worktree or smoke
-  tooling is placed on the shared VPS. Named harness and assertion evidence
-  markers are mechanically distinct.
-- Complete execution-side/inventory proof:
-  `D:\Temp\burningspace-ops002-pinned-execution-proof-20260831T143459Z`;
-  fresh ancestry, source/copy bindings, `npm ci`, builds, readable module files,
-  Compose normalization, Application/Edge Phase A, 3 smoke self-tests, 56
-  preflight self-tests, exact Bash smoke form, and cleanup all `PASS`.
-- The post-GO inventory authority is `THREE_STATE_STAGE_BOUND`:
-  `PRE_GO_BASE` is the immutable canonical source; `GO_AUTHORIZED_PRE_TLS` is a
-  worktree-only derivative activated by a concrete Product Architect GO and
-  changes only the exact GO/execution/host-installation/DNS allowlist while
-  keeping `tlsReady=false`; `TLS_READY_PHASE_B` derives from State 2 only after
-  retained real TLS evidence and changes only edge-plan `tlsReady=false ->
-  true`. Every stage uses its own manifest-bound hashes. Smoke readiness uses
-  `TLS_READY_PHASE_B`, never the canonical pre-GO hashes.
-- The exact field allowlist and both real validator command paths were proven
-  locally with a clearly non-authoritative synthetic GO/TLS fixture at
-  `D:\Temp\burningspace-ops002-inventory-stage-proof-20260831T170134Z`.
-  State transformations, Edge Phase-B CLI, Application Phase-B CLI, daemonless
-  Compose normalization, and smoke self-test 3/3 passed. This is not real GO,
-  real TLS, real Edge/Application Phase B, or external smoke.
-- Region / provider location: `Hub Europe — PROVIDER-CONFIRMED BY PRODUCT
-  ARCHITECT`; this preserves the literal Contabo panel value without inferring
-  a country, city, or physical datacenter.
-- Fourth-round Operations/Security review: `APPROVE PRE-GO`; report SHA-256
-  `d9b8f3b6f518a0d7afbd27a0eec4dd812b8182c846909bf840ab279e204e33a9`,
-  reviewer-manifest SHA-256
-  `2837394d53907852d4a9fbcfec1eb66c0d91ed6bd3b529872b43fa23874b8a4e`.
-- Fourth-round Network/Runtime review: `APPROVE PRE-GO`; report SHA-256
-  `bbf415911da511c2530d6cf052bffe7cc3bb990646b64f4e75bf1d9fba41c2d1`,
-  reviewer-manifest SHA-256
-  `b45fef55079e70dfe43b14006051639df4973e4ff4ed0f37e86cecc14f4609b5`.
-- Both fourth-round reviewers assessed the same frozen substantive candidate,
-  preserved by commit `297e96ff6cb43b89e3733bd2faf94dfc1b41d996`
-  and candidate binding
-  `d24796c14575eab99d2d6d845bb7e2567c087a479b4c99cd63bb3209b5f0a1d3`.
-  Factual conflicts: `NONE`. Blocking findings for GO readiness: `NONE`.
-- Product Architect dual-review reconciliation:
-  `GO-READY — DUAL REVIEW RECONCILED`; sealed readiness evidence-manifest
-  SHA-256
-  `f7748456f8c6bddfb938c0a5b2e8a0ae883b8214e78a326635419a13bff205c1`
-  and packet `SHA256SUMS.txt` SHA-256
-  `c747f0674acb10d9e220eb12a0be254b4f3f30a722cc2c0fa4cb2f407929d20f`.
-- Prior findings A3-F1, A3-F2, A3-F3, B3-F1, B3-F2, and B3-F3 are `CLOSED`.
-  Fourth-round A4-F1, A4-F2, A4-F3, B4-F1, B4-F2, B4-F3, and B4-F4 are
-  non-blocking for GO readiness but remain mandatory acceptance gates at their
-  assigned real-bundle stages. A4-F4 remains a deferred informational
-  evidence-retention note.
-- TLS: `NOT READY`.
-- Deployment GO: `ACTIVE / CONDITIONAL / STAGE-GATED`.
-- Edge Phase B: `POST-GO / NOT RUN`.
-- Application Phase B: `POST-GO / NOT RUN`.
-- Images pulled to host: `NO`.
-- Caddy: `NOT DEPLOYED`.
-- BurningSpace: `NOT DEPLOYED`.
-- Provider-model correction: `org.opencontainers.image.source` and replacement
-  repository-linking labels remain forbidden in the canonical workflow, but
-  their absence does not guarantee that GitHub shows no repository-source
-  association. The final UI association is accepted because visibility is
-  private, inheritance is off, and explicit Actions access remains `WRITE`.
-- Final-binding reviewer disposition: the pre-GO independent
-  Operations/Security and Network/Runtime reviews are complete, as are the two
-  targeted integrity reviews of the corrected evidence chain. These reviews do
-  not replace the future pair of exact-real-bundle approvals.
-- Historical pre-PR reconciliation checks: Core run `33374592005` returned
-  `SUCCESS`; mandatory Claude QA run `33374592021` reviewed
-  `f6a4cd3cc94435ee21a157c93df826626636cf6b`, returned wrapper `SUCCESS` and
-  substantive `Approved with suggestions`, and reported no blockers. These
-  checks do not replace exact-head Core and mandatory Claude QA on PR #79.
-- Historical delivery binding: PR #79 delivered the reviewed pre-GO
-  substantive candidate. The Product Architect subsequently issued the GO,
-  suspended execution for evidence resealing, and lifted that suspension only
-  after strict validation plus both targeted integrity approvals.
+No mobile-control task is currently active.
 
-## Next safe action
+## Current next safe action
 
-Canonicalize this reactivation through the bounded documentation-only PR with
-exact-head Core, mandatory Claude QA, and a normal merge. After merge, perform
-only the bounded read-only DNS/host currency spot-check. If it passes, prepare,
-test, and freeze the real promotion bundle outside the repository.
+Wait for exact-head Core and automated QA to rerun on the PERSIST-001 documentation evidence follow-up.
 
-The exact final bundle must remain mechanically incapable of its first active
-promotion or host mutation until separate Operations/Security and
-Network/Runtime approvals both bind that exact final bundle hash. Bundle
-preparation and review do not themselves authorize execution.
+If required checks are green and no new substantive blocker appears, the only next action is **human merge of PR #85**.
 
-Approving or merging the Caddy edge repository preparation does not activate
-host installation.
-
-Host Caddy installation, ACME/TLS, Edge Phase B, Application Phase B, exact
-image pull/start, and external smoke are intentionally post-GO execution gates.
-Their pending state does not block issuing GO after every true pre-GO binding
-passes, but each gate remains mandatory in sequence and failure stops
-progression.
-
-Phase B live execution remains unstarted and BurningSpace remains undeployed.
-DNS is configured; no credential is stored on the host. The Product Architect
-has issued and reactivated the exact environment-specific GO, but the
-real-bundle dual-review lock and every ordered execution gate remain in force.
-Do not activate State 2/3, mutate the host, install Caddy, contact ACME, use a
-PAT, log in to GHCR, pull images, run real Phase B, start containers, execute
-external smoke, or claim deployment completion during bundle preparation.
-
-</details>
+Do not start PERSIST-002 before that merge.

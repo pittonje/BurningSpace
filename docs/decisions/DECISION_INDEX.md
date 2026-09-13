@@ -36,19 +36,31 @@ This file is non-canonical navigation. Individual decision files are authoritati
 | `BS-ARCH-005` | protocol as transitional public compatibility boundary | accepted | Architecture — protocol and package dependency direction | `BS-ARCH-004` | [record](BS-ARCH-005.md) |
 | `BS-ARCH-006` | Balance and configuration package boundaries | accepted | Architecture — balance and configuration separation | none | [record](BS-ARCH-006.md) |
 | `BS-ARCH-007` | Local GameScene prototype is non-authoritative | accepted | Architecture — client prototype boundary | `BS-ARCH-001` | [record](BS-ARCH-007.md) |
+| `BS-ARCH-008` | PostgreSQL persistence, consistency and migrations | accepted | Architecture - durable storage | `BS-ARCH-001`-`006` | [record](BS-ARCH-008.md) |
+| `BS-ARCH-009` | Durable guest identity and faction membership | accepted | Architecture - identity | `BS-ARCH-001`, `004`, `005`, `008` | [record](BS-ARCH-009.md) |
+| `BS-ARCH-010` | Gameplay leases and durable reconnect ownership | accepted | Architecture - sessions | `BS-ARCH-001`, `003`, `008`, `009` | [record](BS-ARCH-010.md) |
+| `BS-ARCH-011` | Canonical persistent world lifecycle and recovery | accepted | Architecture - world lifecycle | `BS-ARCH-001`, `003`, `007`-`010` | [record](BS-ARCH-011.md) |
 | `BS-PROC-001` | Human-only merge authority | accepted | Process governance — merge authority | none | [record](BS-PROC-001.md) |
 | `BS-PROC-002` | Separation of governance responsibilities | accepted | Process governance — role boundaries and independent review | `BS-PROC-001` | [record](BS-PROC-002.md) |
 | `BS-PROC-003` | Durable governance roles are independent of model or vendor | accepted | Process governance — role identity | `BS-PROC-002` | [record](BS-PROC-003.md) |
 | `BS-PROC-004` | Required review evidence before human merge | accepted | Process governance — review evidence and merge preconditions | `BS-PROC-001`, `BS-PROC-002` | [record](BS-PROC-004.md) |
 | `CI-003-D1` | Deterministic trusted-base PR-risk routing for Claude QA | accepted | CI governance — PR QA routing and QA evidence binding | `BS-PROC-001`, `BS-PROC-004` | [record](CI-003-D1.md) |
 
-## DOCARCH-002D status
+## Current registry - PERSIST-001, 2026-09-13
+
+39 accepted records: 18 BS-MECH, 5 GAME-001, 11 BS-ARCH, 4 BS-PROC, 1 CI.
+BS-ARCH-008-011 were selected under explicitly delegated PA authority in
+[PERSIST-001](../tasks/persist-001-persistence-identity-architecture.md).
+Independent Architecture/Security review and final task acceptance remain pending;
+PERSIST-002 implementation is not authorized by this index.
+
+## Historical DOCARCH-002D status
 
 - DOCARCH-002C is complete.
 - DOCARCH-002D1 merged through PR #44.
 - DOCARCH-002D2 merged through PR #45.
 - DOCARCH-002D3 is the active final reconciliation and closure candidate; it is not yet merged and creates no decision records.
-- The accepted decision-record count remains 35.
+- The accepted decision-record count at that historical checkpoint was 35.
 - After D3 human merge, DOCARCH-003 — Canonical Development Roadmap is the next repository task.
 - AGENT-004 remains deferred to DOCARCH-005.
 

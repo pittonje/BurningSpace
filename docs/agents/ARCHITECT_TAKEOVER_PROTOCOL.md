@@ -4,7 +4,7 @@
 - Program: DOCARCH-004
 - Stage: DOCARCH-004B
 - Baseline: merged DOCARCH-004A / PR #49
-- Accepted decisions: 35
+- Accepted decisions: 39 (PERSIST-001; original protocol baseline: 35)
 - New decisions introduced: none
 - Chat history required: no
 - Repository mutation during recovery: prohibited
@@ -139,13 +139,18 @@ Read `docs/decisions/DECISION_INDEX.md`, enumerate the individual decision
 record files, and verify each accepted status, the total, and category counts.
 Compare the index with the files and stop on an unexplained mismatch.
 
-The point-in-time baseline for this protocol is 35 accepted records:
+The original point-in-time baseline for this protocol was 35 accepted records:
 
 - 18 `BS-MECH`;
 - 5 `GAME-001`;
 - 7 `BS-ARCH`;
 - 4 `BS-PROC`;
 - 1 `CI`.
+
+PERSIST-001 updates the current count to 39: 18 BS-MECH, 5 GAME-001,
+11 BS-ARCH, 4 BS-PROC, 1 CI. The four added architecture decisions are recorded
+under explicit delegated PA authority; independent task review remains pending.
+The original baseline above remains historical evidence.
 
 Future legitimate accepted-decision work may change these counts only through
 its governed process. If this protocol continues to state a baseline count,
