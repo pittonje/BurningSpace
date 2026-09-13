@@ -10,7 +10,7 @@ Updated by: Codex — MOBILE-001C FIX1 HUD anchoring
 - Client: https://game.burningforge.dev
 - Server origin: https://game-server.burningforge.dev
 - Environment: `burningspace-staging-01`, Contabo shared existing VPS.
-- Deployed application release: `4a774354859c036d45666496539c2fc3c24b9f1c`.
+- Original deployed application release: `4a774354859c036d45666496539c2fc3c24b9f1c`.
 - Runtime: exact immutable images, started with `--pull never`; both
   application containers healthy; health/readiness PASS.
 - One external hash-bound smoke: **18/18 PASS**, including reconnect
@@ -29,47 +29,34 @@ result; POSTDEPLOY-001 does not repeat a public probe or contact the VPS.
 
 ## Current bounded task and next action
 
-Active task: **MOBILE-001C - Combat Controls & Tactical Camera**.
-Task: [mobile-001c-combat-controls-tactical-camera.md](../tasks/mobile-001c-combat-controls-tactical-camera.md).
-Branch: `game/mobile-001c-combat-camera-refinement`.
-Base/main: `175d87f47f16c6c5bf343728e29814165a2d9258` (PR #83).
-Status: `FIX1 IMPLEMENTED / AWAITING DELTA REVIEW OF M001C-UX-01`.
-Authority commit: `f961b36` (first branch commit); implementation HEAD is the
-commit containing this handoff on the named branch.
-Scope: combined touch AIM/FIRE, movement-facing heading, balanced 8-way
-movement, local wheel/pinch tactical zoom, viewport safe-area completion.
-Preserve desktop combat, 50 ms input cadence, server protocol/authority and
-spectator physics. No server/shared/protocol/deployment/dependency changes.
-Production: `apps/client/index.html`, `src/config/gameConfig.ts`,
-`src/input/{TouchInputState,TouchInputSource,CameraZoomInput}.ts`,
-`src/scenes/MultiplayerGameScene.ts`, `src/styles.css` (all under apps/client).
-Tests: touchInputState, touchInputSource, touchCombat, cameraZoomInput,
-multiplayerInput, desktopInputSource and fakeTouchDom under apps/client/test.
-Focused tests 94/94 (including desktop) and full client tests 123/123 PASS;
-client/workspace typecheck, client/workspace production build and diff check PASS.
-Default/min/max zoom .86/.40/1.15; camera input never enters network payload.
-Resumed verification confirmed the existing branch/authority and clean current
-main at the same base after fetch/fast-forward. Added one explicit desktop
-movement/mouse-aim independence regression; final checks above PASS.
-Local browser check: desktop mouse aim/LMB fire and wheel directions; Forced
-Touch at 844x390 with MOVE, AIM/FIRE, LOBBY, separate stick drags, correct canvas
-size/edge spacing, and overlay/touch-action cleanup PASS. No browser errors.
-Multi-pointer combat/pinch and physical safe-area insets remain test-covered
-or source-checked only; browser API has no simultaneous-touch action and no
-real-phone check is claimed. Local servers and temporary browser settings
-cleaned up. Optional zoom persistence deferred; Vite chunk warning remains INFO.
-Independent Client/UX review of `1ec9532d54fea69aeab8750708edfb65c6bceaed`
-requested changes for M001C-UX-01 only (0 BLOCKER / 0 HIGH / 1 MEDIUM).
-FIX1 retains scrollFactor(0), inverse-scales the three Phaser HUD texts and
-inverts camera origin/zoom for screen anchors every frame after camera/content
-updates. Banner height is converted back to screen pixels before HUD placement.
-Runtime delta: MultiplayerGameScene.ts only. Regression: hudAnchoring.test.ts,
-real Phaser GetCalcMatrix/TransformMatrix at 844x390, three zooms and two scroll
-positions. Focused 43/43; full client 137/137; client/workspace typecheck,
-production client build and diff check PASS. Accepted combat/zoom input remains
-unchanged. FIX1 HEAD is the commit containing this handoff.
-Next safe action: delta review of M001C-UX-01.
-No push, PR or deployment in this task.
+Active program: **Wave 2 persistence / durable identity**.
+Task: [PERSIST-001](../tasks/persist-001-persistence-identity-architecture.md).
+Owner: Product Architect (explicit human delegation).
+Branch: `arch/persist-001-persistence-identity`.
+Base/main: `3b3621d248a73f67e1bed89cd3c267d5539f2c34`.
+Status: `AUTHORITY DEFINED / ARCHITECTURE NOT YET WRITTEN`.
+Scope: architecture/decision documentation only; no persistence runtime,
+dependencies, deployment, secrets, VPS contact, push or PR.
+One independent Architecture/Security review is required after authoring;
+PERSIST-002 remains unauthorized until PA accepts PERSIST-001.
+Next safe action: define the persistence and durable identity architecture
+within the committed PERSIST-001 task.
+
+## MOBILE-001C closure reconciliation ? 2026-09-13
+
+MOBILE-001A/B/C are merged; MOBILE-001C entered main through PR #84 at the base
+SHA above. The human PA confirms the merged client was deployed through the
+bounded client-only staging update, public staging remained healthy, and real-phone
+testing confirmed the revised controls are usable. These deployment/device facts
+are user-supplied evidence; this task makes no VPS contact or fresh public probe,
+and does not invent a client image digest. The OPS-002 release above identifies
+the original deployment/server baseline, not the subsequently updated client.
+
+Known mobile UX debt, recorded once: **8-way touch movement feels somewhat
+stepped; DEFERRED UX TUNING, accepted for current testing, non-blocking for
+persistence**. No further mobile task is active or opened.
+The [MOBILE-001C task](../tasks/mobile-001c-combat-controls-tactical-camera.md)
+retains implementation evidence with a dated closure correction.
 
 ## MOBILE-001B staging follow-up (2026-09-13)
 
@@ -78,7 +65,7 @@ Server remains on the OPS-002 approved release above. The client-only update
 completed one external smoke 18/18 PASS; credentials were cleaned and owner PAT
 revocation confirmed. Evidence: `D:/Temp/burningspace-mobile-001b-client-update-20260913T092517Z/FINAL_REPORT.md`.
 PA's field-tested touch feedback is the authority for MOBILE-001C refinement.
-Persistence/identity remains future work. No staging action is part of MOBILE-001C.
+This is historical MOBILE-001B evidence; the PERSIST-001 task above owns current work.
 
 ## Historical handoff — through 2026-09-01
 
