@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { MapSchema } from '@colyseus/schema';
-import { Client, type Room } from 'colyseus.js';
+import type { Room } from 'colyseus.js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ServerMessages, type RoomInfoMessage } from '@burningspace/shared';
 import {
@@ -11,6 +11,13 @@ import {
   type ProductionServerHandle
 } from '../src/index.js';
 import { RuntimeLifecycle } from '../src/ops/runtimeLifecycle.js';
+import {
+  createBootstrappedTestDatabase,
+  describeUnreachableDatabaseWarning,
+  isTestDatabaseReachable,
+  type BootstrappedTestDatabase
+} from './support/testPersistenceDatabase.js';
+import { createTestGuestIdentity, joinCanonicalBattleRoom } from './support/testIdentityHelper.js';
 
 const ALLOWED_ORIGIN = 'https://arena.example.com';
 const TEST_TIMEOUT_MS = 10_000;
@@ -62,6 +69,14 @@ function installPm2TelemetryFilterForWorkerIpc(): void {
 
 installPm2TelemetryFilterForWorkerIpc();
 
+const databaseAvailable = await isTestDatabaseReachable();
+
+if (!databaseAvailable) {
+  console.warn(describeUnreachableDatabaseWarning('productionReadiness.test.ts'));
+}
+
+const databases: BootstrappedTestDatabase[] = [];
+
 function productionEnvironment(
   overrides: Partial<ProductionServerEnvironment> = {}
 ): ProductionServerEnvironment {
@@ -72,6 +87,14 @@ function productionEnvironment(
     BURNINGSPACE_SHUTDOWN_TIMEOUT_SECONDS: '2',
     ...overrides
   };
+}
+
+async function productionEnvironmentWithDatabase(
+  overrides: Partial<ProductionServerEnvironment> = {}
+): Promise<ProductionServerEnvironment> {
+  const database = await createBootstrappedTestDatabase();
+  databases.push(database);
+  return productionEnvironment({ DATABASE_URL: database.databaseUrl, ...overrides });
 }
 
 async function fetchJson(url: string): Promise<JsonResponse> {
@@ -107,12 +130,13 @@ afterEach(async () => {
   await Promise.allSettled(runningServers.splice(0).map((server) =>
     server.shutdown('SIGTERM')
   ));
+  await Promise.allSettled(databases.splice(0).map((database) => database.drop()));
 });
 
 describe('production readiness bootstrap', () => {
-  it('preserves health and reports ready only after listening', async () => {
+  it.skipIf(!databaseAvailable)('preserves health and reports ready only after listening', async () => {
     const server = await startProductionServer({
-      environment: productionEnvironment(),
+      environment: await productionEnvironmentWithDatabase(),
       port: 0,
       hostname: '127.0.0.1',
       registerSignalHandlers: false
@@ -174,10 +198,10 @@ describe('production readiness bootstrap', () => {
     ]);
   });
 
-  it('handles SIGTERM once, settles pending reconnect work, and closes cleanly', async () => {
+  it.skipIf(!databaseAvailable)('handles SIGTERM once, settles pending reconnect work, and closes cleanly', async () => {
     const lines: string[] = [];
     const server = await startProductionServer({
-      environment: productionEnvironment(),
+      environment: await productionEnvironmentWithDatabase(),
       port: 0,
       hostname: '127.0.0.1',
       registerSignalHandlers: false,
@@ -185,12 +209,14 @@ describe('production readiness bootstrap', () => {
     });
     runningServers.push(server);
 
-    const client = new Client(server.url, { headers: { Origin: ALLOWED_ORIGIN } });
-    const observerClient = new Client(server.url, {
-      headers: { Origin: ALLOWED_ORIGIN }
-    });
-    const room = await client.joinOrCreate<ReadinessBattleState>('battle');
-    const observer = await observerClient.joinById<ReadinessBattleState>(room.roomId);
+    const { credential } = await createTestGuestIdentity(server.url, ALLOWED_ORIGIN);
+    const room = await joinCanonicalBattleRoom<ReadinessBattleState>(server.url, credential, ALLOWED_ORIGIN);
+    const { credential: observerCredential } = await createTestGuestIdentity(server.url, ALLOWED_ORIGIN);
+    const observer = await joinCanonicalBattleRoom<ReadinessBattleState>(
+      server.url,
+      observerCredential,
+      ALLOWED_ORIGIN
+    );
     openRooms.push(room, observer);
     const roomInfo: RoomInfoMessage[] = [];
     observer.onMessage<RoomInfoMessage>(ServerMessages.ROOM_INFO, (message) => {

@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks';
-import { Client, Room, type AuthContext } from 'colyseus';
+import { Client, ErrorCode, Protocol, Room, ServerError, type AuthContext } from 'colyseus';
 import {
   ProfileClientMessages,
   ProfileServerMessages,
@@ -35,6 +35,10 @@ import { BattleState } from '../schema/BattleState.js';
 import { ParticipantState } from '../schema/ParticipantState.js';
 import { ProjectileState } from '../schema/ProjectileState.js';
 import { ShipState } from '../schema/ShipState.js';
+import {
+  getActiveProductionRoomDependencies,
+  type DurableRoomAuth
+} from '../persistence/productionRoomDependencies.js';
 import {
   assertRequestOrigin,
   getActiveNetworkBoundaryConfig
@@ -98,18 +102,47 @@ function validateProfile(message: unknown): ProfileValidationResult {
   };
 }
 
-export class BattleRoom extends Room<BattleState> {
+export class BattleRoom extends Room<BattleState, unknown, unknown, DurableRoomAuth> {
   static override async onAuth(
     _token: string,
-    _options: unknown,
+    options: unknown,
     context: AuthContext
-  ): Promise<boolean> {
+  ): Promise<DurableRoomAuth | false> {
     try {
       assertRequestOrigin(context);
-      return true;
     } catch {
       return false;
     }
+
+    const dependencies = getActiveProductionRoomDependencies();
+
+    if (!dependencies) {
+      throw new ServerError(ErrorCode.AUTH_FAILED, 'persistence_unavailable');
+    }
+
+    const peerKey = dependencies.getAuthPeerKey(context);
+    const limiterResult = dependencies.freshAuthLimiter.consume(peerKey);
+
+    if (!limiterResult.allowed) {
+      throw new ServerError(ErrorCode.AUTH_FAILED, 'auth_rate_limited');
+    }
+
+    if (!dependencies.isAuthoritySafe()) {
+      throw new ServerError(ErrorCode.AUTH_FAILED, 'persistence_unavailable');
+    }
+
+    // Only `credential` has any authority. playerId/credentialId/worldId/
+    // sessionId/shipId/faction from the client are never trusted here; a
+    // forged playerId alongside a valid credential is silently ignored --
+    // the DB lookup below resolves the actual credential owner.
+    const rawCredential = isRecord(options) ? options.credential : undefined;
+    const auth = await dependencies.authenticateCredential(rawCredential);
+
+    if (!auth || auth.worldId !== dependencies.worldId) {
+      throw new ServerError(ErrorCode.AUTH_FAILED, 'identity_rejected');
+    }
+
+    return auth;
   }
 
   maxClients = MAX_ROOM_CLIENTS;
@@ -150,7 +183,18 @@ export class BattleRoom extends Room<BattleState> {
     console.log(`[BattleRoom] created roomId=${this.roomId}`);
   }
 
-  onJoin(client: Client): void {
+  onJoin(client: Client, _options?: unknown, auth?: DurableRoomAuth): void {
+    const dependencies = getActiveProductionRoomDependencies();
+
+    if (!auth || !dependencies || auth.worldId !== dependencies.worldId) {
+      // onAuth already guarantees a structurally valid auth result for any
+      // real client; this is defense in depth only.
+      client.leave(Protocol.WS_CLOSE_CONSENTED);
+      return;
+    }
+
+    dependencies.sessionBindings.bindFreshSession(client.sessionId, auth);
+
     const participant = new ParticipantState();
     participant.sessionId = client.sessionId;
     participant.nickname = `Guest-${client.sessionId.slice(0, 4)}`;
@@ -171,22 +215,77 @@ export class BattleRoom extends Room<BattleState> {
       return;
     }
 
-    this.neutralizeInput(client.sessionId);
+    const sessionId = client.sessionId;
+    const dependencies = getActiveProductionRoomDependencies();
+
+    this.neutralizeInput(sessionId);
+    dependencies?.sessionBindings.setControlAllowed(sessionId, false);
     this.sendRoomInfo();
 
     try {
-      await this.allowReconnection(
+      const reconnectedClient = await this.allowReconnection(
         client,
         this.networkBoundaryConfig.reconnectGraceSeconds
       );
-      this.sendRoomInfo();
+
+      const controlReopened = await this.revalidateReconnectedSession(sessionId, dependencies);
+
+      if (controlReopened) {
+        this.sendRoomInfo();
+      } else {
+        reconnectedClient.leave(Protocol.WS_CLOSE_CONSENTED);
+      }
     } catch (error) {
       if (!this.isExpectedReconnectionRejection(error)) {
         throw error;
       }
 
-      this.finalizeSession(client.sessionId, false);
+      this.finalizeSession(sessionId, false);
     }
+  }
+
+  /**
+   * Packet 5 reconnect gate: credential + durable player binding + current
+   * world writer authority, protected against a stale async completion via
+   * SessionBindingRegistry's connection generation. This does NOT yet
+   * implement gameplay-lease fencing (leaseId / recovering status /
+   * reconnect_deadline / writer_epoch on active_session_leases) -- that is
+   * Packet 6.
+   */
+  private async revalidateReconnectedSession(
+    sessionId: string,
+    dependencies: ReturnType<typeof getActiveProductionRoomDependencies>
+  ): Promise<boolean> {
+    const binding = dependencies?.sessionBindings.get(sessionId);
+
+    if (!dependencies || !binding || binding.worldId !== dependencies.worldId) {
+      return false;
+    }
+
+    if (!dependencies.isAuthoritySafe()) {
+      return false;
+    }
+
+    const generation = dependencies.sessionBindings.beginConnectionGeneration(sessionId);
+
+    if (generation === undefined) {
+      return false;
+    }
+
+    const stillActive = await dependencies.revalidateCredential(binding.playerId, binding.credentialId);
+
+    if (!dependencies.sessionBindings.isCurrentGeneration(sessionId, generation)) {
+      // A newer connection attempt (or finalize) already superseded this
+      // one; never reopen control based on a stale completion.
+      return false;
+    }
+
+    if (!stillActive || !dependencies.isAuthoritySafe()) {
+      return false;
+    }
+
+    dependencies.sessionBindings.setControlAllowed(sessionId, true);
+    return true;
   }
 
   private neutralizeInput(sessionId: string): void {
@@ -207,12 +306,17 @@ export class BattleRoom extends Room<BattleState> {
     );
   }
 
+  private isControlAllowed(sessionId: string): boolean {
+    return getActiveProductionRoomDependencies()?.sessionBindings.isControlAllowed(sessionId) ?? false;
+  }
+
   private finalizeSession(sessionId: string, consented: boolean): void {
     if (this.finalizedSessions.has(sessionId)) {
       return;
     }
 
     this.finalizedSessions.add(sessionId);
+    getActiveProductionRoomDependencies()?.sessionBindings.remove(sessionId);
     this.state.participants.delete(sessionId);
     this.removeShip(sessionId);
     this.inputs.delete(sessionId);
@@ -227,6 +331,10 @@ export class BattleRoom extends Room<BattleState> {
   }
 
   private handleSetProfile(client: Client, message: unknown): void {
+    if (!this.isControlAllowed(client.sessionId)) {
+      return;
+    }
+
     if (!this.profileMessageLimiter.consume(client.sessionId).allowed) {
       this.sendBoundedProfileRateLimitNotice(client);
       return;
@@ -369,6 +477,10 @@ export class BattleRoom extends Room<BattleState> {
   }
 
   private handlePlayerInput(client: Client, message: unknown): void {
+    if (!this.isControlAllowed(client.sessionId)) {
+      return;
+    }
+
     if (!this.playerInputLimiter.consume(client.sessionId).allowed) {
       return;
     }

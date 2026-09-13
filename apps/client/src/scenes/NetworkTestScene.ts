@@ -31,6 +31,7 @@ export class NetworkTestScene extends Phaser.Scene {
   private statusDetail?: HTMLDivElement;
   private errorText?: HTMLDivElement;
   private profileErrorText?: HTMLDivElement;
+  private identityText?: HTMLDivElement;
   private roomInfoText?: HTMLDivElement;
   private nicknameInput?: HTMLInputElement;
   private modeSelect?: HTMLSelectElement;
@@ -40,6 +41,7 @@ export class NetworkTestScene extends Phaser.Scene {
   private applyButton?: HTMLButtonElement;
   private enterMultiplayerButton?: HTMLButtonElement;
   private disconnectButton?: HTMLButtonElement;
+  private startNewGuestButton?: HTMLButtonElement;
   private participantsList?: HTMLUListElement;
   private connectionState: ConnectionState = networkClient.getConnectionState();
   private readonly disposers: Unsubscribe[] = [];
@@ -72,6 +74,7 @@ export class NetworkTestScene extends Phaser.Scene {
     this.statusDetail = createElement('div', 'network-test__status-detail', '');
     this.errorText = createElement('div', 'network-test__error', '');
     this.profileErrorText = createElement('div', 'network-test__error', '');
+    this.identityText = createElement('div', 'network-test__error', '');
 
     this.nicknameInput = createElement('input', 'network-test__input');
     this.nicknameInput.value = `Guest${Math.floor(100 + Math.random() * 900)}`;
@@ -109,10 +112,18 @@ export class NetworkTestScene extends Phaser.Scene {
     this.applyButton = createElement('button', 'network-test__button', 'Apply profile');
     this.enterMultiplayerButton = createElement('button', 'network-test__button', 'Enter multiplayer');
     this.disconnectButton = createElement('button', 'network-test__button', 'Disconnect');
+    this.startNewGuestButton = createElement('button', 'network-test__button', 'Start new guest');
     const openLocalButton = createElement('button', 'network-test__button network-test__button--secondary', 'Open local prototype');
 
     const buttons = createElement('div', 'network-test__buttons');
-    buttons.append(this.connectButton, this.applyButton, this.enterMultiplayerButton, this.disconnectButton, openLocalButton);
+    buttons.append(
+      this.connectButton,
+      this.applyButton,
+      this.enterMultiplayerButton,
+      this.disconnectButton,
+      this.startNewGuestButton,
+      openLocalButton
+    );
 
     const participantsTitle = createElement('h2', 'network-test__subtitle', 'Participants');
     this.participantsList = createElement('ul', 'network-test__participants');
@@ -124,6 +135,7 @@ export class NetworkTestScene extends Phaser.Scene {
       this.roomInfoText,
       this.errorText,
       this.profileErrorText,
+      this.identityText,
       form,
       buttons,
       participantsTitle,
@@ -147,6 +159,9 @@ export class NetworkTestScene extends Phaser.Scene {
     });
     this.disconnectButton.addEventListener('click', () => {
       void this.network?.disconnect();
+    });
+    this.startNewGuestButton.addEventListener('click', () => {
+      void this.network?.startNewGuestIdentity();
     });
     openLocalButton.addEventListener('click', () => {
       void this.network?.disconnect().finally(() => {
@@ -222,6 +237,15 @@ export class NetworkTestScene extends Phaser.Scene {
       this.profileErrorText.hidden = !this.connectionState.profileError;
     }
 
+    if (this.identityText) {
+      this.identityText.textContent = this.getIdentityIssueMessage();
+      this.identityText.hidden = !this.connectionState.identityIssue;
+    }
+
+    if (this.startNewGuestButton) {
+      this.startNewGuestButton.hidden = this.connectionState.identityRecovery !== 'start_new_guest';
+    }
+
     if (this.roomInfoText) {
       const roomInfo = this.connectionState.roomInfo;
       this.roomInfoText.textContent = roomInfo
@@ -262,6 +286,19 @@ export class NetworkTestScene extends Phaser.Scene {
     }
 
     this.renderParticipants();
+  }
+
+  private getIdentityIssueMessage(): string {
+    switch (this.connectionState.identityIssue) {
+      case 'identity_rejected':
+        return 'Saved identity could not be authenticated.';
+      case 'stored_identity_malformed':
+        return 'Saved identity is corrupted.';
+      case 'storage_unavailable':
+        return 'Identity storage is unavailable.';
+      default:
+        return '';
+    }
   }
 
   private renderParticipants(): void {

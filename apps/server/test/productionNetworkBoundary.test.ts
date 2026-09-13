@@ -21,6 +21,7 @@ import {
   startProductionBattleServer,
   type ProductionBattleServerHandle
 } from './support/startProductionBattleServer.js';
+import { createTestGuestIdentity, joinCanonicalBattleRoom } from './support/testIdentityHelper.js';
 
 const ALLOWED_ORIGIN = 'https://play.example.com';
 const HOSTILE_ORIGIN = 'https://hostile.example';
@@ -132,8 +133,8 @@ describe('production network boundary', () => {
       throw new Error('Production network-boundary server is not running.');
     }
 
-    const room = await createClient(server.url, ALLOWED_ORIGIN)
-      .joinOrCreate<BattleStateSchema>('battle');
+    const { credential } = await createTestGuestIdentity(server.url, ALLOWED_ORIGIN);
+    const room = await joinCanonicalBattleRoom<BattleStateSchema>(server.url, credential, ALLOWED_ORIGIN);
     room.onMessage<RoomInfoMessage>(ServerMessages.ROOM_INFO, () => undefined);
     await waitFor(
       () => Boolean(room.state?.participants && room.state?.ships),

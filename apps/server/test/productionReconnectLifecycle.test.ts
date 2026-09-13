@@ -24,6 +24,11 @@ import {
   startProductionBattleServer,
   type ProductionBattleServerHandle
 } from './support/startProductionBattleServer.js';
+import {
+  createInMemoryIdentityStorage,
+  createTestGuestIdentity,
+  joinCanonicalBattleRoom
+} from './support/testIdentityHelper.js';
 
 const ALLOWED_ORIGIN = 'https://play.example.com';
 const HOSTILE_ORIGIN = 'https://hostile.example';
@@ -219,8 +224,8 @@ describe('production reconnect ownership lifecycle', () => {
       throw new Error('Production reconnect test server is not running.');
     }
 
-    const room = await createClient(server.url, origin)
-      .joinOrCreate<BattleStateSchema>('battle');
+    const { credential } = await createTestGuestIdentity(server.url, origin);
+    const room = await joinCanonicalBattleRoom<BattleStateSchema>(server.url, credential, origin);
     room.onMessage(ServerMessages.ROOM_INFO, () => undefined);
     rooms.push(room);
     await waitFor(
@@ -336,7 +341,7 @@ describe('production reconnect ownership lifecycle', () => {
     });
     const observer = await join();
     await setPlayerProfile(observer, 'AutoObserver', 'blue');
-    const network = new NetworkClient({ serverUrl: server.url });
+    const network = new NetworkClient({ serverUrl: server.url, identityStorage: createInMemoryIdentityStorage() });
     networkClients.push(network);
     const states: ConnectionState[] = [];
     let addedShips = 0;
@@ -524,7 +529,7 @@ describe('production reconnect ownership lifecycle', () => {
     server = await startProductionBattleServer({
       networkBoundaryConfig: testConfig({ reconnectGraceSeconds: 1 })
     });
-    const failing = new NetworkClient({ serverUrl: server.url });
+    const failing = new NetworkClient({ serverUrl: server.url, identityStorage: createInMemoryIdentityStorage() });
     networkClients.push(failing);
     let failureState: ConnectionState = { status: 'disconnected' };
     failing.onConnectionStateChanged((state) => { failureState = state; });
@@ -550,7 +555,7 @@ describe('production reconnect ownership lifecycle', () => {
     expect(reconnectAttempts).toBe(5);
     expect(failingAccess.reconnectionToken).toBeUndefined();
 
-    const cancellable = new NetworkClient({ serverUrl: server.url });
+    const cancellable = new NetworkClient({ serverUrl: server.url, identityStorage: createInMemoryIdentityStorage() });
     networkClients.push(cancellable);
     await cancellable.connect();
     const cancellableAccess = cancellable as unknown as NetworkClientInternalAccess;

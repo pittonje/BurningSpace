@@ -97,6 +97,24 @@ export async function findActiveCredentialByHash(
     : { status: 'not_active' };
 }
 
+/**
+ * Used after transient reconnect (Colyseus bypasses fresh onAuth on
+ * reconnection) to revalidate that a credential is still active for the
+ * exact player it was bound to, without keeping the raw credential or hash
+ * in room memory.
+ */
+export async function isCredentialActiveForPlayer(
+  client: Queryable,
+  playerId: string,
+  credentialId: string
+): Promise<boolean> {
+  const result = await client.query(
+    'SELECT 1 FROM player_credentials WHERE player_id = $1 AND credential_id = $2 AND revoked_at IS NULL',
+    [playerId, credentialId]
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 export type RevokeCredentialResult = 'revoked' | 'already_revoked' | 'not_found';
 
 /**

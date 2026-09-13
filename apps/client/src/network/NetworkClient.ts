@@ -11,14 +11,18 @@ import {
 } from '@burningspace/protocol';
 import {
   ClientMessages,
+  IdentityGuestIntent,
   ServerMessages,
   type Faction,
+  type GuestIdentityCreateSuccess,
   type HitEventMessage,
+  type IdentityHttpErrorResponse,
   type PlayerInputMessage,
   type ProjectileSnapshot,
   type RoomInfoMessage,
   type ShipDestroyedMessage,
-  type ShipSnapshot
+  type ShipSnapshot,
+  type WorldBattleRoomDiscoverySuccess
 } from '@burningspace/shared';
 import { loadClientRuntimeConfig } from '../config/runtimeConfig';
 import {
@@ -31,6 +35,16 @@ import {
   type ConnectionPresentation,
   type ConnectionRecovery
 } from './connectionPresentation';
+import { clearIdentity, readIdentity, saveIdentity } from './identityStorage';
+
+interface IdentityStorageAdapter {
+  readIdentity: typeof readIdentity;
+  saveIdentity: typeof saveIdentity;
+  clearIdentity: typeof clearIdentity;
+}
+
+export type IdentityIssue = 'storage_unavailable' | 'stored_identity_malformed' | 'identity_rejected';
+export type IdentityRecovery = 'none' | 'start_new_guest' | 'retry';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type Unsubscribe = () => void;
@@ -99,11 +113,21 @@ export interface ConnectionState {
   errorCategory?: ConnectionErrorCategory;
   profileError?: string;
   roomInfo?: RoomInfoMessage;
+  identityIssue?: IdentityIssue;
+  identityRecovery?: IdentityRecovery;
 }
 
 export interface NetworkClientOptions {
   roomName?: string;
   serverUrl?: string;
+  /**
+   * Test-only: overrides the real browser-localStorage-backed identity
+   * persistence with an injected adapter. Lets a single Node process
+   * simulate multiple independent browser identities (e.g. several
+   * NetworkClient instances in one integration test), each with its own
+   * isolated storage. Defaults to the real localStorage-backed functions.
+   */
+  identityStorage?: IdentityStorageAdapter;
 }
 
 type StateCallbacks = ReturnType<typeof getStateCallbacks<BattleStateSchema>>;
@@ -176,12 +200,16 @@ function toProjectileSnapshot(schema: ProjectileStateSchema): ProjectileSnapshot
 
 export class NetworkClient {
   private readonly client: Client;
+  private readonly serverOrigin: string;
   private readonly roomName: string;
+  private readonly identityStorage: IdentityStorageAdapter;
   private room?: Room<BattleStateSchema>;
   private status: ConnectionStatus = 'disconnected';
   private presentation = createIdleConnectionPresentation();
   private error?: string;
   private profileError?: string;
+  private identityIssue?: IdentityIssue;
+  private identityRecovery: IdentityRecovery = 'none';
   private roomInfo?: RoomInfoMessage;
   private acceptedProfile?: ProfileAcceptedMessage;
   private connectingPromise?: Promise<void>;
@@ -215,10 +243,10 @@ export class NetworkClient {
   private readonly projectileDisposers = new Map<string, Unsubscribe>();
 
   constructor(options: NetworkClientOptions = {}) {
-    this.client = new Client(
-      options.serverUrl ?? loadClientRuntimeConfig().serverOrigin
-    );
+    this.serverOrigin = options.serverUrl ?? loadClientRuntimeConfig().serverOrigin;
+    this.client = new Client(this.serverOrigin);
     this.roomName = options.roomName ?? 'battle';
+    this.identityStorage = options.identityStorage ?? { readIdentity, saveIdentity, clearIdentity };
   }
 
   get currentParticipants(): RoomParticipant[] {
@@ -403,13 +431,180 @@ export class NetworkClient {
       ...this.presentation,
       error: this.error,
       profileError: this.profileError,
-      roomInfo: this.roomInfo
+      roomInfo: this.roomInfo,
+      identityIssue: this.identityIssue,
+      identityRecovery: this.identityRecovery
     };
+  }
+
+  /**
+   * Explicitly clears any saved durable identity, disconnecting first if
+   * necessary. This is the ONLY client path that intentionally replaces an
+   * invalid saved credential: the next connect() will treat identity as
+   * missing and create a fresh guest.
+   */
+  async startNewGuestIdentity(): Promise<void> {
+    if (this.room || this.connectingPromise) {
+      await this.disconnect();
+    }
+
+    const result = this.identityStorage.clearIdentity();
+
+    if (result !== 'cleared') {
+      this.identityIssue = 'storage_unavailable';
+      this.identityRecovery = 'retry';
+      this.emitConnectionState();
+      return;
+    }
+
+    this.identityIssue = undefined;
+    this.identityRecovery = 'none';
+    this.emitConnectionState();
+  }
+
+  private buildHttpUrl(path: string): string {
+    return new URL(path, this.serverOrigin).toString();
+  }
+
+  /**
+   * Missing identity => POST /identity/guest and save the result before
+   * anything else proceeds. Storage read/write failures and malformed
+   * saved identities are surfaced, never silently recovered or replaced.
+   */
+  private async resolveIdentityForConnect(): Promise<string | undefined> {
+    const readResult = this.identityStorage.readIdentity();
+
+    if (readResult.status === 'available') {
+      this.identityIssue = undefined;
+      this.identityRecovery = 'none';
+      return readResult.identity.credential;
+    }
+
+    if (readResult.status === 'unavailable') {
+      this.identityIssue = 'storage_unavailable';
+      this.identityRecovery = 'retry';
+      return undefined;
+    }
+
+    if (readResult.status === 'malformed') {
+      this.identityIssue = 'stored_identity_malformed';
+      this.identityRecovery = 'start_new_guest';
+      return undefined;
+    }
+
+    return this.createAndSaveGuestIdentity();
+  }
+
+  private async createAndSaveGuestIdentity(): Promise<string | undefined> {
+    let response: Response;
+
+    try {
+      response = await fetch(this.buildHttpUrl('/identity/guest'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intent: IdentityGuestIntent })
+      });
+    } catch {
+      this.identityIssue = 'identity_rejected';
+      this.identityRecovery = 'retry';
+      return undefined;
+    }
+
+    let body: GuestIdentityCreateSuccess | IdentityHttpErrorResponse;
+
+    try {
+      body = await response.json();
+    } catch {
+      this.identityIssue = 'identity_rejected';
+      this.identityRecovery = 'retry';
+      return undefined;
+    }
+
+    if (!response.ok || !body.ok) {
+      this.identityIssue = 'identity_rejected';
+      this.identityRecovery = 'retry';
+      return undefined;
+    }
+
+    // A raw credential the caller does not manage to save is intentionally
+    // discarded here rather than retried from memory: an explicit
+    // user/caller retry (or Start new guest) is required, per foundation
+    // simplicity. This may leave an inaccessible durable identity in the
+    // DB, which PERSIST-001 accepts.
+    const saveResult = this.identityStorage.saveIdentity({ version: 1, playerId: body.playerId, credential: body.credential });
+
+    if (saveResult !== 'saved') {
+      this.identityIssue = 'storage_unavailable';
+      this.identityRecovery = 'retry';
+      return undefined;
+    }
+
+    this.identityIssue = undefined;
+    this.identityRecovery = 'none';
+    return body.credential;
+  }
+
+  private async discoverCanonicalRoomId(): Promise<string | undefined> {
+    try {
+      const response = await fetch(this.buildHttpUrl('/world/battle-room'));
+
+      if (!response.ok) {
+        return undefined;
+      }
+
+      const body = (await response.json()) as WorldBattleRoomDiscoverySuccess | IdentityHttpErrorResponse;
+      return body.ok ? body.roomId : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private classifyJoinAuthFailure(error: unknown): IdentityIssue | undefined {
+    const message = error instanceof Error ? error.message : undefined;
+
+    if (message === 'identity_rejected' || message === 'auth_rate_limited' || message === 'persistence_unavailable') {
+      return message === 'identity_rejected' ? 'identity_rejected' : undefined;
+    }
+
+    return undefined;
   }
 
   private async connectInternal(epoch: number): Promise<void> {
     try {
-      const room = await this.client.joinOrCreate<BattleStateSchema>(this.roomName);
+      // Identity resolution and discovery proceed unconditionally (mirroring
+      // the prior unconditional joinOrCreate call) -- only the resulting
+      // STATE MUTATIONS below are gated on staleness, so a superseded
+      // operation's eventual result never overwrites a newer one's state.
+      const credential = await this.resolveIdentityForConnect();
+
+      if (!credential) {
+        if (this.isConnectionOperationActive(epoch)) {
+          this.setConnectionState('error', {
+            lifecycle: 'terminal_failure',
+            operation: 'none',
+            recovery: 'retry_connection',
+            errorCategory: 'unexpected_failure'
+          });
+        }
+        return;
+      }
+
+      const roomId = await this.discoverCanonicalRoomId();
+
+      if (!roomId) {
+        if (this.isConnectionOperationActive(epoch)) {
+          this.setConnectionState('error', {
+            lifecycle: 'terminal_failure',
+            operation: 'none',
+            recovery: 'retry_connection',
+            errorCategory: 'server_unavailable'
+          });
+        }
+        return;
+      }
+
+      // ONLY credential carries authority. playerId is never sent here.
+      const room = await this.client.joinById<BattleStateSchema>(roomId, { credential });
 
       if (!this.isConnectionOperationActive(epoch)) {
         await room.leave(true).catch(() => undefined);
@@ -434,6 +629,11 @@ export class NetworkClient {
       this.clearParticipants();
       this.clearShips();
       this.clearProjectiles();
+
+      const authFailure = this.classifyJoinAuthFailure(error);
+      this.identityIssue = authFailure;
+      this.identityRecovery = authFailure === 'identity_rejected' ? 'start_new_guest' : this.identityRecovery;
+
       this.setConnectionState('error', {
         lifecycle: 'terminal_failure',
         operation: 'none',

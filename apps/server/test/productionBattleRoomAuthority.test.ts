@@ -13,6 +13,7 @@ import {
   startProductionBattleServer,
   type ProductionBattleServerHandle
 } from './support/startProductionBattleServer.js';
+import { createInMemoryIdentityStorage } from './support/testIdentityHelper.js';
 
 const TEST_TIMEOUT_MS = 15_000;
 const WAIT_TIMEOUT_MS = 5_000;
@@ -29,7 +30,7 @@ interface ObservedClient {
 }
 
 function createObservedClient(serverUrl: string, roomName = 'battle'): ObservedClient {
-  const client = new NetworkClient({ serverUrl, roomName });
+  const client = new NetworkClient({ serverUrl, roomName, identityStorage: createInMemoryIdentityStorage() });
   let state: ConnectionState = { status: 'disconnected' };
   const unsubscribe = client.onConnectionStateChanged((nextState) => {
     state = nextState;
@@ -173,10 +174,12 @@ describe('production BattleRoom multi-client authority', () => {
   it('preserves server authority across real production clients', async () => {
     server = await startProductionBattleServer();
 
-    const unavailableDiagnosticRoom = addClient('battle-test');
-    await unavailableDiagnosticRoom.client.connect();
-    expect(unavailableDiagnosticRoom.getState().status).toBe('error');
-    expect(unavailableDiagnosticRoom.client.getSessionId()).toBeUndefined();
+    // The pre-Packet-4 per-connection joinOrCreate(roomName) path (which
+    // this scenario originally exercised by naming an unregistered room) no
+    // longer exists: every connection now discovers the single canonical
+    // battle room via GET /world/battle-room and joins it by ID, so a
+    // client-chosen room name can no longer select (or fail to find) a
+    // room at all.
 
     const playerA = addClient();
     const playerB = addClient();

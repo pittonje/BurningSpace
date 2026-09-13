@@ -28,12 +28,18 @@ import {
   matchesWorldDiscoveryPath,
   type WorldDiscoveryEndpointContext
 } from './http/worldDiscoveryEndpoint.js';
+import {
+  createProductionRoomDependencies,
+  installProductionRoomDependencies,
+  type ProductionRoomDependenciesInstallation
+} from './persistence/productionRoomDependencies.js';
 import { registerProductionRooms } from './rooms/productionRoomRegistry.js';
 import {
   createWebSocketVerifyClient,
   describeNetworkBoundaryMode,
   installNetworkBoundary,
   parseNetworkBoundaryConfig,
+  type NetworkBoundaryConfig,
   type NetworkBoundaryEnvironment
 } from './security/networkBoundary.js';
 import { PeerRateLimiter } from './security/peerRateLimiter.js';
@@ -47,6 +53,10 @@ const GUEST_IDENTITY_LIMITER_CAPACITY = 3;
 const GUEST_IDENTITY_LIMITER_REFILL_PER_SECOND = 1 / 60;
 const GUEST_IDENTITY_LIMITER_MAX_BUCKETS = 10_000;
 const GUEST_IDENTITY_LIMITER_IDLE_EVICTION_MILLIS = 10 * 60 * 1000;
+const FRESH_AUTH_LIMITER_CAPACITY = 10;
+const FRESH_AUTH_LIMITER_REFILL_PER_SECOND = 1;
+const FRESH_AUTH_LIMITER_MAX_BUCKETS = 10_000;
+const FRESH_AUTH_LIMITER_IDLE_EVICTION_MILLIS = 10 * 60 * 1000;
 
 export interface ProductionServerEnvironment extends NetworkBoundaryEnvironment, PersistenceEnv {
   readonly PORT?: string;
@@ -64,6 +74,15 @@ export interface StartProductionServerOptions {
   readonly exitOnAuthorityLoss?: boolean;
   /** Test-only: injects a monotonic clock into the single per-process /identity/guest limiter to avoid real sleeps. */
   readonly guestIdentityLimiterClock?: MonotonicClock;
+  /** Test-only: injects a monotonic clock into the single per-process fresh-auth (BattleRoom.onAuth) limiter. */
+  readonly freshAuthLimiterClock?: MonotonicClock;
+  /**
+   * Test-only: a pre-built NetworkBoundaryConfig, bypassing environment-based
+   * parseNetworkBoundaryConfig() entirely. Lets network-boundary tests inject
+   * exact Origin allowlists/rate limits/monotonic clocks programmatically
+   * without duplicating server composition.
+   */
+  readonly networkBoundaryConfigOverride?: NetworkBoundaryConfig;
 }
 
 export interface ProductionServerHandle {
@@ -193,12 +212,13 @@ export async function startProductionServer(
   let restoreNetworkBoundary: (() => void) | undefined;
   let persistenceRuntime: PersistenceRuntime | undefined;
   let identityPool: Pool | undefined;
+  let productionRoomDependenciesInstallation: ProductionRoomDependenciesInstallation | undefined;
   let canonicalRoomWatcher: ReturnType<typeof setInterval> | undefined;
 
   try {
     const port = options.port ?? parsePort(environment.PORT);
     const shutdownTimeoutSeconds = parseShutdownTimeoutSeconds(environment);
-    const networkBoundaryConfig = parseNetworkBoundaryConfig(environment);
+    const networkBoundaryConfig = options.networkBoundaryConfigOverride ?? parseNetworkBoundaryConfig(environment);
     const securityMode = describeNetworkBoundaryMode(networkBoundaryConfig);
     const operationalDetails = {
       securityMode,
@@ -278,6 +298,7 @@ export async function startProductionServer(
         await gameServer?.gracefullyShutdown(false);
         await closed;
         restoreNetworkBoundary?.();
+        productionRoomDependenciesInstallation?.restore();
         await persistenceRuntime?.shutdown();
         await identityPool?.end().catch(() => undefined);
       })();
@@ -318,6 +339,24 @@ export async function startProductionServer(
     // connection string PersistenceRuntime itself resolved (pure function
     // of the same environment).
     identityPool = createPersistencePool(readMigrationStatusDatabaseUrl(environment));
+
+    const freshAuthLimiter = new PeerRateLimiter({
+      capacity: FRESH_AUTH_LIMITER_CAPACITY,
+      refillRatePerSecond: FRESH_AUTH_LIMITER_REFILL_PER_SECOND,
+      maxBuckets: FRESH_AUTH_LIMITER_MAX_BUCKETS,
+      idleEvictionMs: FRESH_AUTH_LIMITER_IDLE_EVICTION_MILLIS,
+      monotonicNow: options.freshAuthLimiterClock
+    });
+
+    productionRoomDependenciesInstallation = installProductionRoomDependencies(
+      createProductionRoomDependencies({
+        worldId: persistenceRuntime.worldId,
+        writerEpoch: persistenceRuntime.writerEpoch,
+        pool: identityPool,
+        writer: persistenceRuntime.writer,
+        freshAuthLimiter
+      })
+    );
 
     registerProductionRooms(gameServer);
 
@@ -422,6 +461,7 @@ export async function startProductionServer(
     lifecycle.markFailed();
     await gameServer?.gracefullyShutdown(false).catch(() => undefined);
     restoreNetworkBoundary?.();
+    productionRoomDependenciesInstallation?.restore();
     await persistenceRuntime?.shutdown().catch(() => undefined);
     await identityPool?.end().catch(() => undefined);
     log('error', 'startup_failed', operationalErrorDetails(error));
