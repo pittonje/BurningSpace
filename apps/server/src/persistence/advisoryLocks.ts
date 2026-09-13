@@ -76,3 +76,18 @@ export async function acquireAdvisorySharedLock(client: Client, lock: AdvisoryLo
 export async function releaseAdvisorySharedLock(client: Client, lock: AdvisoryLockKey): Promise<void> {
   await client.query('SELECT pg_advisory_unlock_shared($1, $2)', [lock.key[0], lock.key[1]]);
 }
+
+/**
+ * Non-blocking runtime acquisition: a live application process holds
+ * SCHEMA_MAINTENANCE_LOCK in shared mode for its entire lifetime, which is
+ * incompatible with pg_advisory_lock()'s session-blocking semantics used by
+ * acquireAdvisorySharedLock above (Packet-2 migration path). Runtime callers
+ * poll this instead and apply their own bounded retry using monotonic time.
+ */
+export async function tryAcquireAdvisorySharedLock(client: Client, lock: AdvisoryLockKey): Promise<boolean> {
+  const result = await client.query<{ locked: boolean }>('SELECT pg_try_advisory_lock_shared($1, $2) AS locked', [
+    lock.key[0],
+    lock.key[1]
+  ]);
+  return result.rows[0]?.locked ?? false;
+}

@@ -1,7 +1,7 @@
 import { createServer, type RequestListener, type Server as HttpServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { Server } from 'colyseus';
+import { Server, matchMaker } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import {
   createOperationalLogger,
@@ -10,6 +10,12 @@ import {
   RuntimeLifecycle,
   type OperationalLogSink
 } from './ops/runtimeLifecycle.js';
+import type { PersistenceEnv } from './persistence/config.js';
+import {
+  bootPersistenceRuntime,
+  type PersistenceRuntime,
+  type PersistenceRuntimeOptions
+} from './persistence/persistenceRuntime.js';
 import { registerProductionRooms } from './rooms/productionRoomRegistry.js';
 import {
   createWebSocketVerifyClient,
@@ -21,8 +27,10 @@ import {
 
 const DEFAULT_PORT = 2567;
 const HEALTH_BODY = JSON.stringify({ ok: true, service: 'burningspace-server' });
+const CANONICAL_BATTLE_ROOM_NAME = 'battle';
+const CANONICAL_ROOM_WATCH_INTERVAL_MILLIS = 5_000;
 
-export interface ProductionServerEnvironment extends NetworkBoundaryEnvironment {
+export interface ProductionServerEnvironment extends NetworkBoundaryEnvironment, PersistenceEnv {
   readonly PORT?: string;
   readonly BURNINGSPACE_SHUTDOWN_TIMEOUT_SECONDS?: string;
 }
@@ -33,11 +41,15 @@ export interface StartProductionServerOptions {
   readonly hostname?: string;
   readonly registerSignalHandlers?: boolean;
   readonly logSink?: OperationalLogSink;
+  readonly persistence?: Omit<PersistenceRuntimeOptions, 'environment' | 'onAuthorityLost'>;
+  /** Set false in tests: real production always terminates the process on authority loss. */
+  readonly exitOnAuthorityLoss?: boolean;
 }
 
 export interface ProductionServerHandle {
   readonly url: string;
   readonly lifecycle: RuntimeLifecycle;
+  readonly persistence: PersistenceRuntime;
   shutdown(signal?: 'SIGINT' | 'SIGTERM'): Promise<void>;
 }
 
@@ -129,6 +141,8 @@ export async function startProductionServer(
   let httpServer: HttpServer | undefined;
   let gameServer: Server | undefined;
   let restoreNetworkBoundary: (() => void) | undefined;
+  let persistenceRuntime: PersistenceRuntime | undefined;
+  let canonicalRoomWatcher: ReturnType<typeof setInterval> | undefined;
 
   try {
     const port = options.port ?? parsePort(environment.PORT);
@@ -154,7 +168,77 @@ export async function startProductionServer(
       })
     });
     gameServer.onShutdown(networkBoundary.restore);
+
+    let shutdownPromise: Promise<void> | undefined;
+    let teardownPromise: Promise<void> | undefined;
+    const signalHandlers = new Map<'SIGINT' | 'SIGTERM', () => void>();
+    const removeSignalHandlers = (): void => {
+      for (const [signal, handler] of signalHandlers) {
+        process.off(signal, handler);
+      }
+      signalHandlers.clear();
+    };
+
+    const performTeardown = (): Promise<void> => {
+      if (teardownPromise) {
+        return teardownPromise;
+      }
+      if (canonicalRoomWatcher) {
+        clearInterval(canonicalRoomWatcher);
+        canonicalRoomWatcher = undefined;
+      }
+      const closed = waitForHttpServerClose(httpServer as HttpServer);
+      teardownPromise = (async () => {
+        await gameServer?.gracefullyShutdown(false);
+        await closed;
+        restoreNetworkBoundary?.();
+        await persistenceRuntime?.shutdown();
+      })();
+      return teardownPromise;
+    };
+
+    let authorityLostHandled = false;
+    const handleAuthorityLost = (reason: string, cause?: unknown): void => {
+      if (authorityLostHandled) {
+        return;
+      }
+      authorityLostHandled = true;
+      log('error', 'startup_failed', {
+        ...operationalDetails,
+        errorName: 'PersistenceAuthorityLost',
+        errorMessage: reason,
+        ...(cause instanceof Error ? operationalErrorDetails(cause) : {})
+      });
+      lifecycle.markFailed();
+      const bounded = withTimeout(performTeardown(), shutdownTimeoutSeconds).catch(() => undefined);
+      if (options.exitOnAuthorityLoss !== false) {
+        void bounded.finally(() => {
+          process.exitCode = 1;
+          setImmediate(() => process.exit(1));
+        });
+      }
+    };
+
+    persistenceRuntime = await bootPersistenceRuntime({
+      ...options.persistence,
+      environment,
+      onAuthorityLost: handleAuthorityLost
+    });
+
     registerProductionRooms(gameServer);
+
+    const canonicalRoom = await matchMaker.createRoom(CANONICAL_BATTLE_ROOM_NAME, {});
+    persistenceRuntime.publishCanonicalRoomId(canonicalRoom.roomId);
+
+    canonicalRoomWatcher = setInterval(() => {
+      if (lifecycle.state !== 'ready') {
+        return;
+      }
+      if (!matchMaker.getLocalRoomById(canonicalRoom.roomId)) {
+        handleAuthorityLost('canonical_room_disposed_unexpectedly');
+      }
+    }, CANONICAL_ROOM_WATCH_INTERVAL_MILLIS);
+    canonicalRoomWatcher.unref?.();
 
     await new Promise<void>((resolveListen, rejectListen) => {
       const handleError = (error: Error): void => {
@@ -185,15 +269,6 @@ export async function startProductionServer(
 
     log('info', 'server_ready', operationalDetails);
 
-    let shutdownPromise: Promise<void> | undefined;
-    const signalHandlers = new Map<'SIGINT' | 'SIGTERM', () => void>();
-    const removeSignalHandlers = (): void => {
-      for (const [signal, handler] of signalHandlers) {
-        process.off(signal, handler);
-      }
-      signalHandlers.clear();
-    };
-
     const shutdown = (signal: 'SIGINT' | 'SIGTERM' = 'SIGTERM'): Promise<void> => {
       if (shutdownPromise) {
         return shutdownPromise;
@@ -204,14 +279,8 @@ export async function startProductionServer(
       }
 
       log('info', 'shutdown_started', { ...operationalDetails, signal });
-      const closed = waitForHttpServerClose(httpServer as HttpServer);
-      const gracefulShutdown = (async () => {
-        await gameServer?.gracefullyShutdown(false);
-        await closed;
-        restoreNetworkBoundary?.();
-      })();
 
-      shutdownPromise = withTimeout(gracefulShutdown, shutdownTimeoutSeconds)
+      shutdownPromise = withTimeout(performTeardown(), shutdownTimeoutSeconds)
         .then(() => {
           lifecycle.completeShutdown();
           removeSignalHandlers();
@@ -220,7 +289,6 @@ export async function startProductionServer(
         .catch((error: unknown) => {
           lifecycle.markFailed();
           removeSignalHandlers();
-          restoreNetworkBoundary?.();
           log('error', 'shutdown_failed', {
             ...operationalDetails,
             signal,
@@ -253,12 +321,14 @@ export async function startProductionServer(
     return {
       url: `http://${publicHost}:${listeningPort}`,
       lifecycle,
+      persistence: persistenceRuntime,
       shutdown
     };
   } catch (error) {
     lifecycle.markFailed();
     await gameServer?.gracefullyShutdown(false).catch(() => undefined);
     restoreNetworkBoundary?.();
+    await persistenceRuntime?.shutdown().catch(() => undefined);
     log('error', 'startup_failed', operationalErrorDetails(error));
     throw error;
   }

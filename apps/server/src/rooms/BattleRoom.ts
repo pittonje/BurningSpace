@@ -132,6 +132,9 @@ export class BattleRoom extends Room<BattleState> {
   private nextProjectileId = 1;
 
   onCreate(): void {
+    // Exactly one canonical world room per process (BS-ARCH-011): it must
+    // survive zero connected clients rather than self-disposing.
+    this.autoDispose = false;
     this.setState(new BattleState());
     this.onMessage<unknown>(ProfileClientMessages.SET_PROFILE, (client, message) => {
       this.handleSetProfile(client, message);
