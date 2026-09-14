@@ -200,19 +200,25 @@ Local acceptance evidence gathered (Packet 7):
   `burningspace_runtime` database connection, the updated durable-identity
   `public-arena-smoke.ts` and `external-staging-smoke.ts`, and a clean
   graceful shutdown — with full container/network cleanup afterward.
-- A discovered, documented, and worked-around defect: the production
-  `deploy/server.Dockerfile` runtime image does not package
-  `apps/server/db/migrations`, which every server boot needs for its
-  fail-closed schema-compatibility check. `deploy/server.Dockerfile` is
-  outside this task's authorized files, so it was not modified; see
-  [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md)
-  for the full writeup and the exact fix a future packet must apply before
-  any real staging rollout with persistence enabled.
 - A repository-only, never-applied real-staging PostgreSQL definition
   (`deploy/docker-compose.staging.db.yml` +
   `deploy/staging.db.env.example`) and its future operator sequence,
-  documented in the same plan.
+  documented in
+  [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).
 
-Next safe action: return the final Packet 7 commit HEAD to the Product
+**Packet 7 FIX1 (bounded post-Packet-7 correction):** Product Architect
+review of Packet 7 raised one blocker — the production
+`deploy/server.Dockerfile` runtime image did not package
+`apps/server/db/migrations`, which every server boot needs for its
+fail-closed schema-compatibility check, so an immutable image-only staging
+rollout would fail to boot. FIX1 corrected this by adding the single
+required `COPY` line to `deploy/server.Dockerfile`'s runtime stage, removed
+the CI-only bind-mount workaround, added an explicit CI packaging assertion
+against the built image, and re-validated the entire local acceptance
+evidence set (CI integration stack, backup/restore, full real-PostgreSQL
+test suite, typecheck/build) end-to-end with the corrected image. Full
+detail in `docs/ops/persist-002-staging-db-integration-plan.md`.
+
+Next safe action: return the final Packet 7 FIX1 commit HEAD to the Product
 Architect for exact-head inspection and first push/PR authorization. See
 `docs/handoffs/CURRENT.md`.

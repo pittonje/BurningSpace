@@ -140,17 +140,6 @@ services:
       BURNINGSPACE_WORLD_SLUG: public-arena
     networks:
       - burningspace_db
-    # Packet-7 discovered defect: deploy/server.Dockerfile's runtime target
-    # never copies apps/server/db/migrations, but every boot's fail-closed
-    # schema-compatibility check (apps/server/src/persistence/schemaMigrations.ts)
-    # reads those SQL files from disk regardless. server.Dockerfile is out of
-    # this packet's authorized scope (see docs/ops/persist-002-staging-db-integration-plan.md
-    # for the full defect writeup and the Dockerfile fix this unblocks). This
-    # CI-only read-only bind mount is a proof-scoped workaround, not a general
-    # fix -- it works only because CI has a full repository checkout;  a real
-    # host would not.
-    volumes:
-      - ./../apps/server/db/migrations:/app/apps/server/db/migrations:ro
 
 networks:
   burningspace_db:

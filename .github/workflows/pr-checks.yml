@@ -371,19 +371,8 @@ jobs:
             if (!Array.isArray(service.tmpfs) || !service.tmpfs.some((entry) => String(entry).startsWith('/tmp'))) {
               throw new Error(`${name} must retain its /tmp tmpfs.`);
             }
-            const volumes = service.volumes || [];
-            // server carries exactly one documented, read-only, CI-only
-            // exception: apps/server/db/migrations is required at every boot
-            // for the fail-closed schema-compatibility check but is not
-            // copied into the production runtime image (a discovered
-            // packaging defect out of this packet's scope -- see
-            // docs/ops/persist-002-staging-db-integration-plan.md). client
-            // must remain fully volume-free.
-            const allowedServerMount =
-              name === 'server' && volumes.length === 1 && volumes[0].read_only &&
-              String(volumes[0].target).endsWith('apps/server/db/migrations');
-            if (volumes.length > 0 && !allowedServerMount) {
-              throw new Error(`${name} bind mounts and persistent volumes are forbidden.`);
+            if (service.volumes && service.volumes.length > 0) {
+              throw new Error(`${name} bind mounts and persistent volumes are forbidden -- the runtime image must be self-contained.`);
             }
           }
           const clientNetworks = Object.keys(services.client.networks || {}).sort().join(',');
@@ -440,6 +429,29 @@ jobs:
           console.log(JSON.stringify({ ok: true, event: 'compose_hardening_validated', services: Object.keys(services).length }));
           NODE
           compose build server client migrator privilege-checker
+
+          server_image="$(node - "$RUNNER_TEMP/burningspace-compose.json" <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const model = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          if (model.services.server.volumes && model.services.server.volumes.length > 0) {
+            throw new Error('server must have no bind mounts -- the runtime image must be self-contained.');
+          }
+          console.log(model.services.server.image);
+          NODE
+          )"
+          echo '{"ok":true,"event":"server_service_has_no_migration_bind_mount"}'
+
+          docker run --rm --entrypoint test "$server_image" \
+            -f /app/apps/server/db/migrations/001_persistent_identity_foundation.sql
+          echo "{\"ok\":true,\"event\":\"runtime_image_contains_migration_authority_files\",\"image\":\"$server_image\"}"
+
+          runtime_user="$(docker run --rm --entrypoint whoami "$server_image")"
+          if [ "$runtime_user" != "node" ]; then
+            echo "server runtime image must run as the non-root node user, got: $runtime_user" >&2
+            exit 1
+          fi
+          echo "{\"ok\":true,\"event\":\"runtime_image_user_verified\",\"user\":\"$runtime_user\"}"
+
           compose up -d server client privilege-checker
 
           for name in migrator grantor privilege-checker; do

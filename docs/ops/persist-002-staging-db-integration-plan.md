@@ -30,47 +30,57 @@ PostgreSQL 17:
 None of this touched `apps/server/src/**`, any migration file, the accepted
 runtime authority model, or the real shared-host staging environment.
 
-## Known blocking prerequisite: `deploy/server.Dockerfile` packaging gap
+## `deploy/server.Dockerfile` packaging gap — discovered in Packet 7, corrected in FIX1
 
-**Discovered by Packet 7's real end-to-end proof, not yet fixed.**
-
-`apps/server/src/persistence/schemaMigrations.ts` resolves
-`apps/server/db/migrations` on disk, relative to the running module, and
-this directory is read on **every** server boot as part of the Packet-3
-fail-closed schema-compatibility check
+**Discovery (Packet 7):** `apps/server/src/persistence/schemaMigrations.ts`
+resolves `apps/server/db/migrations` on disk, relative to the running
+module, and this directory is read on **every** server boot as part of the
+Packet-3 fail-closed schema-compatibility check
 (`persistenceRuntime.ts`'s `verifyExactSchemaState`). The `runtime` build
-target in `deploy/server.Dockerfile` copies only the compiled
-`apps/server/dist` output and never copies `apps/server/db/migrations`
+target in `deploy/server.Dockerfile` copied only the compiled
+`apps/server/dist` output and never copied `apps/server/db/migrations`
 into the image. Before Packet 7, no packet had ever booted the real
 production server image against a real database, so this defect was never
 exercised or observed.
 
-Effect: the real production server image, run with a real `DATABASE_URL`
-exactly as `deploy/docker-compose.staging.yml` configures it, fails to
-start with `ENOENT: no such file or directory, scandir
-'/app/apps/server/db/migrations'` and retries forever.
+Effect at the time: the real production server image, run with a real
+`DATABASE_URL` exactly as `deploy/docker-compose.staging.yml` configures
+it, failed to start with `ENOENT: no such file or directory, scandir
+'/app/apps/server/db/migrations'` and retried forever. `deploy/server.Dockerfile`
+was outside PERSIST-002 Packet 7's authorized file list, so Packet 7 did
+not modify it and instead proved the rest of the CI integration topology
+using a CI-only, read-only bind mount of `apps/server/db/migrations` into
+the `server` service as a proof-scoped workaround (documented at the time
+as not applicable to a real, image-only host).
 
-`deploy/server.Dockerfile` is outside PERSIST-002 Packet 7's authorized
-file list, so Packet 7 did not modify it. Instead:
+**Correction (PERSIST-002 Packet 7 FIX1):** Product Architect review of
+Packet 7 raised this as the sole blocker — an immutable, image-only staging
+rollout would fail to boot. FIX1 adds exactly one line to
+`deploy/server.Dockerfile`'s `runtime` stage:
 
-- `deploy/docker-compose.staging.integration.yml`'s `server` service adds a
-  single, explicit, read-only bind mount of `apps/server/db/migrations`
-  into the container at the exact path the code expects
-  (`/app/apps/server/db/migrations`). This is a CI-only proof workaround —
-  it works only because the CI runner has a full repository checkout to
-  mount from.
-- `deploy/docker-compose.staging.db.yml` (the future real-staging
-  definition) does **not** attempt the same workaround, because a bind
-  mount from a source checkout does not translate to the immutable,
-  image-only deployment model the real shared-host staging environment
-  uses.
+```
+COPY --from=build --chown=node:node /app/apps/server/db/migrations ./apps/server/db/migrations
+```
 
-**Before any real staging rollout with persistence enabled, `deploy/server.Dockerfile`'s
-`runtime` target must be updated to also copy `apps/server/db/migrations`
-into the image** (a small, narrowly-scoped Dockerfile change — add one
-`COPY --from=build --chown=node:node /app/apps/server/db/migrations
-./apps/server/db/migrations` line). This is a real, load-bearing
-prerequisite for the sequence below, not an optional cleanup.
+The migration SQL authority files are now baked into the immutable runtime
+image itself. FIX1 removed the CI-only bind mount from
+`deploy/docker-compose.staging.integration.yml` entirely — the CI server
+now boots using only files baked into its own image, with no host mount of
+any kind. A packaging assertion was added to
+`.github/workflows/pr-checks.yml` that runs `docker run --entrypoint test
+<built server image> -f /app/apps/server/db/migrations/001_persistent_identity_foundation.sql`
+directly against the built image (independent of the running container or
+any mount) before the stack is brought up, and confirms the rendered
+`server` service carries no `volumes` entry at all. This was locally
+validated end-to-end: the full CI integration stack (postgres → migrator →
+grants → privilege-checker → server → both smoke scripts → graceful
+shutdown) passed with the server reading only its own baked-in migration
+files, and the future `deploy/docker-compose.staging.db.yml` +
+`deploy/docker-compose.staging.yml` overlay was re-rendered and confirmed
+to require no host migration mount either.
+
+This defect is fully resolved; the history above is preserved for audit
+rather than erased.
 
 ## Runtime / migrator / backup role separation
 
