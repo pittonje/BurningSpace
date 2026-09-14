@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../../.."
+  },
+  "include": [
+    "backup-dump.ts",
+    "backup-restore-verify.ts",
+    "db-privilege-check.ts",
+    "persistence-tooling.ts"
+  ]
+}

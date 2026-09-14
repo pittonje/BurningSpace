@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { resolve as resolvePath, dirname } from 'node:path';
 import { Client } from 'pg';
 import { redactDatabaseUrl } from '../../src/persistence/config.js';
 import { runMigrations } from '../../src/persistence/migrationRunner.js';
 import { bootstrapWorld } from '../../src/persistence/repositories/worldsRepository.js';
+import { POSTGRES_17_IMAGE, runCommand } from '../../scripts/persistence-tooling.js';
 
 /**
  * Short-lived direct connection for test-side assertions against canonical
@@ -124,4 +127,114 @@ export async function createBootstrappedTestDatabase(
       await dropTestDatabase(databaseName);
     }
   };
+}
+
+const ROLE_INIT_SCRIPT_PATH = resolvePath(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../../deploy/postgres/init/001-burningspace-roles.sh'
+);
+
+export interface RoleSeparatedPostgres {
+  readonly containerName: string;
+  readonly hostPort: number;
+  readonly adminUrl: string;
+  readonly migratorUrl: string;
+  readonly runtimeUrl: string;
+  readonly backupUrl: string;
+  stop(): Promise<void>;
+}
+
+async function isPostgresReachable(url: string): Promise<boolean> {
+  const client = new Client({ connectionString: url, connectionTimeoutMillis: 1_000 });
+  try {
+    await client.connect();
+    await client.end();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A DEDICATED, throwaway, role-separated PostgreSQL container (migrator/
+ * runtime/backup, exactly the deploy/postgres/init/001-burningspace-roles.sh
+ * model) on a Docker-assigned dynamic host port -- distinct from and never
+ * sharing state with the plain-admin deploy/docker-compose.test.db.yml
+ * harness the rest of the suite uses. Only backupRestore.test.ts needs the
+ * real role separation; every other real-PG test intentionally keeps using
+ * the simpler shared admin harness above.
+ */
+export async function startRoleSeparatedPostgres(): Promise<RoleSeparatedPostgres> {
+  const containerName = `bs_backup_test_${randomUUID().replace(/-/g, '')}`;
+  const dbName = 'burningspace';
+  const adminPassword = randomUUID();
+  const migratorPassword = randomUUID();
+  const runtimePassword = randomUUID();
+  const backupPassword = randomUUID();
+
+  const runResult = await runCommand('docker', [
+    'run',
+    '-d',
+    '--name',
+    containerName,
+    '-e',
+    `POSTGRES_DB=${dbName}`,
+    '-e',
+    'POSTGRES_USER=burningspace_admin',
+    '-e',
+    `POSTGRES_PASSWORD=${adminPassword}`,
+    '-e',
+    `BURNINGSPACE_MIGRATOR_PASSWORD=${migratorPassword}`,
+    '-e',
+    `BURNINGSPACE_RUNTIME_PASSWORD=${runtimePassword}`,
+    '-e',
+    `BURNINGSPACE_BACKUP_PASSWORD=${backupPassword}`,
+    '-p',
+    '127.0.0.1::5432',
+    '-v',
+    `${ROLE_INIT_SCRIPT_PATH}:/docker-entrypoint-initdb.d/001-burningspace-roles.sh:ro`,
+    POSTGRES_17_IMAGE
+  ]);
+
+  if (runResult.exitCode !== 0) {
+    throw new Error(`Failed to start role-separated PostgreSQL container: ${runResult.stderr.slice(0, 1000)}`);
+  }
+
+  const stop = async (): Promise<void> => {
+    await runCommand('docker', ['rm', '-f', containerName]);
+  };
+
+  try {
+    const portResult = await runCommand('docker', ['port', containerName, '5432/tcp']);
+    const portMatch = /:(\d+)\s*$/mu.exec(portResult.stdout.trim());
+
+    if (portResult.exitCode !== 0 || !portMatch) {
+      throw new Error(`Failed to resolve the published host port: ${portResult.stderr.slice(0, 500)}`);
+    }
+
+    const hostPort = Number(portMatch[1]);
+    const adminUrl = `postgres://burningspace_admin:${adminPassword}@127.0.0.1:${hostPort}/${dbName}`;
+    const migratorUrl = `postgres://burningspace_migrator:${migratorPassword}@127.0.0.1:${hostPort}/${dbName}`;
+    const runtimeUrl = `postgres://burningspace_runtime:${runtimePassword}@127.0.0.1:${hostPort}/${dbName}`;
+    const backupUrl = `postgres://burningspace_backup:${backupPassword}@127.0.0.1:${hostPort}/${dbName}`;
+
+    const readyDeadline = Date.now() + 30_000;
+    let ready = false;
+    while (Date.now() < readyDeadline) {
+      if (await isPostgresReachable(migratorUrl)) {
+        ready = true;
+        break;
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 300));
+    }
+
+    if (!ready) {
+      throw new Error('Role-separated PostgreSQL container did not become reachable in time.');
+    }
+
+    return { containerName, hostPort, adminUrl, migratorUrl, runtimeUrl, backupUrl, stop };
+  } catch (error) {
+    await stop().catch(() => undefined);
+    throw error;
+  }
 }

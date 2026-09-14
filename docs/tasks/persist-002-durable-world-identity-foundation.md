@@ -170,8 +170,49 @@ Do not claim battle-state durability.
 
 ## Status
 
-Packet 1 (this packet) is documentation/authority-only: it opens this task
-and reconciles stale PERSIST-001 lifecycle statements left over from before
-PR #85 merged. No runtime implementation is authorized by Packet 1.
+**IMPLEMENTATION COMPLETE LOCALLY. LOCAL ACCEPTANCE EVIDENCE COMPLETE.
+AWAITING INDEPENDENT REVIEWS, PR CHECKS, PRODUCT ARCHITECT ACCEPTANCE, AND
+HUMAN MERGE.**
 
-Next safe action: Execute PERSIST-002 Packet 2 — Migration foundation.
+All seven implementation packets are complete as local sequential commits
+on `feat/persist-002-durable-world-identity-foundation`. Not yet pushed, no
+PR opened, nothing merged, no staging deployment, no VPS/Contabo contact,
+no image publication.
+
+Local acceptance evidence gathered (Packet 7):
+
+- Full real-PostgreSQL test suite (48 files / 446 tests) green, 0 skipped,
+  0 failures, run against the real Packet-2 test database.
+- `apps/server/test/persistence/backupRestore.test.ts`: a real quiesced
+  `pg_dump`/`pg_restore` backup-and-restore cycle against real Docker
+  PostgreSQL 17, including durable identity/faction/credential-revocation
+  recovery, stale-writer-epoch lease non-reactivation after restore, and a
+  negative corrupted-dump SHA-256 integrity test — both tests pass, 0
+  skipped.
+- `apps/server/scripts/db-privilege-check.ts`: transactional (rollback-safe)
+  proof that `burningspace_runtime`/`burningspace_migrator`/
+  `burningspace_backup` each have exactly their intended privileges and no
+  more, run against the same roles the CI server container uses.
+- A CI-only ephemeral integration Compose stack
+  (`deploy/docker-compose.staging.integration.yml`) locally validated
+  end-to-end: hardening assertions, real migration + grants + privilege
+  check, the real production server booting against a real restricted
+  `burningspace_runtime` database connection, the updated durable-identity
+  `public-arena-smoke.ts` and `external-staging-smoke.ts`, and a clean
+  graceful shutdown — with full container/network cleanup afterward.
+- A discovered, documented, and worked-around defect: the production
+  `deploy/server.Dockerfile` runtime image does not package
+  `apps/server/db/migrations`, which every server boot needs for its
+  fail-closed schema-compatibility check. `deploy/server.Dockerfile` is
+  outside this task's authorized files, so it was not modified; see
+  [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md)
+  for the full writeup and the exact fix a future packet must apply before
+  any real staging rollout with persistence enabled.
+- A repository-only, never-applied real-staging PostgreSQL definition
+  (`deploy/docker-compose.staging.db.yml` +
+  `deploy/staging.db.env.example`) and its future operator sequence,
+  documented in the same plan.
+
+Next safe action: return the final Packet 7 commit HEAD to the Product
+Architect for exact-head inspection and first push/PR authorization. See
+`docs/handoffs/CURRENT.md`.
