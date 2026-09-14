@@ -33,7 +33,9 @@ import {
   installProductionRoomDependencies,
   type ProductionRoomDependenciesInstallation
 } from './persistence/productionRoomDependencies.js';
+import type { GameplayAuthorityTestHooks } from './persistence/gameplayAuthority.js';
 import { registerProductionRooms } from './rooms/productionRoomRegistry.js';
+import type { BattleRoom } from './rooms/BattleRoom.js';
 import {
   createWebSocketVerifyClient,
   describeNetworkBoundaryMode,
@@ -83,6 +85,16 @@ export interface StartProductionServerOptions {
    * without duplicating server composition.
    */
   readonly networkBoundaryConfigOverride?: NetworkBoundaryConfig;
+  /** Test-only: forwarded to gameplayAuthority.ts's createGameplayAuthority(). */
+  readonly gameplayAuthorityTestHooks?: GameplayAuthorityTestHooks;
+  /**
+   * Test-only: registers this class as the canonical 'battle' room instead
+   * of the real production BattleRoom (registerProductionRooms is
+   * skipped). Lets a test-only Room subclass (e.g. TestBattleRoom) inject
+   * a deterministic failure seam without any production code path ever
+   * depending on it.
+   */
+  readonly battleRoomClassOverride?: typeof BattleRoom;
 }
 
 export interface ProductionServerHandle {
@@ -351,14 +363,20 @@ export async function startProductionServer(
     productionRoomDependenciesInstallation = installProductionRoomDependencies(
       createProductionRoomDependencies({
         worldId: persistenceRuntime.worldId,
+        serverInstanceId: persistenceRuntime.serverInstanceId,
         writerEpoch: persistenceRuntime.writerEpoch,
         pool: identityPool,
         writer: persistenceRuntime.writer,
-        freshAuthLimiter
+        freshAuthLimiter,
+        gameplayAuthorityTestHooks: options.gameplayAuthorityTestHooks
       })
     );
 
-    registerProductionRooms(gameServer);
+    if (options.battleRoomClassOverride) {
+      gameServer.define(CANONICAL_BATTLE_ROOM_NAME, options.battleRoomClassOverride);
+    } else {
+      registerProductionRooms(gameServer);
+    }
 
     const canonicalRoom = await matchMaker.createRoom(CANONICAL_BATTLE_ROOM_NAME, {});
     persistenceRuntime.publishCanonicalRoomId(canonicalRoom.roomId);

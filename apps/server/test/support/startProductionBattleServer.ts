@@ -1,4 +1,6 @@
 import { startProductionServer, type ProductionServerHandle } from '../../src/index.js';
+import type { BattleRoom } from '../../src/rooms/BattleRoom.js';
+import type { GameplayAuthorityTestHooks } from '../../src/persistence/gameplayAuthority.js';
 import type { OperationalLogSink } from '../../src/ops/runtimeLifecycle.js';
 import type { NetworkBoundaryConfig } from '../../src/security/networkBoundary.js';
 import type { MonotonicClock } from '../../src/security/tokenBucketRateLimiter.js';
@@ -54,6 +56,10 @@ export interface StartProductionBattleServerOptions {
   readonly guestIdentityLimiterClock?: MonotonicClock;
   /** Test-only: captures operational log lines (e.g. to prove no raw secret is ever logged). */
   readonly logSink?: OperationalLogSink;
+  /** Test-only: forwarded to gameplayAuthority.ts's createGameplayAuthority(). */
+  readonly gameplayAuthorityTestHooks?: GameplayAuthorityTestHooks;
+  /** Test-only: registers this class as the canonical 'battle' room instead of the real BattleRoom. */
+  readonly battleRoomClassOverride?: typeof BattleRoom;
 }
 
 export interface ProductionBattleServerHandle {
@@ -96,7 +102,9 @@ export async function startProductionBattleServer(
       networkBoundaryConfigOverride: options.networkBoundaryConfig,
       freshAuthLimiterClock: options.freshAuthLimiterClock,
       guestIdentityLimiterClock: options.guestIdentityLimiterClock,
-      logSink: options.logSink
+      logSink: options.logSink,
+      gameplayAuthorityTestHooks: options.gameplayAuthorityTestHooks,
+      battleRoomClassOverride: options.battleRoomClassOverride
     });
   } catch (error) {
     await server?.shutdown('SIGTERM').catch(() => undefined);

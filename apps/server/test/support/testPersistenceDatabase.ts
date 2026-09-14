@@ -4,6 +4,24 @@ import { redactDatabaseUrl } from '../../src/persistence/config.js';
 import { runMigrations } from '../../src/persistence/migrationRunner.js';
 import { bootstrapWorld } from '../../src/persistence/repositories/worldsRepository.js';
 
+/**
+ * Short-lived direct connection for test-side assertions against canonical
+ * durable state (never used by production code, which only ever goes
+ * through the application Pool via the narrow repositories).
+ */
+export async function withDirectConnection<T>(
+  databaseUrl: string,
+  fn: (client: Client) => Promise<T>
+): Promise<T> {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    return await fn(client);
+  } finally {
+    await client.end();
+  }
+}
+
 export const ADMIN_DATABASE_URL =
   process.env.BURNINGSPACE_TEST_DATABASE_URL ??
   'postgres://burningspace_test_admin:burningspace_test_password@127.0.0.1:55432/burningspace_test';

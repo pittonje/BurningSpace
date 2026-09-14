@@ -269,6 +269,73 @@ export async function renewWorldWriter(client: Queryable, params: RenewWorldWrit
   return result.rows[0]?.writer_expires_at ?? null;
 }
 
+export interface VerifyCurrentWriterParams {
+  readonly worldId: string;
+  readonly serverInstanceId: string;
+  readonly writerEpoch: bigint;
+}
+
+export interface VerifiedWriter {
+  readonly dbNow: Date;
+}
+
+/**
+ * Locks the world row (FOR UPDATE) for the duration of the caller's
+ * transaction and verifies, using DB time, that this exact process is
+ * CURRENTLY the live writer: active lifecycle, supported domain version,
+ * matching instance/epoch, and an unexpired writer lease. Intended to be
+ * called as the first step inside a durable gameplay-authority transaction
+ * (world -> player -> credential -> membership -> session lease lock
+ * order); Packet-3's in-memory isControlSafe() remains a useful cheap gate
+ * BEFORE opening the transaction, but this is the authoritative DB-verified
+ * check INSIDE it. Returns null (never throws) on any mismatch so callers
+ * uniformly roll back and report writer_authority_lost.
+ */
+export async function lockAndVerifyCurrentWriter(
+  client: Queryable,
+  params: VerifyCurrentWriterParams
+): Promise<VerifiedWriter | null> {
+  const result = await client.query<{
+    lifecycle_status: 'active' | 'retired';
+    domain_version: number;
+    writer_instance_id: string | null;
+    writer_epoch: string;
+    writer_expires_at: Date | null;
+    db_now: Date;
+  }>(
+    `SELECT lifecycle_status, domain_version, writer_instance_id, writer_epoch, writer_expires_at, clock_timestamp() AS db_now
+     FROM worlds WHERE world_id = $1 FOR UPDATE`,
+    [params.worldId]
+  );
+  const row = result.rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  const isVerified =
+    row.lifecycle_status === WORLD_LIFECYCLE_ACTIVE &&
+    row.domain_version === SUPPORTED_DOMAIN_VERSION &&
+    row.writer_instance_id === params.serverInstanceId &&
+    BigInt(row.writer_epoch) === params.writerEpoch &&
+    row.writer_expires_at !== null &&
+    row.writer_expires_at.getTime() > row.db_now.getTime();
+
+  return isVerified ? { dbNow: row.db_now } : null;
+}
+
+/**
+ * Increments worlds.state_revision by exactly one. Callers are responsible
+ * for calling this exactly once per semantic durable transition (never for
+ * retries, heartbeats, or metadata-only changes) -- see gameplayAuthority.ts.
+ */
+export async function incrementWorldStateRevision(client: Queryable, worldId: string): Promise<void> {
+  await client.query(
+    'UPDATE worlds SET state_revision = state_revision + 1, updated_at = clock_timestamp() WHERE world_id = $1',
+    [worldId]
+  );
+}
+
 export interface ReleaseWorldWriterParams {
   readonly worldId: string;
   readonly serverInstanceId: string;

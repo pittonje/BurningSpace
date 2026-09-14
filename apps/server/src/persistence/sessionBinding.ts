@@ -10,8 +10,16 @@ export interface SessionBinding {
   readonly worldId: string;
   connectionGeneration: number;
   controlAllowed: boolean;
-  /** Reserved for Packet 6's gameplay lease fencing; always undefined here. */
+  /** The exact durable gameplay lease this session currently holds, if any. */
   leaseId?: string;
+  /** Mirrors the DB lease status this binding was last known to hold. */
+  leaseStatus?: 'active' | 'recovering';
+}
+
+export interface ActiveLeaseBinding {
+  readonly sessionId: string;
+  readonly playerId: string;
+  readonly leaseId: string;
 }
 
 export interface BindFreshSessionAuth {
@@ -77,5 +85,40 @@ export class SessionBindingRegistry {
 
   remove(sessionId: string): boolean {
     return this.bindings.delete(sessionId);
+  }
+
+  setLease(sessionId: string, leaseId: string, status: 'active' | 'recovering'): void {
+    const binding = this.bindings.get(sessionId);
+
+    if (binding) {
+      binding.leaseId = leaseId;
+      binding.leaseStatus = status;
+    }
+  }
+
+  clearLease(sessionId: string): void {
+    const binding = this.bindings.get(sessionId);
+
+    if (binding) {
+      binding.leaseId = undefined;
+      binding.leaseStatus = undefined;
+    }
+  }
+
+  /**
+   * A point-in-time copy for the room-level lease heartbeat: only sessions
+   * that are currently control-allowed with a logically active (not
+   * recovering) lease are eligible for renewal.
+   */
+  snapshotActiveLeaseBindings(): ActiveLeaseBinding[] {
+    const snapshot: ActiveLeaseBinding[] = [];
+
+    for (const binding of this.bindings.values()) {
+      if (binding.controlAllowed && binding.leaseStatus === 'active' && binding.leaseId !== undefined) {
+        snapshot.push({ sessionId: binding.sessionId, playerId: binding.playerId, leaseId: binding.leaseId });
+      }
+    }
+
+    return snapshot;
   }
 }

@@ -115,11 +115,53 @@ export async function isCredentialActiveForPlayer(
   return (result.rowCount ?? 0) > 0;
 }
 
+/**
+ * Locks the exact credential row for the duration of the caller's
+ * transaction and verifies it belongs to the exact durable player and is
+ * not revoked. Never reveals the verifier/hash. Used inside gameplay-
+ * authority transactions (world -> player -> credential -> ...); the
+ * client-supplied playerId is never trusted elsewhere, only this
+ * server-resolved (from Packet-5 auth) pair is checked here.
+ */
+export async function lockActiveCredentialForPlayer(
+  client: Queryable,
+  playerId: string,
+  credentialId: string
+): Promise<boolean> {
+  const result = await client.query<{ revoked_at: Date | null }>(
+    'SELECT revoked_at FROM player_credentials WHERE player_id = $1 AND credential_id = $2 FOR UPDATE',
+    [playerId, credentialId]
+  );
+  const row = result.rows[0];
+  return row !== undefined && row.revoked_at === null;
+}
+
+/**
+ * Releases every active/recovering gameplay lease that references this
+ * credential, using one DB timestamp for both expires_at and updated_at
+ * (migration 001's released-state CHECK requires expires_at <= updated_at).
+ * Callers must invoke this in the SAME transaction as setting revoked_at so
+ * a revoked credential can never keep gameplay authority.
+ */
+async function releaseLeasesForCredential(client: Queryable, playerId: string, credentialId: string): Promise<void> {
+  await client.query(
+    `WITH db_time AS (SELECT clock_timestamp() AS now)
+     UPDATE active_session_leases
+     SET status = 'released', reconnect_deadline = NULL,
+         expires_at = (SELECT now FROM db_time), updated_at = (SELECT now FROM db_time)
+     WHERE player_id = $1 AND credential_id = $2 AND status <> 'released'`,
+    [playerId, credentialId]
+  );
+}
+
 export type RevokeCredentialResult = 'revoked' | 'already_revoked' | 'not_found';
 
 /**
  * Revocation never deletes the row and never clears a revoked_at that is
- * already set. Manages its own transaction and row lock.
+ * already set. Manages its own transaction and row lock. Any active/
+ * recovering gameplay lease referencing this credential is released in the
+ * SAME transaction, so a revoked credential can never retain gameplay
+ * authority.
  */
 export async function revokeCredential(
   client: Queryable,
@@ -148,6 +190,7 @@ export async function revokeCredential(
       'UPDATE player_credentials SET revoked_at = clock_timestamp() WHERE player_id = $1 AND credential_id = $2',
       [playerId, credentialId]
     );
+    await releaseLeasesForCredential(client, playerId, credentialId);
     await client.query('COMMIT');
     return 'revoked';
   } catch (error) {
@@ -173,9 +216,11 @@ export type RotateCredentialResult =
  * liveness, revoke it, then insert the replacement -- all in one
  * transaction so no COMMIT can ever be observed with two active
  * credentials for the same player (migration 001's partial unique index
- * would reject that anyway). A failed insert rolls back the revocation
- * too, so a failed rotation never leaves the player without its previously
- * active credential. The caller generates the replacement raw secret via
+ * would reject that anyway). Any active/recovering gameplay lease
+ * referencing the old credential is released in the same transaction. A
+ * failed insert rolls back the revocation (and lease release) too, so a
+ * failed rotation never leaves the player without its previously active
+ * credential. The caller generates the replacement raw secret via
  * credential.ts and discards it if this returns anything but 'rotated'.
  */
 export async function rotateCredential(
@@ -210,6 +255,7 @@ export async function rotateCredential(
     await client.query('UPDATE player_credentials SET revoked_at = clock_timestamp() WHERE credential_id = $1', [
       currentCredentialId
     ]);
+    await releaseLeasesForCredential(client, playerId, currentCredentialId);
 
     const insertResult = await client.query<{ credential_id: string }>(
       `INSERT INTO player_credentials (player_id, credential_version, algorithm, credential_hash)

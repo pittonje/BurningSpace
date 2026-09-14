@@ -381,11 +381,24 @@ describe('production reconnect ownership lifecycle', () => {
     expect(changedShips).toBeGreaterThan(0);
 
     const sequence = network.getOwnShipSnapshot()?.lastProcessedInput ?? 0;
-    network.sendPlayerInput(playerInput(true));
-    await waitFor(
-      () => requireShip(observer, sessionId).lastProcessedInput > sequence,
-      'automatic client input after reconnect'
-    );
+    // Packet 6's reconnect gate re-verifies durable lease/credential/writer
+    // authority (several sequential DB round trips) after the transport
+    // itself already reports "connected"; a single input packet sent right
+    // at that boundary may legitimately arrive before revalidation closes
+    // and be correctly dropped (fail-closed), exactly as a real client's
+    // continuous input stream would ride out. Resend on a short interval
+    // rather than asserting exactly-once delivery immediately on reconnect.
+    const resendInterval = setInterval(() => {
+      network.sendPlayerInput(playerInput(true));
+    }, 100);
+    try {
+      await waitFor(
+        () => requireShip(observer, sessionId).lastProcessedInput > sequence,
+        'automatic client input after reconnect'
+      );
+    } finally {
+      clearInterval(resendInterval);
+    }
 
     await network.disconnect();
     const stateCount = states.length;
@@ -477,8 +490,13 @@ describe('production reconnect ownership lifecycle', () => {
     expect(observer.state.participants.has(sessionId)).toBe(true);
     expect(ownerCount(observer, sessionId)).toBe(1);
 
-    const reconnected = await createClient(server.url, ALLOWED_ORIGIN)
-      .reconnect<BattleStateSchema>(token);
+    // Packet 6's reconnect gate re-verifies durable lease/credential/writer
+    // authority (several sequential DB round trips) after Colyseus's own
+    // transport-level reconnection reservation settles; retry briefly
+    // rather than asserting the very first attempt always wins that race,
+    // exactly like this file's own reconnectWhenReady() helper does for
+    // the other reconnect scenarios above.
+    const reconnected = await reconnectWhenReady(createClient(server.url, ALLOWED_ORIGIN), token);
     rooms.push(reconnected);
     expect(reconnected.sessionId).toBe(sessionId);
     await waitFor(() => ownerCount(observer, sessionId) === 1, 'allowed-Origin reconnect');

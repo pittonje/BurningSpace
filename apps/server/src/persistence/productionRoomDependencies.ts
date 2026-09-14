@@ -4,6 +4,17 @@ import { parseCredential } from './credential.js';
 import { findActiveCredentialByHash, isCredentialActiveForPlayer } from './repositories/credentialsRepository.js';
 import type { PeerRateLimiter } from '../security/peerRateLimiter.js';
 import { SessionBindingRegistry } from './sessionBinding.js';
+import {
+  createGameplayAuthority,
+  type ApplyPlayerProfileContext,
+  type ApplyProfileContext,
+  type GameplayAuthorityTestHooks,
+  type LeaseSessionParams,
+  type MarkRecoveringOutcome,
+  type ProfileTransactionResult,
+  type ResumeSessionParams,
+  type ResumeSessionResult
+} from './gameplayAuthority.js';
 
 /**
  * Narrow, server-private authentication result. Never carries the raw
@@ -33,16 +44,25 @@ export interface ProductionRoomDependencies {
   authenticateCredential(rawCredential: unknown): Promise<DurableRoomAuth | undefined>;
   revalidateCredential(playerId: string, credentialId: string): Promise<boolean>;
   getAuthPeerKey(context: AuthContext): string;
+  applySpectatorProfile(context: ApplyProfileContext): Promise<ProfileTransactionResult>;
+  applyPlayerProfile(context: ApplyPlayerProfileContext): Promise<ProfileTransactionResult>;
+  markSessionRecovering(params: LeaseSessionParams): Promise<MarkRecoveringOutcome>;
+  resumeRecoveringSession(params: ResumeSessionParams): Promise<ResumeSessionResult>;
+  releaseSessionLease(params: { readonly playerId: string; readonly leaseId: string }): Promise<boolean>;
+  renewGameplayLease(params: LeaseSessionParams): Promise<boolean>;
 }
 
 const FALLBACK_PEER_KEY = 'matchmaking-peer';
 
 export interface CreateProductionRoomDependenciesOptions {
   readonly worldId: string;
+  readonly serverInstanceId: string;
   readonly writerEpoch: bigint;
   readonly pool: Pool;
   readonly writer: WriterAuthoritySafe;
   readonly freshAuthLimiter: PeerRateLimiter;
+  /** Test-only: forwarded to gameplayAuthority.ts's createGameplayAuthority(). */
+  readonly gameplayAuthorityTestHooks?: GameplayAuthorityTestHooks;
 }
 
 /**
@@ -63,6 +83,15 @@ export function createProductionRoomDependencies(
   options: CreateProductionRoomDependenciesOptions
 ): ProductionRoomDependencies {
   const sessionBindings = new SessionBindingRegistry();
+  const gameplayAuthority = createGameplayAuthority(
+    {
+      pool: options.pool,
+      worldId: options.worldId,
+      serverInstanceId: options.serverInstanceId,
+      writerEpoch: options.writerEpoch
+    },
+    options.gameplayAuthorityTestHooks
+  );
 
   return {
     worldId: options.worldId,
@@ -96,6 +125,36 @@ export function createProductionRoomDependencies(
       }
 
       return isCredentialActiveForPlayer(options.pool, playerId, credentialId);
+    },
+    // Packet-5 pattern: a cheap local isControlSafe() gate BEFORE ever
+    // opening a transaction, in addition to (never instead of) the
+    // DB-verified writer check gameplayAuthority performs INSIDE each
+    // transaction.
+    applySpectatorProfile: async (context) => {
+      if (!options.writer.isControlSafe()) {
+        return { kind: 'writer_authority_lost' };
+      }
+      return gameplayAuthority.applySpectatorProfile(context);
+    },
+    applyPlayerProfile: async (context) => {
+      if (!options.writer.isControlSafe()) {
+        return { kind: 'writer_authority_lost' };
+      }
+      return gameplayAuthority.applyPlayerProfile(context);
+    },
+    markSessionRecovering: (params) => gameplayAuthority.markSessionRecovering(params),
+    resumeRecoveringSession: async (params) => {
+      if (!options.writer.isControlSafe()) {
+        return { outcome: 'rejected', reason: 'writer_authority_lost' };
+      }
+      return gameplayAuthority.resumeRecoveringSession(params);
+    },
+    releaseSessionLease: (params) => gameplayAuthority.releaseSessionLease(params),
+    renewGameplayLease: async (params) => {
+      if (!options.writer.isControlSafe()) {
+        return false;
+      }
+      return gameplayAuthority.renewGameplayLease(params);
     }
   };
 }
