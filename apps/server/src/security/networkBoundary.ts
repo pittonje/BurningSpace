@@ -340,6 +340,23 @@ export function isRequestOriginAllowed(
   return evaluateOrigin(config, originHeader).allowed;
 }
 
+export interface HttpOriginEvaluation {
+  readonly allowed: boolean;
+  readonly normalizedOrigin?: string;
+}
+
+/**
+ * Reuses the same private Origin evaluation the WebSocket/matchmaking path
+ * already owns, so plain HTTP endpoints (guest identity, world discovery)
+ * never duplicate normalization or allowlist logic.
+ */
+export function evaluateRequestOrigin(
+  config: NetworkBoundaryConfig,
+  originHeader: string | readonly string[] | undefined
+): HttpOriginEvaluation {
+  return evaluateOrigin(config, originHeader);
+}
+
 export function getActiveNetworkBoundaryConfig(): NetworkBoundaryConfig {
   for (let index = installations.length - 1; index >= 0; index -= 1) {
     const installation = installations[index];

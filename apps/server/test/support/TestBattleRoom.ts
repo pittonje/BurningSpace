@@ -3,12 +3,14 @@ import {
   NETWORK_SHIP_MAX_HEALTH,
   NETWORK_SHIP_RADIUS,
   WORLD_HEIGHT,
-  WORLD_WIDTH
+  WORLD_WIDTH,
+  type Faction
 } from '@burningspace/shared';
 import { BattleRoom } from '../../src/rooms/BattleRoom.js';
 
 export const TestRoomMessages = {
-  SET_SHIP_STATE: 'test:setShipState'
+  SET_SHIP_STATE: 'test:setShipState',
+  FORCE_UPSERT_SHIP_FAILURE_ONCE: 'test:forceUpsertShipFailureOnce'
 } as const;
 
 interface TestSetShipStateMessage {
@@ -45,11 +47,36 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 export class TestBattleRoom extends BattleRoom {
+  private forceNextUpsertShipFailure = false;
+
   override onCreate(): void {
     super.onCreate();
     this.onMessage<unknown>(TestRoomMessages.SET_SHIP_STATE, (_client: Client, message) => {
       this.handleSetShipState(message);
     });
+    this.onMessage<unknown>(TestRoomMessages.FORCE_UPSERT_SHIP_FAILURE_ONCE, (_client: Client) => {
+      this.forceUpsertShipFailureOnce();
+    });
+  }
+
+  /**
+   * Test-only deterministic seam for the spawn-failure compensation
+   * scenario (PERSIST-002 Packet 6): the NEXT call to upsertShip() throws
+   * instead of creating/updating the ship, simulating a transient failure
+   * AFTER the durable profile transaction has already committed.
+   * Production BattleRoom is never affected -- this only exists on this
+   * test-only subclass.
+   */
+  forceUpsertShipFailureOnce(): void {
+    this.forceNextUpsertShipFailure = true;
+  }
+
+  protected override upsertShip(sessionId: string, nickname: string, faction: Faction): void {
+    if (this.forceNextUpsertShipFailure) {
+      this.forceNextUpsertShipFailure = false;
+      throw new Error('Synthetic ship spawn failure for test.');
+    }
+    super.upsertShip(sessionId, nickname, faction);
   }
 
   private handleSetShipState(message: unknown): void {

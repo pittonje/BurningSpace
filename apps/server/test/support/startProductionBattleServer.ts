@@ -1,27 +1,14 @@
-import { createServer, type Server as HttpServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { Server } from 'colyseus';
-import { WebSocketTransport } from '@colyseus/ws-transport';
-import { registerProductionRooms } from '../../src/rooms/productionRoomRegistry.js';
-import {
-  createWebSocketVerifyClient,
-  installNetworkBoundary,
-  parseNetworkBoundaryConfig,
-  type NetworkBoundaryConfig
-} from '../../src/security/networkBoundary.js';
-
-export interface StartProductionBattleServerOptions {
-  readonly networkBoundaryConfig?: NetworkBoundaryConfig;
-}
+import { startProductionServer, type ProductionServerHandle } from '../../src/index.js';
+import type { BattleRoom } from '../../src/rooms/BattleRoom.js';
+import type { GameplayAuthorityTestHooks } from '../../src/persistence/gameplayAuthority.js';
+import type { OperationalLogSink } from '../../src/ops/runtimeLifecycle.js';
+import type { NetworkBoundaryConfig } from '../../src/security/networkBoundary.js';
+import type { MonotonicClock } from '../../src/security/tokenBucketRateLimiter.js';
+import { createBootstrappedTestDatabase, type BootstrappedTestDatabase } from './testPersistenceDatabase.js';
 
 const PM2_TELEMETRY_FILTER_MARKER = Symbol.for(
   'burningspace.test.pm2-telemetry-worker-filter'
 );
-
-export interface ProductionBattleServerHandle {
-  readonly url: string;
-  stop(): Promise<void>;
-}
 
 function isPm2TelemetryMessage(message: unknown): boolean {
   return (
@@ -61,94 +48,78 @@ function installPm2TelemetryFilterForWorkerIpc(): void {
   process.send = filteredSend;
 }
 
-function closeHttpServer(httpServer: HttpServer): Promise<void> {
-  return new Promise((resolve, reject) => {
-    httpServer.close((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
-  });
+export interface StartProductionBattleServerOptions {
+  readonly networkBoundaryConfig?: NetworkBoundaryConfig;
+  /** Test-only: injects a monotonic clock into the fresh-auth (BattleRoom.onAuth) limiter. */
+  readonly freshAuthLimiterClock?: MonotonicClock;
+  /** Test-only: injects a monotonic clock into the /identity/guest limiter. */
+  readonly guestIdentityLimiterClock?: MonotonicClock;
+  /** Test-only: captures operational log lines (e.g. to prove no raw secret is ever logged). */
+  readonly logSink?: OperationalLogSink;
+  /** Test-only: forwarded to gameplayAuthority.ts's createGameplayAuthority(). */
+  readonly gameplayAuthorityTestHooks?: GameplayAuthorityTestHooks;
+  /** Test-only: registers this class as the canonical 'battle' room instead of the real BattleRoom. */
+  readonly battleRoomClassOverride?: typeof BattleRoom;
 }
 
+export interface ProductionBattleServerHandle {
+  readonly url: string;
+  /** The disposable real-PostgreSQL database backing this server instance. */
+  readonly databaseUrl: string;
+  readonly worldId: string;
+  stop(): Promise<void>;
+}
+
+/**
+ * A thin composition around the real startProductionServer: boots real
+ * Packet-3 persistence against a fresh disposable+migrated+bootstrapped
+ * database, real Packet-4 identity/discovery HTTP routes, and real
+ * Packet-5 productionRoomDependencies/durable BattleRoom auth. No
+ * persistence bypass, no auth bypass, no env flag to disable auth --
+ * callers authenticate via the same public HTTP/matchmaking boundaries
+ * production traffic uses (see testIdentityHelper.ts).
+ */
 export async function startProductionBattleServer(
   options: StartProductionBattleServerOptions = {}
 ): Promise<ProductionBattleServerHandle> {
-  const networkBoundaryConfig = options.networkBoundaryConfig ??
-    parseNetworkBoundaryConfig({ NODE_ENV: 'test' });
-  const httpServer = createServer((request, response) => {
-    if (request.url === '/health') {
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ ok: true, service: 'burningspace-server' }));
-      return;
-    }
-
-    response.writeHead(404, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ ok: false, error: 'not_found' }));
-  });
   installPm2TelemetryFilterForWorkerIpc();
-  const networkBoundary = installNetworkBoundary(networkBoundaryConfig);
 
-  let gameServer: Server;
+  let database: BootstrappedTestDatabase | undefined;
+  let server: ProductionServerHandle | undefined;
 
   try {
-    gameServer = new Server({
-      transport: new WebSocketTransport({
-        server: httpServer,
-        verifyClient: createWebSocketVerifyClient(networkBoundaryConfig)
-      })
+    database = await createBootstrappedTestDatabase();
+
+    server = await startProductionServer({
+      environment: {
+        NODE_ENV: options.networkBoundaryConfig?.production ? 'production' : 'test',
+        DATABASE_URL: database.databaseUrl
+      },
+      port: 0,
+      hostname: '127.0.0.1',
+      registerSignalHandlers: false,
+      exitOnAuthorityLoss: false,
+      networkBoundaryConfigOverride: options.networkBoundaryConfig,
+      freshAuthLimiterClock: options.freshAuthLimiterClock,
+      guestIdentityLimiterClock: options.guestIdentityLimiterClock,
+      logSink: options.logSink,
+      gameplayAuthorityTestHooks: options.gameplayAuthorityTestHooks,
+      battleRoomClassOverride: options.battleRoomClassOverride
     });
   } catch (error) {
-    networkBoundary.restore();
+    await server?.shutdown('SIGTERM').catch(() => undefined);
+    await database?.drop().catch(() => undefined);
     throw error;
   }
 
-  try {
-    registerProductionRooms(gameServer);
-
-    await new Promise<void>((resolve, reject) => {
-      const handleError = (error: Error): void => {
-        httpServer.off('listening', handleListening);
-        reject(error);
-      };
-      const handleListening = (): void => {
-        httpServer.off('error', handleError);
-        resolve();
-      };
-
-      httpServer.once('error', handleError);
-      httpServer.once('listening', handleListening);
-      httpServer.listen(0, '127.0.0.1');
-    });
-  } catch (error) {
-    await gameServer.gracefullyShutdown(false).catch(() => undefined);
-
-    if (httpServer.listening) {
-      await closeHttpServer(httpServer).catch(() => undefined);
-    }
-
-    networkBoundary.restore();
-    throw error;
-  }
-
-  const address = httpServer.address();
-
-  if (!address || typeof address === 'string') {
-    await gameServer.gracefullyShutdown(false).catch(() => undefined);
-    if (httpServer.listening) {
-      await closeHttpServer(httpServer).catch(() => undefined);
-    }
-    networkBoundary.restore();
-    throw new Error('Unable to resolve production BattleRoom test server address.');
-  }
-
+  const runningServer = server;
+  const runningDatabase = database;
   let stopped = false;
 
   return {
-    url: `http://127.0.0.1:${(address as AddressInfo).port}`,
+    url: runningServer.url,
+    databaseUrl: runningDatabase.databaseUrl,
+    worldId: runningDatabase.worldId,
     async stop(): Promise<void> {
       if (stopped) {
         return;
@@ -156,13 +127,9 @@ export async function startProductionBattleServer(
 
       stopped = true;
       try {
-        await gameServer.gracefullyShutdown(false).catch(() => undefined);
-
-        if (httpServer.listening) {
-          await closeHttpServer(httpServer).catch(() => undefined);
-        }
+        await runningServer.shutdown('SIGTERM');
       } finally {
-        networkBoundary.restore();
+        await runningDatabase.drop().catch(() => undefined);
       }
     }
   };

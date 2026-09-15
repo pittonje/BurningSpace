@@ -2,7 +2,7 @@
 
 Owner: Product Architect
 Risk: HIGH ARCHITECTURE IMPACT / DOCUMENTATION-ONLY
-Status: ARCHITECTURE/SECURITY REVIEW APPROVED / PA ACCEPTED / AWAITING HUMAN MERGE
+Status: MERGED / CLOSED (PR #85, merge commit `98bda8f5bed41112f5687eb4ef2fd52a0c82950a`)
 Date: 2026-09-13
 Branch: `arch/persist-001-persistence-identity`
 Base/main: `3b3621d248a73f67e1bed89cd3c267d5539f2c34`
@@ -37,7 +37,8 @@ restriction does not override these explicit starting instructions.
 | Persistence successor | Explicit human PA task plus canonical Wave 2 gates | Authorized architecture task only |
 | Prior governance | Governance, BS-ARCH-001-007, BS-PROC-001-004 | Preserved; no historical accepted record edits |
 | Independent Architecture/Security review | `docs/reviews/persist-001-architecture-security-review.md`, reviewed commit `356b2f94573c3be641296a26fff727158063ed36` | APPROVE; 0 BLOCKER / 0 HIGH / 0 MEDIUM |
-| Product Architect disposition | PA accepted the reviewed PERSIST-001 architecture in chat on 2026-09-13 | ACCEPTED; PERSIST-002 may open only as a separate bounded implementation task after merge |
+| Product Architect disposition | PA accepted the reviewed PERSIST-001 architecture in chat on 2026-09-13 | ACCEPTED |
+| Human merge | PR #85 merged into `origin/main` as `98bda8f5bed41112f5687eb4ef2fd52a0c82950a` | MERGED / CLOSED; PERSIST-002 opened as a separate bounded implementation task |
 
 ## Exact documentation scope
 
@@ -88,7 +89,8 @@ The independent Architecture/Security review is complete and recorded at
 [docs/reviews/persist-001-architecture-security-review.md](../reviews/persist-001-architecture-security-review.md),
 bound to commit `356b2f94573c3be641296a26fff727158063ed36`, with verdict **APPROVE** and
 0 BLOCKER / 0 HIGH / 0 MEDIUM. Product Architect accepted PERSIST-001 after that
-review. Human-only merge policy remains.
+review. PR #85 was subsequently human-merged as `98bda8f5bed41112f5687eb4ef2fd52a0c82950a`.
+Human-only merge policy remains.
 
 ## Validation and commits
 
@@ -111,8 +113,8 @@ Architecture reviewed commit: `356b2f94573c3be641296a26fff727158063ed36`.
 Decisions BS-ARCH-008 through BS-ARCH-011 are accepted under the explicitly
 delegated PA decision authority. Existing 35 accepted records remain unchanged.
 Independent combined Architecture/Security review is complete and APPROVED;
-Product Architect final acceptance is complete. PERSIST-001 is awaiting human
-merge only.
+Product Architect final acceptance is complete. PERSIST-001 is MERGED / CLOSED
+via PR #85, merge commit `98bda8f5bed41112f5687eb4ef2fd52a0c82950a`.
 
 [Architecture](../architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md) defines
 storage/identity/session/world lifecycle, concrete schema/transaction boundaries,
@@ -140,11 +142,12 @@ Architecture/Security review while this task and CURRENT still contained the
 pre-review `READY FOR REVIEW` checkpoint and no in-repository review artifact.
 
 The independent review artifact and this documentation-only reconciliation close
-that mismatch. The failed wrapper is not claimed as a successful QA run. Exact-head
-Core and automated QA are expected to rerun on the evidence follow-up commit.
+that mismatch. The failed wrapper is not claimed as a successful QA run.
 
-Next action: obtain green exact-head required checks on the documentation evidence
-follow-up, then human-merge PR #85. Do not start PERSIST-002 before merge.
+PR #85 was subsequently human-merged as `98bda8f5bed41112f5687eb4ef2fd52a0c82950a`.
+PERSIST-001 is MERGED / CLOSED. PERSIST-002 is opened as a separate bounded
+implementation task; see
+[PERSIST-002 — Durable World & Identity Foundation](persist-002-durable-world-identity-foundation.md).
 
 ## Mechanical validation evidence
 

@@ -232,11 +232,14 @@ Make the existing multiplayer foundation safe to extend.
 
 **PERSIST-001 gate disposition, 2026-09-13:** storage, identity, sessions, world
 lifecycle, migration/rollback and consistency are defined by accepted BS-ARCH-008
-through BS-ARCH-011 under explicitly delegated PA authority. The architecture
-task is in REVIEW, pending independent Architecture/Security review and final PA
-task acceptance. PERSIST-002 is not started or authorized. This does not complete
+through BS-ARCH-011 under explicitly delegated PA authority. Independent
+Architecture/Security review APPROVED (0 BLOCKER / 0 HIGH / 0 MEDIUM) and Product
+Architect accepted the reviewed architecture; PERSIST-001 is MERGED / CLOSED via
+PR #85 (merge commit `98bda8f5bed41112f5687eb4ef2fd52a0c82950a`). PERSIST-002 is
+now open as a separate bounded implementation task. This does not complete
 Wave 2 or classify future campaign battle state. See the
-[architecture and acceptance contract](../architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md).
+[architecture and acceptance contract](../architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md)
+and [PERSIST-002](../tasks/persist-002-durable-world-identity-foundation.md).
 
 **Purpose**
 

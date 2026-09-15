@@ -24,6 +24,11 @@ import {
   startProductionBattleServer,
   type ProductionBattleServerHandle
 } from './support/startProductionBattleServer.js';
+import {
+  createInMemoryIdentityStorage,
+  createTestGuestIdentity,
+  joinCanonicalBattleRoom
+} from './support/testIdentityHelper.js';
 
 const ALLOWED_ORIGIN = 'https://play.example.com';
 const HOSTILE_ORIGIN = 'https://hostile.example';
@@ -219,8 +224,8 @@ describe('production reconnect ownership lifecycle', () => {
       throw new Error('Production reconnect test server is not running.');
     }
 
-    const room = await createClient(server.url, origin)
-      .joinOrCreate<BattleStateSchema>('battle');
+    const { credential } = await createTestGuestIdentity(server.url, origin);
+    const room = await joinCanonicalBattleRoom<BattleStateSchema>(server.url, credential, origin);
     room.onMessage(ServerMessages.ROOM_INFO, () => undefined);
     rooms.push(room);
     await waitFor(
@@ -336,7 +341,7 @@ describe('production reconnect ownership lifecycle', () => {
     });
     const observer = await join();
     await setPlayerProfile(observer, 'AutoObserver', 'blue');
-    const network = new NetworkClient({ serverUrl: server.url });
+    const network = new NetworkClient({ serverUrl: server.url, identityStorage: createInMemoryIdentityStorage() });
     networkClients.push(network);
     const states: ConnectionState[] = [];
     let addedShips = 0;
@@ -376,11 +381,24 @@ describe('production reconnect ownership lifecycle', () => {
     expect(changedShips).toBeGreaterThan(0);
 
     const sequence = network.getOwnShipSnapshot()?.lastProcessedInput ?? 0;
-    network.sendPlayerInput(playerInput(true));
-    await waitFor(
-      () => requireShip(observer, sessionId).lastProcessedInput > sequence,
-      'automatic client input after reconnect'
-    );
+    // Packet 6's reconnect gate re-verifies durable lease/credential/writer
+    // authority (several sequential DB round trips) after the transport
+    // itself already reports "connected"; a single input packet sent right
+    // at that boundary may legitimately arrive before revalidation closes
+    // and be correctly dropped (fail-closed), exactly as a real client's
+    // continuous input stream would ride out. Resend on a short interval
+    // rather than asserting exactly-once delivery immediately on reconnect.
+    const resendInterval = setInterval(() => {
+      network.sendPlayerInput(playerInput(true));
+    }, 100);
+    try {
+      await waitFor(
+        () => requireShip(observer, sessionId).lastProcessedInput > sequence,
+        'automatic client input after reconnect'
+      );
+    } finally {
+      clearInterval(resendInterval);
+    }
 
     await network.disconnect();
     const stateCount = states.length;
@@ -472,8 +490,13 @@ describe('production reconnect ownership lifecycle', () => {
     expect(observer.state.participants.has(sessionId)).toBe(true);
     expect(ownerCount(observer, sessionId)).toBe(1);
 
-    const reconnected = await createClient(server.url, ALLOWED_ORIGIN)
-      .reconnect<BattleStateSchema>(token);
+    // Packet 6's reconnect gate re-verifies durable lease/credential/writer
+    // authority (several sequential DB round trips) after Colyseus's own
+    // transport-level reconnection reservation settles; retry briefly
+    // rather than asserting the very first attempt always wins that race,
+    // exactly like this file's own reconnectWhenReady() helper does for
+    // the other reconnect scenarios above.
+    const reconnected = await reconnectWhenReady(createClient(server.url, ALLOWED_ORIGIN), token);
     rooms.push(reconnected);
     expect(reconnected.sessionId).toBe(sessionId);
     await waitFor(() => ownerCount(observer, sessionId) === 1, 'allowed-Origin reconnect');
@@ -524,7 +547,7 @@ describe('production reconnect ownership lifecycle', () => {
     server = await startProductionBattleServer({
       networkBoundaryConfig: testConfig({ reconnectGraceSeconds: 1 })
     });
-    const failing = new NetworkClient({ serverUrl: server.url });
+    const failing = new NetworkClient({ serverUrl: server.url, identityStorage: createInMemoryIdentityStorage() });
     networkClients.push(failing);
     let failureState: ConnectionState = { status: 'disconnected' };
     failing.onConnectionStateChanged((state) => { failureState = state; });
@@ -550,7 +573,7 @@ describe('production reconnect ownership lifecycle', () => {
     expect(reconnectAttempts).toBe(5);
     expect(failingAccess.reconnectionToken).toBeUndefined();
 
-    const cancellable = new NetworkClient({ serverUrl: server.url });
+    const cancellable = new NetworkClient({ serverUrl: server.url, identityStorage: createInMemoryIdentityStorage() });
     networkClients.push(cancellable);
     await cancellable.connect();
     const cancellableAccess = cancellable as unknown as NetworkClientInternalAccess;

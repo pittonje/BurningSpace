@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NetworkClient, type ConnectionState } from '../src/network/NetworkClient';
 import {
   classifyInitialConnectionError,
@@ -7,6 +7,31 @@ import {
   getPlayerConnectionErrorMessage,
   type ConnectionErrorCategory
 } from '../src/network/connectionPresentation';
+
+const FAKE_STORED_IDENTITY = {
+  version: 1,
+  playerId: '11111111-2222-4333-8444-555555555555',
+  credential: `bsc1_${'A'.repeat(43)}`
+};
+const FAKE_ROOM_ID = 'canonical-room-id';
+
+function stubIdentityAndDiscovery(): void {
+  const store = new Map<string, string>([[
+    'burningspace.identity.v1',
+    JSON.stringify(FAKE_STORED_IDENTITY)
+  ]]);
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => store.set(key, value),
+    removeItem: (key: string) => store.delete(key)
+  });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true, roomId: FAKE_ROOM_ID }), { status: 200 })
+    )
+  );
+}
 
 type Callback<TArgs extends unknown[]> = (...args: TArgs) => void;
 
@@ -37,7 +62,7 @@ interface TestRoom {
 
 interface NetworkClientInternals {
   client: {
-    joinOrCreate: ReturnType<typeof vi.fn>;
+    joinById: ReturnType<typeof vi.fn>;
     reconnect: ReturnType<typeof vi.fn>;
   };
   room?: TestRoom;
@@ -140,19 +165,19 @@ function deferred<T>(): Deferred<T> {
 function createHarness(): {
   network: NetworkClient;
   internals: NetworkClientInternals;
-  joinOrCreate: ReturnType<typeof vi.fn>;
+  joinById: ReturnType<typeof vi.fn>;
   reconnect: ReturnType<typeof vi.fn>;
 } {
   const network = new NetworkClient({ serverUrl: 'http://127.0.0.1:2567' });
   const internals = network as unknown as NetworkClientInternals;
-  const joinOrCreate = vi.fn();
+  const joinById = vi.fn();
   const reconnect = vi.fn();
-  internals.client.joinOrCreate = joinOrCreate;
+  internals.client.joinById = joinById;
   internals.client.reconnect = reconnect;
   internals.registerParticipantListeners = vi.fn();
   internals.registerShipListeners = vi.fn();
   internals.registerProjectileListeners = vi.fn();
-  return { network, internals, joinOrCreate, reconnect };
+  return { network, internals, joinById, reconnect };
 }
 
 function collectStates(network: NetworkClient): ConnectionState[] {
@@ -162,13 +187,44 @@ function collectStates(network: NetworkClient): ConnectionState[] {
 }
 
 async function flushPromises(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
+  // Identity resolution + discovery fetch now sit before joinById in
+  // connectInternal, each contributing extra microtask ticks.
+  for (let i = 0; i < 8; i += 1) {
+    await Promise.resolve();
+  }
 }
+
+const MAX_CONDITION_TICKS = 200;
+
+/**
+ * Polls a synchronous condition across microtask ticks instead of counting
+ * a fixed number of Promise.resolve() ticks. connectInternal's async chain
+ * (identity resolution -> discovery fetch -> response.json() -> joinById)
+ * has no fixed microtask depth guaranteed across Node/runtime versions, so
+ * a hardcoded tick count is timing-fragile (it passed locally but failed in
+ * CI). This waits for the actual observable effect instead, bounded so a
+ * genuine regression still fails fast rather than hanging.
+ */
+async function waitForCondition(condition: () => boolean): Promise<void> {
+  for (let i = 0; i < MAX_CONDITION_TICKS; i += 1) {
+    if (condition()) {
+      return;
+    }
+
+    await Promise.resolve();
+  }
+
+  throw new Error(`Condition was not satisfied within ${MAX_CONDITION_TICKS} microtask ticks.`);
+}
+
+beforeEach(() => {
+  stubIdentityAndDiscovery();
+});
 
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('connection presentation', () => {
@@ -216,22 +272,24 @@ describe('connection presentation', () => {
 
 describe('NetworkClient lifecycle ownership', () => {
   it('moves idle to connecting to connected and suppresses duplicate initial connects', async () => {
-    const { network, joinOrCreate } = createHarness();
+    const { network, joinById } = createHarness();
     const room = createTestRoom('initial');
     const pendingJoin = deferred<TestRoom>();
-    joinOrCreate.mockReturnValueOnce(pendingJoin.promise);
+    joinById.mockReturnValueOnce(pendingJoin.promise);
     const states = collectStates(network);
 
     const first = network.connect();
     const duplicate = network.connect();
 
-    expect(joinOrCreate).toHaveBeenCalledTimes(1);
     expect(network.getConnectionState()).toMatchObject({
       status: 'connecting',
       lifecycle: 'connecting',
       operation: 'initial_connect',
       recovery: 'none'
     });
+
+    await waitForCondition(() => joinById.mock.calls.length > 0);
+    expect(joinById).toHaveBeenCalledTimes(1);
 
     pendingJoin.resolve(room);
     await Promise.all([first, duplicate]);
@@ -245,8 +303,8 @@ describe('NetworkClient lifecycle ownership', () => {
   });
 
   it('keeps an initial failure terminal and starts retry as a fresh operation', async () => {
-    const { network, internals, joinOrCreate } = createHarness();
-    joinOrCreate.mockRejectedValueOnce(new Error('MATCHMAKE failure at https://internal.example?token=secret'));
+    const { network, internals, joinById } = createHarness();
+    joinById.mockRejectedValueOnce(new Error('MATCHMAKE failure at https://internal.example?token=secret'));
 
     await network.connect();
     const failedEpoch = internals.connectionEpoch;
@@ -267,7 +325,7 @@ describe('NetworkClient lifecycle ownership', () => {
 
     const retryRoom = createTestRoom('retry');
     const retryJoin = deferred<TestRoom>();
-    joinOrCreate.mockReturnValueOnce(retryJoin.promise);
+    joinById.mockReturnValueOnce(retryJoin.promise);
     const retry = network.connect();
     expect(internals.connectionEpoch).toBe(failedEpoch + 1);
     expect(network.getConnectionState()).toMatchObject({ lifecycle: 'connecting', operation: 'initial_connect' });
@@ -278,10 +336,10 @@ describe('NetworkClient lifecycle ownership', () => {
 
   it('reports loss and reconnecting, suppresses duplicate reconnect work, and reports actual success', async () => {
     vi.useFakeTimers();
-    const { network, joinOrCreate, reconnect } = createHarness();
+    const { network, joinById, reconnect } = createHarness();
     const firstRoom = createTestRoom('first');
     const secondRoom = createTestRoom('second');
-    joinOrCreate.mockResolvedValueOnce(firstRoom);
+    joinById.mockResolvedValueOnce(firstRoom);
     reconnect.mockResolvedValueOnce(secondRoom);
     const states = collectStates(network);
     await network.connect();
@@ -301,7 +359,7 @@ describe('NetworkClient lifecycle ownership', () => {
     await vi.advanceTimersByTimeAsync(250);
     await retryDuringReconnect;
 
-    expect(joinOrCreate).toHaveBeenCalledTimes(1);
+    expect(joinById).toHaveBeenCalledTimes(1);
     expect(reconnect).toHaveBeenCalledTimes(1);
     expect(network.getConnectionState()).toMatchObject({
       status: 'connected',
@@ -317,8 +375,8 @@ describe('NetworkClient lifecycle ownership', () => {
   });
 
   it('returns consented disconnect to idle without starting reconnect work', async () => {
-    const { network, joinOrCreate, reconnect } = createHarness();
-    joinOrCreate.mockResolvedValueOnce(createTestRoom('consented'));
+    const { network, joinById, reconnect } = createHarness();
+    joinById.mockResolvedValueOnce(createTestRoom('consented'));
     await network.connect();
 
     await Promise.all([network.disconnect(), network.disconnect()]);
@@ -333,16 +391,16 @@ describe('NetworkClient lifecycle ownership', () => {
   });
 
   it('prevents a new connect from racing a pending explicit disconnect', async () => {
-    const { network, joinOrCreate } = createHarness();
+    const { network, joinById } = createHarness();
     const firstRoom = createTestRoom('disconnecting');
     const pendingLeave = deferred<void>();
     firstRoom.leave = vi.fn(() => pendingLeave.promise);
-    joinOrCreate.mockResolvedValueOnce(firstRoom);
+    joinById.mockResolvedValueOnce(firstRoom);
     await network.connect();
 
     const disconnect = network.disconnect();
     const connectDuringDisconnect = network.connect();
-    expect(joinOrCreate).toHaveBeenCalledTimes(1);
+    expect(joinById).toHaveBeenCalledTimes(1);
 
     pendingLeave.resolve();
     await Promise.all([disconnect, connectDuringDisconnect]);
@@ -352,17 +410,17 @@ describe('NetworkClient lifecycle ownership', () => {
       operation: 'none'
     });
 
-    joinOrCreate.mockResolvedValueOnce(createTestRoom('after-disconnect'));
+    joinById.mockResolvedValueOnce(createTestRoom('after-disconnect'));
     await network.connect();
-    expect(joinOrCreate).toHaveBeenCalledTimes(2);
+    expect(joinById).toHaveBeenCalledTimes(2);
     expect(network.getConnectionState().lifecycle).toBe('connected');
   });
 
   it('uses the unchanged bounded reconnect schedule, then permits a new connection', async () => {
     vi.useFakeTimers();
-    const { network, joinOrCreate, reconnect } = createHarness();
+    const { network, joinById, reconnect } = createHarness();
     const room = createTestRoom('failure');
-    joinOrCreate.mockResolvedValueOnce(room);
+    joinById.mockResolvedValueOnce(room);
     reconnect.mockRejectedValue(new Error('expired opaque-secret-token'));
     await network.connect();
 
@@ -387,18 +445,18 @@ describe('NetworkClient lifecycle ownership', () => {
     await vi.runAllTimersAsync();
     expect(reconnect).toHaveBeenCalledTimes(5);
 
-    joinOrCreate.mockResolvedValueOnce(createTestRoom('new-session'));
+    joinById.mockResolvedValueOnce(createTestRoom('new-session'));
     await network.connect();
-    expect(joinOrCreate).toHaveBeenCalledTimes(2);
+    expect(joinById).toHaveBeenCalledTimes(2);
     expect(network.getConnectionState().lifecycle).toBe('connected');
   });
 
   it('prevents a stale reconnected presentation timer from clearing a newer room error', async () => {
     vi.useFakeTimers();
-    const { network, joinOrCreate, reconnect } = createHarness();
+    const { network, joinById, reconnect } = createHarness();
     const firstRoom = createTestRoom('timer-first');
     const reconnectedRoom = createTestRoom('timer-reconnected');
-    joinOrCreate.mockResolvedValueOnce(firstRoom);
+    joinById.mockResolvedValueOnce(firstRoom);
     reconnect.mockResolvedValueOnce(reconnectedRoom);
     await network.connect();
 
@@ -417,12 +475,12 @@ describe('NetworkClient lifecycle ownership', () => {
   });
 
   it('rejects a stale prior operation after a newer operation succeeds', async () => {
-    const { network, internals, joinOrCreate } = createHarness();
+    const { network, internals, joinById } = createHarness();
     const firstJoin = deferred<TestRoom>();
     const secondJoin = deferred<TestRoom>();
     const staleRoom = createTestRoom('stale');
     const currentRoom = createTestRoom('current');
-    joinOrCreate.mockReturnValueOnce(firstJoin.promise).mockReturnValueOnce(secondJoin.promise);
+    joinById.mockReturnValueOnce(firstJoin.promise).mockReturnValueOnce(secondJoin.promise);
 
     const firstEpoch = internals.beginConnectionOperation();
     const firstOperation = internals.connectInternal(firstEpoch);
@@ -442,9 +500,9 @@ describe('NetworkClient lifecycle ownership', () => {
   });
 
   it('preserves callback compatibility and sanitizes active-room errors', async () => {
-    const { network, joinOrCreate } = createHarness();
+    const { network, joinById } = createHarness();
     const room = createTestRoom('callbacks');
-    joinOrCreate.mockResolvedValueOnce(room);
+    joinById.mockResolvedValueOnce(room);
     const callback = vi.fn();
     const unsubscribe = network.onConnectionStateChanged(callback);
     expect(callback).toHaveBeenLastCalledWith(expect.objectContaining({

@@ -1,0 +1,147 @@
+# PERSIST-002 Packet 7: CI-ONLY database integration overlay.
+#
+# Combined ONLY inside .github/workflows/pr-checks.yml, together with the
+# unmodified deploy/docker-compose.staging.yml and
+# deploy/docker-compose.staging.build.yml, to prove the full
+# persistence-aware staging topology (postgres + migrator + grantor +
+# privilege-checker + server + client) before any real staging rollout.
+#
+# This file is NEVER applied to any real host and carries no production
+# secrets: every password below is a fixed, obviously-fake, CI-only literal
+# (the same convention already used by deploy/docker-compose.test.db.yml),
+# scoped to a throwaway tmpfs-backed database that is destroyed at the end
+# of every CI run. Real staging preparation lives in the separate
+# deploy/docker-compose.staging.db.yml (never combined with this file) --
+# see docs/ops/persist-002-staging-db-integration-plan.md.
+
+name: burningspace-staging
+
+services:
+  postgres:
+    image: postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+    environment:
+      POSTGRES_DB: burningspace
+      POSTGRES_USER: burningspace_ci_admin
+      POSTGRES_PASSWORD: burningspace_ci_admin_password
+      BURNINGSPACE_MIGRATOR_PASSWORD: burningspace_ci_migrator_password
+      BURNINGSPACE_RUNTIME_PASSWORD: burningspace_ci_runtime_password
+      BURNINGSPACE_BACKUP_PASSWORD: burningspace_ci_backup_password
+    volumes:
+      - ./postgres/init/001-burningspace-roles.sh:/docker-entrypoint-initdb.d/001-burningspace-roles.sh:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    networks:
+      - burningspace_db
+    cpus: "1.00"
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U burningspace_ci_admin -d burningspace"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrator:
+    build:
+      context: ..
+      dockerfile: deploy/server.Dockerfile
+      target: build
+    networks:
+      - burningspace_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MIGRATION_DATABASE_URL: postgres://burningspace_migrator:burningspace_ci_migrator_password@postgres:5432/burningspace
+      BURNINGSPACE_WORLD_SLUG: public-arena
+    entrypoint: ["sh", "-c"]
+    command:
+      - "npx tsx apps/server/scripts/db-migrate.ts && npx tsx apps/server/scripts/world-bootstrap.ts"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cpus: "1.00"
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  grantor:
+    image: postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+    networks:
+      - burningspace_db
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    volumes:
+      - ./postgres/apply-runtime-grants.sql:/work/apply-runtime-grants.sql:ro
+    entrypoint: ["psql"]
+    command:
+      - "-v"
+      - "ON_ERROR_STOP=1"
+      - "--dbname"
+      - postgres://burningspace_migrator:burningspace_ci_migrator_password@postgres:5432/burningspace
+      - "--file"
+      - /work/apply-runtime-grants.sql
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cpus: "0.25"
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  privilege-checker:
+    build:
+      context: ..
+      dockerfile: deploy/server.Dockerfile
+      target: build
+    networks:
+      - burningspace_db
+    depends_on:
+      grantor:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://burningspace_runtime:burningspace_ci_runtime_password@postgres:5432/burningspace
+      MIGRATION_DATABASE_URL: postgres://burningspace_migrator:burningspace_ci_migrator_password@postgres:5432/burningspace
+      BACKUP_DATABASE_URL: postgres://burningspace_backup:burningspace_ci_backup_password@postgres:5432/burningspace
+    entrypoint: ["sh", "-c"]
+    command:
+      - "npx tsx apps/server/scripts/db-privilege-check.ts"
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cpus: "0.50"
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  server:
+    depends_on:
+      grantor:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://burningspace_runtime:burningspace_ci_runtime_password@postgres:5432/burningspace
+      BURNINGSPACE_WORLD_SLUG: public-arena
+    networks:
+      - burningspace_db
+
+networks:
+  burningspace_db:
+    driver: bridge
+    internal: true

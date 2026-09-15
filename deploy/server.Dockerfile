@@ -35,6 +35,7 @@ RUN npm ci --omit=dev --workspace @burningspace/server --include-workspace-root=
     && npm cache clean --force
 
 COPY --from=build --chown=node:node /app/apps/server/dist ./apps/server/dist
+COPY --from=build --chown=node:node /app/apps/server/db/migrations ./apps/server/db/migrations
 COPY --from=build --chown=node:node /app/packages/protocol/dist ./packages/protocol/dist
 COPY --from=build --chown=node:node /app/packages/shared/dist ./packages/shared/dist
 
