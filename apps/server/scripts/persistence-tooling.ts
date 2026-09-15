@@ -63,6 +63,14 @@ export function runCommand(
  * published port) into the form an ephemeral `docker run` container can use
  * to reach that same host port, via Docker's host-gateway alias. Only
  * rewrites the hostname; credentials/path/query are preserved unchanged.
+ *
+ * Only correct on Docker Desktop (Windows/Mac): there, `host.docker.internal`
+ * is resolved by Docker Desktop's own network proxy and reaches ports bound
+ * to the host's loopback interface. On native Linux Docker,
+ * `--add-host=host.docker.internal:host-gateway` instead resolves to the
+ * docker0 bridge gateway address, which can reach ports published on
+ * 0.0.0.0 but NOT ports published loopback-only (`-p 127.0.0.1::PORT`) --
+ * see resolveContainerDatabaseAccess, which is what callers should use.
  */
 export function toContainerReachableUrl(hostUrl: string): string {
   const url = new URL(hostUrl);
@@ -74,6 +82,39 @@ export function toContainerReachableUrl(hostUrl: string): string {
 
 /** Extra args needed on every `docker run` that uses toContainerReachableUrl's alias. */
 export const DOCKER_HOST_GATEWAY_ARGS = ['--add-host=host.docker.internal:host-gateway'];
+
+export interface ContainerDatabaseAccess {
+  /** The connection string the docker-run tool process should actually use. */
+  readonly dbUrl: string;
+  /** Extra `docker run` args needed for that connection string to be reachable. */
+  readonly dockerArgs: readonly string[];
+}
+
+/**
+ * Resolves how an ephemeral `docker run` tool container (pg_dump/pg_restore/
+ * psql) should reach a host-reachable Postgres URL, in a way that is
+ * reliable on both native Linux Docker (as used by GitHub Actions runners)
+ * and Docker Desktop (Windows/Mac, used by local developers).
+ *
+ * On Linux, `--network host` shares the host's network namespace directly
+ * with the short-lived, `--rm` tool container: a loopback-only-published
+ * port (e.g. `-p 127.0.0.1::5432`) is reached exactly as it would be from
+ * the host itself, with no hostname rewriting needed and no widening of the
+ * database's own published bind address. This also works unchanged for a
+ * real remote DATABASE_URL in operator usage, since host networking simply
+ * gives the container the host's own routing/DNS.
+ *
+ * On non-Linux platforms, `--network host` is not properly supported by
+ * Docker Desktop, so this falls back to the existing, already-working
+ * host-gateway rewrite (toContainerReachableUrl + DOCKER_HOST_GATEWAY_ARGS).
+ */
+export function resolveContainerDatabaseAccess(hostUrl: string): ContainerDatabaseAccess {
+  if (process.platform === 'linux') {
+    return { dbUrl: hostUrl, dockerArgs: ['--network', 'host'] };
+  }
+
+  return { dbUrl: toContainerReachableUrl(hostUrl), dockerArgs: DOCKER_HOST_GATEWAY_ARGS };
+}
 
 export async function sha256File(filePath: string): Promise<string> {
   const hash = createHash('sha256');
@@ -107,14 +148,14 @@ export interface PgDumpSnapshotOptions {
  * transaction open on a separate connection until this resolves.
  */
 export async function runPgDumpSnapshot(options: PgDumpSnapshotOptions): Promise<void> {
-  const containerUrl = toContainerReachableUrl(options.sourceUrl);
+  const access = resolveContainerDatabaseAccess(options.sourceUrl);
   const hostDir = dirname(options.outputPath);
   const fileName = basename(options.outputPath);
 
   const result = await runCommand('docker', [
     'run',
     '--rm',
-    ...DOCKER_HOST_GATEWAY_ARGS,
+    ...access.dockerArgs,
     '-v',
     `${hostDir}:/work`,
     POSTGRES_17_IMAGE,
@@ -125,7 +166,7 @@ export async function runPgDumpSnapshot(options: PgDumpSnapshotOptions): Promise
     '--file',
     `/work/${fileName}`,
     '--dbname',
-    containerUrl
+    access.dbUrl
   ]);
 
   if (result.exitCode !== 0) {
@@ -140,14 +181,14 @@ export interface PgRestoreOptions {
 }
 
 export async function runPgRestore(options: PgRestoreOptions): Promise<void> {
-  const containerUrl = toContainerReachableUrl(options.targetUrl);
+  const access = resolveContainerDatabaseAccess(options.targetUrl);
   const hostDir = dirname(options.dumpPath);
   const fileName = basename(options.dumpPath);
 
   const result = await runCommand('docker', [
     'run',
     '--rm',
-    ...DOCKER_HOST_GATEWAY_ARGS,
+    ...access.dockerArgs,
     '-v',
     `${hostDir}:/work`,
     POSTGRES_17_IMAGE,
@@ -156,7 +197,7 @@ export async function runPgRestore(options: PgRestoreOptions): Promise<void> {
     '--no-owner',
     '--no-privileges',
     '--dbname',
-    containerUrl,
+    access.dbUrl,
     `/work/${fileName}`
   ]);
 
@@ -166,14 +207,14 @@ export async function runPgRestore(options: PgRestoreOptions): Promise<void> {
 }
 
 export async function runPsqlFile(options: { readonly targetUrl: string; readonly sqlPath: string }): Promise<void> {
-  const containerUrl = toContainerReachableUrl(options.targetUrl);
+  const access = resolveContainerDatabaseAccess(options.targetUrl);
   const hostDir = dirname(options.sqlPath);
   const fileName = basename(options.sqlPath);
 
   const result = await runCommand('docker', [
     'run',
     '--rm',
-    ...DOCKER_HOST_GATEWAY_ARGS,
+    ...access.dockerArgs,
     '-v',
     `${hostDir}:/work`,
     POSTGRES_17_IMAGE,
@@ -181,7 +222,7 @@ export async function runPsqlFile(options: { readonly targetUrl: string; readonl
     '-v',
     'ON_ERROR_STOP=1',
     '--dbname',
-    containerUrl,
+    access.dbUrl,
     '--file',
     `/work/${fileName}`
   ]);

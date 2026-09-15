@@ -194,6 +194,29 @@ async function flushPromises(): Promise<void> {
   }
 }
 
+const MAX_CONDITION_TICKS = 200;
+
+/**
+ * Polls a synchronous condition across microtask ticks instead of counting
+ * a fixed number of Promise.resolve() ticks. connectInternal's async chain
+ * (identity resolution -> discovery fetch -> response.json() -> joinById)
+ * has no fixed microtask depth guaranteed across Node/runtime versions, so
+ * a hardcoded tick count is timing-fragile (it passed locally but failed in
+ * CI). This waits for the actual observable effect instead, bounded so a
+ * genuine regression still fails fast rather than hanging.
+ */
+async function waitForCondition(condition: () => boolean): Promise<void> {
+  for (let i = 0; i < MAX_CONDITION_TICKS; i += 1) {
+    if (condition()) {
+      return;
+    }
+
+    await Promise.resolve();
+  }
+
+  throw new Error(`Condition was not satisfied within ${MAX_CONDITION_TICKS} microtask ticks.`);
+}
+
 beforeEach(() => {
   stubIdentityAndDiscovery();
 });
@@ -265,7 +288,7 @@ describe('NetworkClient lifecycle ownership', () => {
       recovery: 'none'
     });
 
-    await flushPromises();
+    await waitForCondition(() => joinById.mock.calls.length > 0);
     expect(joinById).toHaveBeenCalledTimes(1);
 
     pendingJoin.resolve(room);
