@@ -61,10 +61,6 @@ jobs:
       - name: Run test suite
         run: npm test
 
-      - name: Stop real PostgreSQL test database
-        if: always()
-        run: docker compose -f deploy/docker-compose.test.db.yml -p burningspace-core-test-db down --volumes --remove-orphans
-
       - name: Build workspaces
         run: npm run build
         env:
@@ -78,6 +74,10 @@ jobs:
 
       - name: Network client callback diagnostic
         run: npx tsx apps/client/scripts/network-client-callback-check.ts
+
+      - name: Stop real PostgreSQL test database
+        if: always()
+        run: docker compose -f deploy/docker-compose.test.db.yml -p burningspace-core-test-db down --volumes --remove-orphans
 
       - name: Movement diagnostic
         run: npx tsx apps/server/scripts/movement-check.ts
