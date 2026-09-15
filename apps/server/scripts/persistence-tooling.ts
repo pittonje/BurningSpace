@@ -134,6 +134,26 @@ export class PersistenceToolError extends Error {
   }
 }
 
+/**
+ * On native Linux, a file the postgres:17 tool image writes into a
+ * bind-mounted host directory (pg_dump's output) is otherwise created
+ * container-root-owned: the invoking host user (e.g. the GitHub Actions
+ * runner user) can read it back but cannot overwrite it, which surfaces
+ * later as EACCES on a host-side write to that same path. Docker Desktop
+ * (Windows/Mac) does not exhibit this -- its bind-mount layer already
+ * reconciles ownership to the host user -- and `process.getuid`/`getgid`
+ * do not exist there, so this only ever applies on Linux. Only needed
+ * where the container actually WRITES a host-bind-mounted artifact
+ * (pg_dump); pg_restore and psql only read host-mounted files.
+ */
+function resolveLinuxBindMountWriterArgs(): readonly string[] {
+  if (process.platform !== 'linux' || typeof process.getuid !== 'function' || typeof process.getgid !== 'function') {
+    return [];
+  }
+
+  return ['--user', `${process.getuid()}:${process.getgid()}`];
+}
+
 export interface PgDumpSnapshotOptions {
   /** Host-reachable connection string (e.g. 127.0.0.1:<port>) for the SOURCE database, using a read-capable role. */
   readonly sourceUrl: string;
@@ -156,6 +176,7 @@ export async function runPgDumpSnapshot(options: PgDumpSnapshotOptions): Promise
     'run',
     '--rm',
     ...access.dockerArgs,
+    ...resolveLinuxBindMountWriterArgs(),
     '-v',
     `${hostDir}:/work`,
     POSTGRES_17_IMAGE,
