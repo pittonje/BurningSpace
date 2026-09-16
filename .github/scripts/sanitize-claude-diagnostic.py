@@ -32,6 +32,22 @@ CATEGORIES = {
     "success",
 }
 
+# Fixed, allowlisted subreason codes for execution_file_invalid -- never the
+# raw exception message or any source-record text. Extends observability for
+# a *future controlled run*; it does not retroactively establish which of
+# these applied to any historical run whose execution file was not captured.
+SUBREASON_CODES = {
+    "file_size_limit",
+    "record_count_limit",
+    "nesting_depth_limit",
+    "invalid_utf8",
+    "invalid_json",
+    "duplicate_json_key",
+    "null_byte",
+    "empty_file",
+    "unspecified",
+}
+
 SAFE_CODE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,79}$")
 SAFE_TYPE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,79}$")
 SAFE_MODEL_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$")
@@ -45,21 +61,29 @@ URL_QUERY_RE = re.compile(r"(https?://[^\s?]+)\?[^\s]+", re.IGNORECASE)
 
 
 class DiagnosticError(Exception):
-    """Expected safe diagnostic failure without source-record disclosure."""
+    """Expected safe diagnostic failure without source-record disclosure.
+
+    `code` must always be one of SUBREASON_CODES -- never a raw message or
+    source-record fragment. Callers that omit it get "unspecified".
+    """
+
+    def __init__(self, message: str, code: str = "unspecified") -> None:
+        super().__init__(message)
+        self.code = code if code in SUBREASON_CODES else "unspecified"
 
 
 def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
-            raise DiagnosticError("duplicate JSON key")
+            raise DiagnosticError("duplicate JSON key", code="duplicate_json_key")
         result[key] = value
     return result
 
 
 def check_depth(value: Any, depth: int = 0) -> None:
     if depth > MAX_DEPTH:
-        raise DiagnosticError("maximum nesting depth exceeded")
+        raise DiagnosticError("maximum nesting depth exceeded", code="nesting_depth_limit")
     if isinstance(value, dict):
         for child in value.values():
             check_depth(child, depth + 1)
@@ -73,17 +97,17 @@ def parse_records(path: str) -> list[Any]:
         raise FileNotFoundError
     size = os.path.getsize(path)
     if size > MAX_FILE_BYTES:
-        raise DiagnosticError("execution file exceeds size limit")
+        raise DiagnosticError("execution file exceeds size limit", code="file_size_limit")
     with open(path, "rb") as handle:
         raw = handle.read(MAX_FILE_BYTES + 1)
     if b"\x00" in raw:
-        raise DiagnosticError("execution file contains null byte")
+        raise DiagnosticError("execution file contains null byte", code="null_byte")
     try:
         text = raw.decode("utf-8", errors="strict")
     except UnicodeDecodeError as exc:
-        raise DiagnosticError("execution file is not valid UTF-8") from exc
+        raise DiagnosticError("execution file is not valid UTF-8", code="invalid_utf8") from exc
     if not text.strip():
-        raise DiagnosticError("execution file is empty")
+        raise DiagnosticError("execution file is empty", code="empty_file")
 
     def loads(candidate: str) -> Any:
         return json.loads(candidate, object_pairs_hook=reject_duplicate_keys)
@@ -99,9 +123,11 @@ def parse_records(path: str) -> list[Any]:
             try:
                 records.append(loads(line))
             except json.JSONDecodeError as exc:
-                raise DiagnosticError("execution file is neither valid JSON nor JSONL") from exc
+                raise DiagnosticError(
+                    "execution file is neither valid JSON nor JSONL", code="invalid_json"
+                ) from exc
     if len(records) > MAX_RECORDS:
-        raise DiagnosticError("execution file exceeds record limit")
+        raise DiagnosticError("execution file exceeds record limit", code="record_count_limit")
     for record in records:
         check_depth(record)
     return records
@@ -219,6 +245,7 @@ def inspect(records: list[Any]) -> dict[str, str]:
         "subtype": safe_scalar(result.get("subtype"), SAFE_TYPE_RE),
         "is error": str(result.get("is_error")).lower() if isinstance(result.get("is_error"), bool) else "unavailable",
         "error category": classify(final, structured_present),
+        "execution file subreason": "unavailable",
         "error code": code,
         "HTTP status": http_status,
         "provider error type": provider_type,
@@ -235,7 +262,7 @@ def inspect(records: list[Any]) -> dict[str, str]:
     }
 
 
-def empty_fields(file_state: str, category: str) -> dict[str, str]:
+def empty_fields(file_state: str, category: str, subreason: str = "unavailable") -> dict[str, str]:
     return {
         "execution file": file_state,
         "record count": "unavailable",
@@ -244,6 +271,7 @@ def empty_fields(file_state: str, category: str) -> dict[str, str]:
         "subtype": "unavailable",
         "is error": "unavailable",
         "error category": category,
+        "execution file subreason": subreason if subreason in SUBREASON_CODES else "unavailable",
         "error code": "unavailable",
         "HTTP status": "unavailable",
         "provider error type": "unavailable",
@@ -302,8 +330,8 @@ def main(argv: list[str]) -> int:
     except FileNotFoundError:
         fields = empty_fields("missing", "execution_file_missing")
         exit_code = 1
-    except DiagnosticError:
-        fields = empty_fields("invalid", "execution_file_invalid")
+    except DiagnosticError as exc:
+        fields = empty_fields("invalid", "execution_file_invalid", subreason=exc.code)
         exit_code = 1
     except Exception:
         fields = empty_fields("invalid", "unknown_safe_error")

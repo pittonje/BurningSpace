@@ -170,14 +170,20 @@ Do not claim battle-state durability.
 
 ## Status
 
-**IMPLEMENTATION COMPLETE LOCALLY. LOCAL ACCEPTANCE EVIDENCE COMPLETE.
-AWAITING INDEPENDENT REVIEWS, PR CHECKS, PRODUCT ARCHITECT ACCEPTANCE, AND
-HUMAN MERGE.**
+**IMPLEMENTATION PUSHED AS PR #86 (OPEN). CORE PR CHECKS: SUCCESS AT
+IMPLEMENTATION CHECKPOINT `0dba3e74562b3d0e395a5cad2a29732512e68515`.
+CLAUDE QA AUTOMATION AT THAT CHECKPOINT: NOT VALIDATED (INFRASTRUCTURE
+GAP, SEE BELOW). QA-RECOVERY-001 IS NOW COMMITTED ON TOP OF THAT
+CHECKPOINT; CORE/QA FOR THE RESULTING NEW HEAD ARE PENDING AND NOT YET
+OBSERVED. AWAITING INDEPENDENT REVIEWS, A VALIDATED QA RUN, PRODUCT
+ARCHITECT ACCEPTANCE, AND HUMAN MERGE.**
 
-All seven implementation packets are complete as local sequential commits
-on `feat/persist-002-durable-world-identity-foundation`. Not yet pushed, no
-PR opened, nothing merged, no staging deployment, no VPS/Contabo contact,
-no image publication.
+All seven implementation packets plus four bounded post-implementation
+corrections (FIX1–FIX4) are pushed as local sequential commits on
+`feat/persist-002-durable-world-identity-foundation`
+([PR #86](https://github.com/pittonje/BurningSpace/pull/86), OPEN, not
+merged, no auto-merge). Nothing merged, no staging deployment, no
+VPS/Contabo contact, no image publication.
 
 Local acceptance evidence gathered (Packet 7):
 
@@ -219,6 +225,69 @@ evidence set (CI integration stack, backup/restore, full real-PostgreSQL
 test suite, typecheck/build) end-to-end with the corrected image. Full
 detail in `docs/ops/persist-002-staging-db-integration-plan.md`.
 
-Next safe action: return the final Packet 7 FIX1 commit HEAD to the Product
-Architect for exact-head inspection and first push/PR authorization. See
+**FIX2 (`b97f4eb`):** made the persistence CI harness deterministic —
+replaced a fixed 8-tick client-test wait with condition polling on the
+actual `joinById` call, and gave native Linux CI a working path to the
+loopback-only-published test database (`--network host` for the ephemeral
+pg_dump/pg_restore/psql tool containers on Linux only; the existing
+`host.docker.internal` path on Windows/Mac Docker Desktop is unchanged).
+
+**FIX3 (`793aa6c`):** on native Linux CI, `pg_dump`'s bind-mounted output
+file was created container-root-owned, so a later host-side rewrite of
+that same file (the backup/restore test's negative corruption case) failed
+with `EACCES`. Fixed by running only that one container invocation as the
+invoking host UID:GID on Linux; `pg_restore`/`psql` (read-only consumers of
+host-mounted files) and the Windows/Mac path are unchanged.
+
+**FIX4 (`0dba3e7`):** the standalone Network client callback diagnostic
+(`apps/client/scripts/network-client-callback-check.ts`) predated durable
+identity and used its own bespoke test server with no `/identity/guest` or
+discovery endpoints, so it could never satisfy the current `NetworkClient`
+connect flow. Migrated it onto the real
+`startProductionBattleServer({ battleRoomClassOverride: TestBattleRoom })`
+composition (real isolated PostgreSQL, real identity/discovery, the real
+canonical room, diagnostic-only ship-state controls), with isolated
+per-client in-memory identity storage for all four real guest identities
+it creates. The CI test-database teardown step was moved to run after this
+diagnostic instead of before it.
+
+**Core / Claude QA evidence at implementation checkpoint
+`0dba3e74562b3d0e395a5cad2a29732512e68515`:** Core Pull Request Checks —
+**SUCCESS** (run `34948430842`, job `104313315933`, attempt 1), all steps
+including Caddy edge contract validation and local staging-container
+integration. This SUCCESS is bound specifically to that checkpoint, not
+to any later commit. Claude QA automation at that same checkpoint (run
+`34948430896`, job `104313316185`, attempt 1) did **not** produce a
+validated review: the diagnostic sanitizer returned
+`execution_file_invalid` for the reviewer's execution transcript (the
+precise internal subreason for this historical run is not established,
+since its execution file was not captured, and is not claimed to be known
+here), and independently the review validator rejected the reviewer's
+structured output for an oversized `important_suggestions[0]` (>500
+characters); the publisher posted a sanitized failure comment (ID
+`5677380407`) before its own next step failed. This is an automation gap,
+not a QA verdict on the implementation in either direction.
+
+**QA-RECOVERY-001:** a bounded patch adds fixed, allowlisted
+execution-file-invalid subreason codes to the sanitizer for future-run
+diagnosability (it does not retroactively establish the unestablished
+historical subreason above), and adds conservative generation-guidance
+targets to the QA reviewer prompt (well under the existing hard
+500/20/100/2000 limits, which are unchanged) to reduce the chance of a
+recurrence of the oversized-item failure. It does not change persistence,
+authentication, or gameplay behavior. Product Architect inspected the
+technical bytes (three files, blob hashes verified unchanged before
+commit) and the documentation correction, and approved exactly one
+bounded commit/push. That commit is now made on top of implementation
+checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515` and pushed to PR
+#86; it has **not** itself been observed against Core or Claude QA yet —
+no claim of passing remote checks is made for it here.
+
+Next safe action: obtain and inspect Core Pull Request Checks and
+governed Claude QA for the resulting new PR head, and record their exact
+outcome (run/job/attempt, and — if the sanitizer still fails — the
+"execution file subreason" value from its safe Summary table). Independent
+Architecture, Network, Security, and QA reviews remain to be routed and
+bound to whichever HEAD is current when they begin; Product Architect
+final acceptance and human merge remain outstanding. See
 `docs/handoffs/CURRENT.md`.

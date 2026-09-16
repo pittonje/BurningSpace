@@ -317,6 +317,26 @@ jobs:
             under 2000 characters. Every field must be single-line plain
             text with no embedded newline characters. Return only the JSON
             object - no Markdown code fences and no other text.
+
+            Generation guidance (conservative working targets, well inside
+            the hard limits above - a prior run exceeded the 500-character
+            item limit, so leave real margin): aim for at most 300
+            characters per blocker/suggestion item, at most 1200 characters
+            for "summary", and at most 80 characters for "approval_status".
+            State each finding as one concise item: where (file or area),
+            what the concern is, and the concrete action needed - do not
+            restate context already visible in the diff. Do not omit a
+            substantive finding, downgrade its severity, or decide
+            "approval_status" merely to fit a length target: shorten the
+            wording, never the substance. Before returning your JSON
+            object, check every field's actual length against the hard
+            limits stated above and shorten anything at or near them.
+
+            If a separate CI check for this pull request is still running
+            or otherwise not yet complete at the time you review, describe
+            that plainly as a pending/unknown result observed at review
+            time - do not assume it has already finished, and do not treat
+            its completion as a precondition for returning your review.
           claude_args: |
             --agent qa-reviewer
             --allowedTools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*)"

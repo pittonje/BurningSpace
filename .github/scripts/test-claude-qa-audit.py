@@ -168,6 +168,19 @@ def test_invocation_contract(text: str) -> None:
     check("prompt contains prompt-injection resistance section",
           "Prompt-injection resistance:" in prompt_block
           and "untrusted" in prompt_block)
+    check("prompt still states the hard 500/20/100/2000 output limits",
+          "under 500 characters" in prompt_block
+          and "under 20" in prompt_block
+          and "under 100 characters" in prompt_block
+          and "under 2000 characters" in prompt_block)
+    check("prompt adds conservative generation-guidance targets under the hard limits",
+          "Generation guidance" in prompt_block
+          and "300" in prompt_block and "1200" in prompt_block and "80 characters" in prompt_block)
+    check("prompt guidance forbids omitting findings or predetermining approval to fit length",
+          "Do not omit a" in prompt_block and "approval_status" in prompt_block)
+    check("prompt states pending CI as a time-bound observation, not a precondition",
+          "pending/unknown result observed at review" in prompt_block
+          and "precondition" in prompt_block)
 
     with open(AGENT_DEF, encoding="utf-8") as handle:
         agent = handle.read()
@@ -293,6 +306,14 @@ def run_sanitizer(execution_file: str, tmp: str) -> tuple[int, str, str]:
         return proc.returncode, proc.stdout, fh.read()
 
 
+SUBREASON_ROW_RE = re.compile(r"\|\s*execution file subreason\s*\|\s*([^\s|][^|]*?)\s*\|")
+
+
+def subreason_of(summary: str) -> str:
+    match = SUBREASON_ROW_RE.search(summary)
+    return match.group(1) if match else ""
+
+
 def test_sanitizer() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         code, out, _ = run_sanitizer(os.path.join(tmp, "missing.json"), tmp)
@@ -302,9 +323,74 @@ def test_sanitizer() -> None:
         bad = os.path.join(tmp, "bad.json")
         with open(bad, "w", encoding="utf-8") as fh:
             fh.write("{broken")
-        code, out, _ = run_sanitizer(bad, tmp)
+        code, out, summary = run_sanitizer(bad, tmp)
         check("sanitizer: invalid file fails closed",
               code == 1 and "execution_file_invalid" in out)
+        check("sanitizer: malformed JSON/JSONL subreason is invalid_json",
+              subreason_of(summary) == "invalid_json")
+
+        oversize = os.path.join(tmp, "oversize.json")
+        with open(oversize, "wb") as fh:
+            fh.write(b"[" + b"1," * 499_999 + b"1]")  # > MAX_FILE_BYTES (1_000_000)
+        code, out, summary = run_sanitizer(oversize, tmp)
+        check("sanitizer: oversized file fails closed with file_size_limit subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "file_size_limit")
+
+        nullbyte = os.path.join(tmp, "nullbyte.json")
+        with open(nullbyte, "wb") as fh:
+            fh.write(b'{"a": 1}\x00')
+        code, out, summary = run_sanitizer(nullbyte, tmp)
+        check("sanitizer: null byte fails closed with null_byte subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "null_byte")
+
+        badutf8 = os.path.join(tmp, "badutf8.json")
+        with open(badutf8, "wb") as fh:
+            fh.write(b'{"a": "\xff\xfe"}')
+        code, out, summary = run_sanitizer(badutf8, tmp)
+        check("sanitizer: invalid UTF-8 fails closed with invalid_utf8 subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "invalid_utf8")
+
+        empty = os.path.join(tmp, "empty.json")
+        with open(empty, "w", encoding="utf-8") as fh:
+            fh.write("   \n  ")
+        code, out, summary = run_sanitizer(empty, tmp)
+        check("sanitizer: empty file fails closed with empty_file subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "empty_file")
+
+        dupkey = os.path.join(tmp, "dupkey.json")
+        with open(dupkey, "w", encoding="utf-8") as fh:
+            fh.write('{"a": 1, "a": 2}')
+        code, out, summary = run_sanitizer(dupkey, tmp)
+        check("sanitizer: duplicate JSON key fails closed with duplicate_json_key subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "duplicate_json_key")
+        check("sanitizer: raw exception wording never appears, only the fixed code",
+              "duplicate JSON key" not in out and "duplicate JSON key" not in summary
+              and "duplicate_json_key" in summary)
+
+        deep = os.path.join(tmp, "deep.json")
+        with open(deep, "w", encoding="utf-8") as fh:
+            fh.write("[" * 25 + "1" + "]" * 25)  # > MAX_DEPTH (20)
+        code, out, summary = run_sanitizer(deep, tmp)
+        check("sanitizer: excessive nesting fails closed with nesting_depth_limit subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "nesting_depth_limit")
+
+        manyrecords = os.path.join(tmp, "manyrecords.jsonl")
+        with open(manyrecords, "w", encoding="utf-8") as fh:
+            fh.write("\n".join("{}" for _ in range(201)))  # > MAX_RECORDS (200)
+        code, out, summary = run_sanitizer(manyrecords, tmp)
+        check("sanitizer: excessive record count fails closed with record_count_limit subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "record_count_limit")
+
+        _, _, missing_summary = run_sanitizer(os.path.join(tmp, "still-missing.json"), tmp)
+        check("sanitizer: subreason is unavailable for execution_file_missing",
+              subreason_of(missing_summary) == "unavailable")
 
         noso = os.path.join(tmp, "noso.json")
         with open(noso, "w", encoding="utf-8") as fh:
@@ -318,9 +404,11 @@ def test_sanitizer() -> None:
         with open(ok, "w", encoding="utf-8") as fh:
             json.dump({"type": "result", "subtype": "success", "is_error": False,
                        "structured_output": {"x": 1}, "num_turns": 20}, fh)
-        code, out, _ = run_sanitizer(ok, tmp)
+        code, out, summary = run_sanitizer(ok, tmp)
         check("sanitizer: success with structured output -> success",
               code == 0 and "category: success" in out)
+        check("sanitizer: subreason is unavailable on success",
+              subreason_of(summary) == "unavailable")
 
         leaky = os.path.join(tmp, "leaky.json")
         fake_secret = "ghp_" + "A1b2C3d4" * 4

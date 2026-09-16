@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-09-14
-Updated by: Implementation engineer — PERSIST-002 Packet 7/7 FIX1: corrected immutable server migration packaging after Product Architect review
+Last updated: 2026-09-16
+Updated by: Implementation engineer — QA-RECOVERY-001: PA-approved QA-infrastructure diagnosability patch and PR #86 evidence reconciliation, committed and pushed
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -39,7 +39,7 @@ PR #85 merge commit (current `origin/main`): `98bda8f5bed41112f5687eb4ef2fd52a0c
 
 Status: **ARCHITECTURE/SECURITY REVIEW APPROVED / PRODUCT ARCHITECT ACCEPTED / MERGED / CLOSED**
 
-Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`. **All seven implementation packets (1–7) are complete as local sequential commits, plus one bounded post-Packet-7 packaging correction (FIX1)** requested by Product Architect review. Not pushed, no PR opened, nothing merged, no staging deployment. See the task file's Status section for the full local acceptance evidence.
+Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7 plus four bounded post-implementation corrections (FIX1–FIX4) are pushed as local sequential commits through implementation checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515`; the branch itself has never been reset, rebased, or amended. Core Pull Request Checks are fully **SUCCESS** at that exact implementation checkpoint (run `34948430842`, job `104313315933`, attempt 1), including the Caddy edge contract and staging-container integration gates. Automated Claude QA at that same checkpoint did **not produce a validated review**: two independent automation failures occurred (see "PR #86 evidence" below) — this is an infrastructure gap, not a QA approval, not a QA rejection of the implementation. QA-RECOVERY-001, a bounded QA-infrastructure diagnosability/documentation patch, is now committed on top of that checkpoint (Product Architect approved it for exactly one bounded commit/push); Core and Claude QA for the resulting new PR head are pending and have not yet been observed — see the task file's Status section for the exact new HEAD and current run status. Required independent Architecture, Network, Security, and QA reviews, Product Architect final acceptance, and human merge remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
 
 ## PERSIST-001 accepted architecture
 
@@ -143,31 +143,96 @@ Disposition: **DEFERRED UX TUNING / NON-BLOCKING FOR PERSISTENCE**.
 
 No mobile-control task is currently active.
 
+## PR #86 evidence (Packets 1–7 + FIX1–FIX4, through implementation checkpoint 0dba3e7)
+
+PERSIST-001 is merged and closed. PERSIST-002 implementation is pushed as
+PR #86 (`feat/persist-002-durable-world-identity-foundation` → `main`),
+currently OPEN, not merged, no auto-merge requested. Eleven bounded
+commits ahead of the PERSIST-001 merge base
+`98bda8f5bed41112f5687eb4ef2fd52a0c82950a`, up through implementation
+checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515` — this count
+describes history up to that checkpoint only, not a claim about the PR's
+eventual total commit count (a further QA-RECOVERY-001 commit follows it;
+see below):
+
+- Packets 1–7 (`16ee7d8`…`a5680d7`) — durable world/identity foundation
+  implementation; see the task file for full per-packet evidence.
+- `ef93b3d` FIX1 — corrected `deploy/server.Dockerfile` to package
+  `apps/server/db/migrations` into the immutable runtime image (the sole
+  blocker raised by Product Architect review of Packet 7), removed the
+  CI-only bind-mount workaround it had used.
+- `b97f4eb` FIX2 — made the persistence CI harness deterministic: replaced
+  a fixed-tick client-test wait with condition polling, and made Linux CI
+  reach the loopback-only test database via `--network host` (Windows/Mac
+  Docker Desktop path unchanged).
+- `793aa6c` FIX3 — preserved backup-artifact ownership on native Linux CI
+  (`pg_dump`'s bind-mounted output was container-root-owned; now written
+  as the invoking host UID:GID on Linux only).
+- `0dba3e7` FIX4 — migrated the standalone Network client callback
+  diagnostic off its obsolete bespoke test server onto the real
+  `startProductionBattleServer`/durable-identity flow, and moved the CI
+  test-database teardown to after that diagnostic.
+
+**Core Pull Request Checks:** SUCCESS at implementation checkpoint
+`0dba3e74562b3d0e395a5cad2a29732512e68515` — run `34948430842`, job
+`104313315933`, attempt 1. All steps passed, including the Caddy edge
+contract validation and the local staging-container integration stack.
+This SUCCESS is bound specifically to that checkpoint, not to any later
+commit.
+
+**Claude QA automation at that same checkpoint:** run `34948430896`, job
+`104313316185`, attempt 1 — did **not** produce a validated review. Two
+independent failures observed: (1) the diagnostic sanitizer returned
+`execution_file_invalid` for the reviewer's execution transcript (the
+precise internal subreason for this historical run is not established,
+since its execution file was not captured, and is not claimed to be known
+here); (2) independently, the review validator rejected the reviewer's
+structured output because `important_suggestions[0]` exceeded the
+500-character hard limit. The deterministic publisher still posted a
+sanitized failure comment (ID `5677380407`) before its own subsequent
+step failed. **This is an automation gap, not a QA approval and not a QA
+rejection of the implementation** — it must not be read as either.
+
+**QA-RECOVERY-001** adds fixed, allowlisted `execution_file_invalid`
+subreason codes to the sanitizer (observability for future runs only —
+it does not retroactively establish the unestablished historical
+subreason above) and conservative generation-guidance targets in the QA
+reviewer prompt, well under the unchanged hard 500/20/100/2000 limits, to
+reduce recurrence of the oversized-item failure. Product Architect
+approved this patch for exactly one bounded commit/push (technical bytes
+frozen and verified by blob hash before commit); it is committed on top
+of implementation checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515`.
+The resulting new PR head has not yet had Core or Claude QA observed —
+this has not passed remote checks and no claim to that effect is made
+here; the next verification action is to obtain and inspect Core and
+governed Claude QA for that resulting PR head.
+
+Independent Architecture, Network, Security, and QA reviews; Product
+Architect final acceptance; and human merge all remain outstanding for PR
+#86. No staging deployment, image publication, or VPS/Contabo contact has
+occurred. The branch implementation above is distinct from the deployed
+staging environment described earlier in this document, which is
+unchanged and still non-persistent.
+
 ## Current next safe action
 
-PERSIST-001 is merged and closed. PERSIST-002 (all seven packets, plus the
-bounded FIX1 packaging correction) is implementation-complete locally on
-branch `feat/persist-002-durable-world-identity-foundation`, with local
-acceptance evidence gathered through Packet 7 and re-validated after FIX1
-(real-PostgreSQL test suite, real backup/restore proof, real
-database-privilege proof, and a locally validated CI-only integration
-Compose stack — see the task file's Status section for the full evidence
-list). Packet 7's own real end-to-end proof discovered one packaging
-defect (`deploy/server.Dockerfile` did not package
-`apps/server/db/migrations`); Product Architect review flagged it as the
-sole blocker; FIX1 corrected the Dockerfile, removed the CI-only bind-mount
-workaround it had used, and re-validated everything against the corrected
-immutable image.
+*(Historical preparation evidence, dated 2026-09-15: QA-RECOVERY-001 was
+prepared as a local, uncommitted patch against the QA reporting
+infrastructure and this documentation, then inspected and approved by
+Product Architect for exactly one bounded commit/push, with its three
+technical files' Git blob hashes frozen and verified unchanged before
+that commit.)*
 
-Nothing has been pushed, no PR has been opened, and no staging deployment
-or VPS/Contabo contact has occurred.
-
-The only next action is: **return the final Packet 7 FIX1 commit HEAD to
-the Product Architect for exact-head inspection and first push/PR
-authorization.** Only after Product Architect confirmation should the
-branch be pushed and a PR opened, binding independent Architecture,
-Network, Security, and QA reviews plus mandatory Core PR checks and
-governed Claude QA to that exact HEAD, followed by Product Architect
-acceptance and human merge. Actual staging rollout with persistence
-enabled remains a later, separately authorized task — see
+QA-RECOVERY-001 is now committed on top of implementation checkpoint
+`0dba3e74562b3d0e395a5cad2a29732512e68515` and pushed to PR #86. The
+resulting new PR head has not yet had Core or Claude QA observed — this
+document does not claim those checks have passed. The next action is:
+**obtain and inspect Core Pull Request Checks and governed Claude QA for
+the resulting new PR head**, and report their outcome (including, if the
+sanitizer still fails, the "execution file subreason" value from its
+safe Summary table). Independent Architecture, Network, Security, and QA
+reviews remain to be routed and bound to whichever HEAD is current when
+they begin; Product Architect final acceptance and human merge remain
+outstanding. Actual staging rollout with persistence enabled remains a
+later, separately authorized task — see
 [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).
