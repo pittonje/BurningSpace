@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-17
-Updated by: Implementation engineer — ARCH-FIX1: fenced BattleRoom simulation/input/async-profile-completion on process authority loss (PERSIST002-C-01), committed and pushed
+Updated by: Implementation engineer — ARCH-FIX2: corrected ARCH-FIX1's test evidence (REVIEW-C01-A resource leak, REVIEW-C01-B non-discriminating regression), committed and pushed
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -39,7 +39,7 @@ PR #85 merge commit (current `origin/main`): `98bda8f5bed41112f5687eb4ef2fd52a0c
 
 Status: **ARCHITECTURE/SECURITY REVIEW APPROVED / PRODUCT ARCHITECT ACCEPTED / MERGED / CLOSED**
 
-Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7 plus post-implementation corrections FIX1–FIX4 and the QA-RECOVERY-001/002 infrastructure patches are pushed as local sequential commits through `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`; the branch itself has never been reset, rebased, or amended. At that head, Core Pull Request Checks were **SUCCESS** (run `35193478755`) and governed Claude QA ran and returned **"Approved with suggestions"** (run `35193478806`). An independent Architecture review of that head then raised **PERSIST002-C-01 (MEDIUM)** — `BattleRoom.updateSimulation()` and related paths did not check process/world authority before running; Product Architect disposition was **REQUEST_CHANGES**. **ARCH-FIX1** implements the fix (fences the simulation tick, input application, and the async `SET_PROFILE` completion boundary on a composed process-authority signal) with its own new real-PostgreSQL regression suite; see the task file's ARCH-FIX1 section for full evidence. This fix is by its own author and is not independently verified merely because it exists — independent delta review of PERSIST002-C-01 remains required, and Core/Claude QA for the resulting ARCH-FIX1 head have not yet been observed. Required independent Network and Security reviews, Product Architect final acceptance, and human merge remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
+Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7, post-implementation corrections FIX1–FIX4, the QA-RECOVERY-001/002 infrastructure patches, and ARCH-FIX1/ARCH-FIX2 are pushed as local sequential commits; the branch itself has never been reset, rebased, or amended. At the QA-RECOVERY-002 head `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`, Core Pull Request Checks were **SUCCESS** (run `35193478755`) and governed Claude QA ran and returned **"Approved with suggestions"** (run `35193478806`). An independent Architecture review of that head then raised **PERSIST002-C-01 (MEDIUM)** — `BattleRoom.updateSimulation()` and related paths did not check process/world authority before running; Product Architect disposition was **REQUEST_CHANGES**. **ARCH-FIX1** (`cc87ab0c679acbce5c16f866f84780c1804c4e31`) implemented the runtime fix; **independent delta review CLOSED the runtime finding PERSIST002-C-01 at that commit**, but found ARCH-FIX1's own test evidence insufficient (REVIEW-C01-A: a resource leak in the teardown-window scenario's cleanup; REVIEW-C01-B: a missing-capability regression that passed on both pre-fix and fixed code), so ARCH-FIX1's overall delta disposition remained **REQUEST_CHANGES**. **ARCH-FIX2** is a bounded, test-only correction of both findings — see the task file's ARCH-FIX2 section, and the section below, for full evidence. Independent verification of ARCH-FIX2, and Core/Claude QA for the resulting ARCH-FIX2 head, have not yet been observed. Required independent Network and Security reviews, Product Architect final acceptance, and human merge remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
 
 ## PERSIST-001 accepted architecture
 
@@ -296,13 +296,92 @@ merely because it exists. Core and governed Claude QA for the resulting
 ARCH-FIX1 head have not yet been observed — this document does not claim
 those checks have passed.
 
+## Independent delta review of PERSIST002-C-01: CLOSED (runtime fix only)
+
+Independent delta review of the ARCH-FIX1 runtime fix (`index.ts`/
+`BattleRoom.ts`) **closed PERSIST002-C-01** at
+`cc87ab0c679acbce5c16f866f84780c1804c4e31`. The production fix itself is
+not reopened by ARCH-FIX2 below.
+
+The same review found two problems in ARCH-FIX1's accompanying test
+evidence (not in the production fix), so **ARCH-FIX1's overall delta
+disposition remained REQUEST_CHANGES**:
+
+- **REVIEW-C01-B:** the missing-capability regression ran only after
+  ordinary cleanup had already removed the ship and emptied the room, so
+  it passed identically on both the pre-fix and the fixed code — not
+  discriminating.
+- **REVIEW-C01-A:** the asynchronous-teardown-window scenario's cleanup
+  used a `skipDatabaseDrop` escape hatch that permanently leaked the
+  process-private HTTP identity pool's connection and its disposable
+  database, instead of the test proving those resources actually closed.
+
+## ARCH-FIX2 (2026-09-17): corrected test evidence for REVIEW-C01-A/B
+
+Test-only correction of both findings, entirely inside
+`apps/server/test/persistence/simulationAuthorityGate.test.ts` (plus this
+document and the task file):
+
+- The missing-capability scenario now keeps a real, alive, moving+firing
+  ship in the room throughout (never disposed/emptied first), establishes
+  a healthy positive control, then makes only
+  `getActiveProductionRoomDependencies()` return `undefined` for the one
+  `updateSimulation()` call under test via a narrowly scoped `vi.spyOn`
+  restored immediately afterward. **Negative-control evidence:** run in a
+  separate, disposable `git worktree` checked out at this task's
+  pre-runtime-fix commit `097cb92804ede1449f3fc1dca1a8a063f9aa3cef` (no
+  implementation-worktree files mutated); the corrected scenario failed
+  there exactly at the intended assertion (the primed ship's position had
+  genuinely advanced, a real ~11-unit move) — not via an unrelated
+  exception or broken fixture. The same scenario passes against the
+  fixed candidate.
+- The teardown-window scenario's cleanup no longer uses
+  `skipDatabaseDrop` (removed entirely). After its freeze assertions, it
+  now advances the injected writer clock and calls the writer's own
+  `performHeartbeat()` (the same method production's heartbeat timer
+  would call), driving the real `handleAuthorityLost()` →
+  `performTeardown()` path, confirmed via `writer.state === 'failed'`.
+  It then waits boundedly for each independently observable effect (room
+  disposed, HTTP listener refusing connections, both module-level
+  installation stacks restored to their pre-boot baselines, zero
+  remaining `pg_stat_activity` rows via a separate observer connection),
+  and proves closure by successfully running a plain `DROP DATABASE`
+  (no `FORCE`) against its own disposable database.
+- The delayed-`SET_PROFILE` scenario's fixed `delay(300)` is replaced
+  with a bounded wait on the room's own real per-session profile-
+  operation tail (an actual completion signal). Its existing assertions
+  are unchanged.
+- Documentation correction: the "ordinary per-player disconnect"
+  scenario proves only that a **consented** disconnect does not globally
+  pause another client. Unconsented-disconnect reconnect grace and
+  disconnected-ship inertia are already covered by the pre-existing
+  `apps/server/test/productionReconnectLifecycle.test.ts`. Projectile
+  continuation specifically during a disconnect remains an **unproved
+  existing gap** — no new test is added for it here.
+
+Full suite: **49 files / 454 tests / 0 failed / 0 skipped** (unchanged
+count — tests corrected in place, none deleted). Two `npm test` attempts
+hit the already-documented, pre-existing Vitest/tinypool
+`ERR_IPC_CHANNEL_CLOSED` worker-crash flake; a third attempt completed
+cleanly. Those two crashed attempts left exactly 3 orphaned `bs_test_*`
+databases, confirmed to have zero active connections and dropped by
+their exact individual names; the 19 `bs_test_*` databases already
+present before this task began, and the pre-existing `deploy-postgres-1`
+container, were left untouched.
+
+This correction is by its own author and is **not** independently
+verified merely because it exists. Core and governed Claude QA for the
+resulting ARCH-FIX2 head have not yet been observed — this document does
+not claim those checks have passed.
+
 ## Current next safe action
 
-The next action is: **independent delta review of PERSIST002-C-01**
-against ARCH-FIX1, and obtaining/inspecting Core Pull Request Checks and
-governed Claude QA for the resulting ARCH-FIX1 PR head. Independent
-Network and Security reviews remain to be routed and bound to whichever
-HEAD is current when they begin; Product Architect final acceptance and
-human merge remain outstanding. Actual staging rollout with persistence
-enabled remains a later, separately authorized task — see
+The next action is: **independent verification of ARCH-FIX2's corrected
+test evidence for REVIEW-C01-A and REVIEW-C01-B**, and
+obtaining/inspecting Core Pull Request Checks and governed Claude QA for
+the resulting ARCH-FIX2 PR head. Independent Network and Security
+reviews remain to be routed and bound to whichever HEAD is current when
+they begin; Product Architect final acceptance and human merge remain
+outstanding. Actual staging rollout with persistence enabled remains a
+later, separately authorized task — see
 [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).

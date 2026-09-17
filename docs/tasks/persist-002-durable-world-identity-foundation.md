@@ -177,10 +177,17 @@ AGAIN AT QA-RECOVERY-002 HEAD `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`,
 WHERE GOVERNED CLAUDE QA ALSO RAN AND RETURNED "APPROVED WITH
 SUGGESTIONS". AN INDEPENDENT ARCHITECTURE REVIEW OF THAT HEAD THEN RAISED
 PERSIST002-C-01 (MEDIUM); PRODUCT ARCHITECT DISPOSITION WAS
-REQUEST_CHANGES. ARCH-FIX1 (BELOW) IMPLEMENTS THE FIX AND ITS OWN REAL
-REGRESSION EVIDENCE. INDEPENDENT DELTA REVIEW OF PERSIST002-C-01, CORE/QA
-FOR THE ARCH-FIX1 HEAD, PRODUCT ARCHITECT FINAL ACCEPTANCE, AND HUMAN
-MERGE ALL REMAIN OUTSTANDING.**
+REQUEST_CHANGES. ARCH-FIX1 IMPLEMENTED THE RUNTIME FIX, INDEPENDENTLY
+**CLOSED** AT `cc87ab0c679acbce5c16f866f84780c1804c4e31`. THAT SAME DELTA
+REVIEW FOUND TWO PROBLEMS IN ARCH-FIX1's OWN TEST EVIDENCE
+(REVIEW-C01-A: A RESOURCE-LEAK IN THE TEARDOWN-WINDOW SCENARIO'S CLEANUP;
+REVIEW-C01-B: A NON-DISCRIMINATING MISSING-CAPABILITY REGRESSION), SO
+ARCH-FIX1's OVERALL DELTA DISPOSITION REMAINED REQUEST_CHANGES.
+ARCH-FIX2 (BELOW) IS A BOUNDED, TEST-ONLY CORRECTION OF BOTH, WITH ITS OWN
+NEGATIVE-CONTROL EVIDENCE, AND DOES NOT REOPEN THE ALREADY-CLOSED RUNTIME
+FIX. INDEPENDENT VERIFICATION OF ARCH-FIX2, CORE/QA FOR THE ARCH-FIX2
+HEAD, PRODUCT ARCHITECT FINAL ACCEPTANCE, AND HUMAN MERGE ALL REMAIN
+OUTSTANDING.**
 
 All seven implementation packets plus four bounded post-implementation
 corrections (FIX1–FIX4) are pushed as local sequential commits on
@@ -406,11 +413,124 @@ implemented fix afterward (this mutation was never committed).
 
 This implementation is by its author (the same agent that authored the
 fix); it is not independently verified merely because a fix now exists.
-Independent delta review of PERSIST002-C-01 remains required. No claim is
-made here that Core/QA for the resulting new head have already passed —
-see `docs/handoffs/CURRENT.md` for what is actually pending.
 
-Next safe action: independent delta review of PERSIST002-C-01, and
-observation of the ordinary push-triggered Core/governed-QA results for
-the ARCH-FIX1 head once available. Product Architect final acceptance and
-human merge remain outstanding.
+**Independent delta review of PERSIST002-C-01 (the runtime fix in
+`index.ts`/`BattleRoom.ts` itself): CLOSED**, at
+`cc87ab0c679acbce5c16f866f84780c1804c4e31`. The production fix is not
+reopened or reinterpreted by ARCH-FIX2 below.
+
+**Overall ARCH-FIX1 delta disposition: REQUEST_CHANGES**, because the same
+review found two problems in the accompanying test evidence, not in the
+production fix:
+
+- **REVIEW-C01-B:** the "fail-closed on a missing authority capability"
+  regression ran only after ordinary cleanup had already removed the ship,
+  caught any exception, and asserted nothing when none was thrown — so it
+  passed identically whether or not the production fence existed, and was
+  not discriminating.
+- **REVIEW-C01-A:** the "asynchronous teardown window" scenario's
+  cleanup used a `skipDatabaseDrop` escape hatch that permanently leaked
+  the process-private HTTP identity pool's connection and left its
+  disposable database undropped for the ephemeral test-Postgres
+  container's own lifecycle to eventually reclaim, instead of the test
+  itself proving those resources closed.
+
+**ARCH-FIX2 (commit `test(persist-002): strengthen authority-fence proof
+and clean up its harness`)** corrects both, test-only, in
+`apps/server/test/persistence/simulationAuthorityGate.test.ts`:
+
+- **REVIEW-C01-B fix:** the missing-capability scenario now keeps a real,
+  alive, moving+firing ship in the room throughout (never disposed or
+  emptied first), establishes a healthy positive control (the same input
+  genuinely advances position and creates a real projectile while the
+  capability is present), then makes only
+  `getActiveProductionRoomDependencies()` return `undefined` for the
+  single `updateSimulation()` call under test, via a narrowly scoped
+  `vi.spyOn` restored synchronously immediately after that one call. It
+  asserts: no throw; the primed ship's position/velocity do not advance;
+  no new projectile appears; and (last, confirming the missing-authority
+  path was actually exercised rather than merely that nothing happened to
+  throw) the spied lookup was reached.
+  **Negative-control evidence:** run in a separate, disposable
+  `git worktree` checked out at this task's pre-runtime-fix commit
+  (`097cb92804ede1449f3fc1dca1a8a063f9aa3cef`, i.e. before
+  PERSIST002-C-01's own fix — `BattleRoom.ts` there has no
+  `isProcessAuthoritySafe()` fence and never calls
+  `getActiveProductionRoomDependencies()` from `updateSimulation()` at
+  all) with only this corrected test file copied in; nothing in the
+  implementation worktree was mutated for this. The corrected scenario
+  **failed there exactly at the intended assertion** — the primed ship's
+  `x` position had genuinely advanced (a real ~11-unit move) — not via an
+  unrelated exception, a broken fixture, or a failed server boot. The
+  same scenario against the ARCH-FIX1+ARCH-FIX2 candidate **passes**.
+- **REVIEW-C01-A fix:** `skipDatabaseDrop` is removed. The scenario still
+  fences its freeze assertions with `lifecycle.markFailed()` called
+  directly (deliberately not yet coupled to teardown, so the freeze is
+  proven to come from the fence and not from a real trigger's near-
+  immediate room disposal) — but, strictly after those freeze assertions,
+  it now advances the injected writer clock and calls the writer's own
+  `performHeartbeat()` (the exact method production's heartbeat timer
+  would have called), driving the real `handleAuthorityLost()` →
+  `performTeardown()` path, and confirms via `writer.state === 'failed'`
+  that this actually took the intended local-safety-deadline failure
+  route. It then waits boundedly (not `performHeartbeat()`'s own return,
+  which proves nothing about the async teardown) for each independently
+  observable effect: the canonical room disposed
+  (`matchMaker.getLocalRoomById`); the HTTP listener refusing new
+  connections; `getActiveProductionRoomDependencies()` and
+  `getActiveNetworkBoundaryConfig()` both back at their pre-boot
+  baselines; and, via a separate admin observer connection to a different
+  database (never the disposable one itself, so it can never appear in
+  its own count), zero remaining `pg_stat_activity` rows for the
+  disposable database. It then drops that database with a plain
+  `DROP DATABASE` (no `FORCE`, no `pg_terminate_backend`) — which only
+  succeeds because nothing is still attached — and confirms it is gone
+  from `pg_database`. This is real evidence of closure, not an assumption.
+- **Also corrected, narrower in scope:** the delayed-`SET_PROFILE`
+  scenario's fixed `delay(300)` is replaced with a bounded wait on the
+  room's own real per-session profile-operation tail
+  (`awaitProfileTail`, reflected via the same test-only room-access seam
+  already used elsewhere in this file) — an actual completion signal, not
+  a guessed sleep duration. All of that scenario's existing assertions
+  (no spawn, no `PROFILE_ACCEPTED`, durable membership/lease evidence)
+  are unchanged.
+- **Documentation correction (no test code changed for this item):** the
+  "ordinary per-player disconnect" scenario proves exactly one thing —
+  a **consented** disconnect of one client does not globally pause
+  another client's ship. It is not evidence for unconsented-disconnect
+  reconnect grace or disconnected-ship inertia (both already independently
+  covered by the pre-existing
+  `apps/server/test/productionReconnectLifecycle.test.ts`, specifically
+  "preserves one authoritative owner and neutralizes stale input across a
+  valid reconnect": an unconsented `leave(false)`, ownership retained
+  through the grace window, and the disconnected ship's velocity
+  decaying rather than being instantly frozen). **Projectile continuation
+  specifically during a disconnect remains an unproved existing gap** —
+  the reconnect-lifecycle test only asserts the disconnected player's own
+  projectile count does not increase, not that another player's
+  in-flight projectile continues its path while someone is disconnected.
+  No new projectile-subsystem test is added here for this.
+
+Every ARCH-FIX2 run recorded above used the repository's normal
+`deploy-postgres-1` disposable test-Postgres container (pre-existing, not
+started or stopped by this task) and this task's own disposable
+`bs_test_*` databases (each created and dropped by the run that created
+it). Two `npm test` attempts hit the already-documented, pre-existing
+Vitest/tinypool `ERR_IPC_CHANNEL_CLOSED` worker-crash flake (unrelated to
+any assertion in this file); a third attempt completed cleanly. Those two
+crashed attempts left exactly 3 orphaned `bs_test_*` databases (named
+individually, not identified by wildcard), which were confirmed to have
+zero active connections and then dropped by their exact names; the
+19 `bs_test_*` databases already present before this task began were left
+untouched.
+
+No claim is made here that Core/QA for the ARCH-FIX2 head have already
+passed — see `docs/handoffs/CURRENT.md` for what is actually pending.
+**Independent verification of ARCH-FIX2 (REVIEW-C01-A and REVIEW-C01-B)
+remains outstanding.**
+
+Next safe action: independent verification of ARCH-FIX2's corrected test
+evidence for REVIEW-C01-A and REVIEW-C01-B, and observation of the
+ordinary push-triggered Core/governed-QA results for the ARCH-FIX2 head
+once available. Product Architect final acceptance and human merge remain
+outstanding.

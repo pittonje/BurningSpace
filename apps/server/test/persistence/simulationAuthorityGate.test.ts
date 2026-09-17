@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { matchMaker } from 'colyseus';
 import {
   NETWORK_SHIP_MAX_HEALTH,
@@ -22,6 +22,8 @@ import type { GameplayAuthorityTestHooks } from '../../src/persistence/gameplayA
 import type { MonotonicClock } from '../../src/persistence/writerLifecycle.js';
 import type { BattleState } from '../../src/schema/BattleState.js';
 import type { ProjectileState } from '../../src/schema/ProjectileState.js';
+import * as productionRoomDependenciesModule from '../../src/persistence/productionRoomDependencies.js';
+import { getActiveNetworkBoundaryConfig } from '../../src/security/networkBoundary.js';
 import { TestBattleRoom, TestRoomMessages } from '../support/TestBattleRoom.js';
 import {
   createInMemoryIdentityStorage,
@@ -30,6 +32,7 @@ import {
   joinCanonicalBattleRoom
 } from '../support/testIdentityHelper.js';
 import {
+  ADMIN_DATABASE_URL,
   createBootstrappedTestDatabase,
   describeUnreachableDatabaseWarning,
   isTestDatabaseReachable,
@@ -93,12 +96,13 @@ function installPm2TelemetryFilterForWorkerIpc(): void {
 interface AuthorityTestServer {
   readonly url: string;
   readonly databaseUrl: string;
+  readonly databaseName: string;
   readonly worldId: string;
   readonly lifecycle: RuntimeLifecycle;
   readonly persistence: PersistenceRuntime;
   /** Mutable box backing the injected writer MonotonicClock -- advance or rewind `.value` to control writer.isControlSafe() deterministically. */
   readonly writerClock: { value: number };
-  stop(options?: { skipDatabaseDrop?: boolean }): Promise<void>;
+  stop(): Promise<void>;
 }
 
 interface BootAuthorityTestServerOptions {
@@ -153,11 +157,12 @@ async function bootAuthorityTestServer(
   return {
     url: runningServer.url,
     databaseUrl: database.databaseUrl,
+    databaseName: database.databaseName,
     worldId: database.worldId,
     lifecycle: runningServer.lifecycle,
     persistence: runningServer.persistence,
     writerClock,
-    async stop(options?: { skipDatabaseDrop?: boolean }): Promise<void> {
+    async stop(): Promise<void> {
       if (stopped) {
         return;
       }
@@ -165,36 +170,40 @@ async function bootAuthorityTestServer(
       stopped = true;
       try {
         await runningServer.shutdown('SIGTERM');
-        // A scenario that forces RuntimeLifecycle into 'failed' directly
-        // (bypassing handleAuthorityLost's own teardown trigger) makes
-        // production shutdown()'s beginShutdown() guard -- which only
-        // proceeds from 'starting'/'ready' -- silently no-op, so it never
-        // closes the writer/schema-maintenance connections. Close
-        // persistence directly too (idempotent via its own shuttingDown
-        // guard) so the database drop below never has to
-        // pg_terminate_backend a connection this harness could have closed
-        // gracefully.
+        // Defensive/idempotent only: production shutdown()'s
+        // beginShutdown() guard proceeds only from 'starting'/'ready', so
+        // if a scenario already drove RuntimeLifecycle to 'failed' through
+        // a REAL authority-loss path before calling stop() (see the
+        // asynchronous-teardown-window scenario, which waits for that real
+        // teardown to fully complete before this ever runs), this call is
+        // a harmless no-op -- persistenceRuntime's own shutdown() is
+        // idempotent via its own shuttingDown guard either way.
         await runningServer.persistence.shutdown().catch(() => undefined);
       } finally {
-        if (!options?.skipDatabaseDrop) {
-          // dropTestDatabase() force-terminates every remaining backend for
-          // this database before dropping it. The separate HTTP identity
-          // pool that index.ts owns privately (never exposed on
-          // ProductionServerHandle, so this harness cannot reach or close
-          // it directly) registers no 'error' listener of its own -- like
-          // any pg.Pool without one -- so force-killing one of its still-
-          // idle connections throws an otherwise-uncaught exception that
-          // can crash the whole test worker. A scenario that deliberately
-          // drives a REAL authority-loss event (rather than one that only
-          // manipulates the writer clock) passes skipDatabaseDrop: true and
-          // leaves its disposable database for the ephemeral test-Postgres
-          // container's own lifecycle to reclaim, instead of forcing that
-          // race.
-          await database.drop().catch(() => undefined);
-        }
+        await database.drop().catch(() => undefined);
       }
     }
   };
+}
+
+async function waitForAsync(
+  condition: () => Promise<boolean>,
+  label: string,
+  timeoutMs = WAIT_TIMEOUT_MS
+): Promise<void> {
+  const startedAt = Date.now();
+
+  for (;;) {
+    if (await condition()) {
+      return;
+    }
+
+    if (Date.now() - startedAt >= timeoutMs) {
+      throw new Error(`Timed out after ${timeoutMs}ms waiting for ${label}.`);
+    }
+
+    await delay(20);
+  }
 }
 
 /**
@@ -209,6 +218,8 @@ async function bootAuthorityTestServer(
 interface BattleRoomTestAccess {
   readonly state: BattleState;
   updateSimulation(deltaTimeMs: number): void;
+  /** Reflects the room's own private per-session profile-operation tail (see queueProfileOperation/awaitProfileTail in BattleRoom.ts) -- resolves once that session's in-flight SET_PROFILE handling (including its compensation) has fully settled. */
+  awaitProfileTail(sessionId: string): Promise<void>;
 }
 
 function serverRoom(roomId: string): BattleRoomTestAccess {
@@ -573,6 +584,20 @@ describe.skipIf(!databaseAvailable)(
   }
 );
 
+async function isHttpEndpointReachable(url: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 500);
+
+  try {
+    await fetch(url, { signal: controller.signal });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 describe.skipIf(!databaseAvailable)(
   'the asynchronous teardown window is fenced even while the writer alone still reports safe (real PostgreSQL)',
   () => {
@@ -581,24 +606,23 @@ describe.skipIf(!databaseAvailable)(
 
     afterEach(async () => {
       await Promise.allSettled(clients.splice(0).map((observed) => observed.dispose()));
-      // skipDatabaseDrop: true -- see bootAuthorityTestServer's stop() for
-      // why. This test calls lifecycle.markFailed() directly (a
-      // deliberate bypass of handleAuthorityLost's normal
-      // markFailed()+teardown coupling, needed to create a stable,
-      // deterministic "authority already lost, teardown NOT complete"
-      // window -- a real authority-loss trigger tears the room down almost
-      // immediately via gracefullyShutdown(), which would make the room
-      // stop simulating regardless of whether this task's fence exists at
-      // all, defeating the point of this scenario). That bypass leaves the
-      // process-owned HTTP identity pool (unreachable from this harness)
-      // never closed by production code.
-      await server?.stop({ skipDatabaseDrop: true });
+      // By the time this runs, the test body below has already driven a
+      // REAL authority-loss teardown to completion and independently
+      // dropped its own disposable database -- this is a harmless,
+      // idempotent no-op safety net, not a required cleanup step anymore.
+      await server?.stop();
       server = undefined;
     });
 
     it(
-      'a room must not resume gameplay merely because writer.isControlSafe() remains true after RuntimeLifecycle has already been marked failed',
+      'a room must not resume gameplay merely because writer.isControlSafe() remains true after RuntimeLifecycle has already been marked failed, and the real authority-loss path this scenario later drives cleans up every resource it owns',
       async () => {
+        // Captured BEFORE booting: the baseline every module-level
+        // installation stack this harness touches must return to once its
+        // own server's real teardown has fully run.
+        const dependenciesBaselineBeforeBoot = productionRoomDependenciesModule.getActiveProductionRoomDependencies();
+        const networkBoundaryBaselineBeforeBoot = getActiveNetworkBoundaryConfig();
+
         server = await bootAuthorityTestServer();
         const mover = createObservedClient(server.url);
         clients.push(mover);
@@ -628,9 +652,11 @@ describe.skipIf(!databaseAvailable)(
         // mechanism, not re-proven here. This proves the ROOM's reaction to
         // an already-declared process authority loss during the teardown
         // window that follows it -- deliberately WITHOUT also triggering
-        // handleAuthorityLost's real teardown, since a real trigger tears
-        // the room down almost immediately regardless of this fence,
-        // which would prove nothing about the fence specifically.
+        // handleAuthorityLost's real teardown yet, since a real trigger
+        // tears the room down almost immediately regardless of this fence,
+        // which would prove nothing about the fence specifically. Teardown
+        // is driven for real further below, only AFTER the freeze
+        // assertions this scenario exists to make.
         server.lifecycle.markFailed();
 
         // The writer connection/heartbeat itself was never touched: this is
@@ -646,15 +672,88 @@ describe.skipIf(!databaseAvailable)(
         const after = room.state.ships.get(moverSessionId)!;
         expect(after.x).toBeCloseTo(frozen.x, 4);
         expect(after.velocityX).toBeCloseTo(frozen.velocityX, 4);
+
+        // Freeze assertions are done. Now drive the REAL authority-loss
+        // handler (rather than leaving this test's own lifecycle.markFailed()
+        // bypass permanently uncoupled from teardown) by making the writer's
+        // own local safety check fail too, then invoking the exact method
+        // production's heartbeat timer would have called. Not calling
+        // writer.release()/persistence.shutdown() first: performHeartbeat()
+        // only proceeds past its guard while stateValue is still 'owning'.
+        server.writerClock.value += 999_999;
+        await server.persistence.writer.performHeartbeat();
+        expect(server.persistence.writer.isControlSafe()).toBe(false);
+        // Confirms the intended route was actually taken (the owning-state
+        // local-safety-deadline failure path), not merely that some
+        // unrelated state changed.
+        expect(server.persistence.writer.state).toBe('failed');
+
+        // performHeartbeat() resolving does NOT mean index.ts's real,
+        // asynchronous performTeardown() has finished -- it only means the
+        // failure callback (which starts that teardown) has been invoked.
+        // Wait boundedly for each independently observable effect.
+        await waitForAsync(
+          async () => matchMaker.getLocalRoomById(roomId) === undefined,
+          'the canonical room to be disposed by real teardown',
+          8_000
+        );
+        await waitForAsync(
+          async () => !(await isHttpEndpointReachable(`${server?.url}/world/battle-room`)),
+          'the HTTP listener to stop accepting connections',
+          8_000
+        );
+        await waitForAsync(
+          async () =>
+            productionRoomDependenciesModule.getActiveProductionRoomDependencies() ===
+            dependenciesBaselineBeforeBoot,
+          'production room dependencies installation to be restored to its pre-boot baseline',
+          8_000
+        );
+        await waitForAsync(
+          async () => getActiveNetworkBoundaryConfig() === networkBoundaryBaselineBeforeBoot,
+          'the network boundary installation to be restored to its pre-boot baseline',
+          8_000
+        );
+
+        // Application DB connections (writer, schema-maintenance, and the
+        // process-private HTTP identity pool) must all be closed by the
+        // real teardown above -- proven with a separate observer
+        // connection to a DIFFERENT database, never the disposable one
+        // itself, so it can never appear in its own count.
+        const databaseName = server.databaseName;
+        await withDirectConnection(ADMIN_DATABASE_URL, async (observer) => {
+          await waitForAsync(
+            async () => {
+              const result = await observer.query<{ count: string }>(
+                'SELECT count(*)::text AS count FROM pg_stat_activity WHERE datname = $1',
+                [databaseName]
+              );
+              return result.rows[0]?.count === '0';
+            },
+            'every application connection to this disposable database to close',
+            8_000
+          );
+
+          // A plain DROP DATABASE (no FORCE, no pg_terminate_backend): it
+          // only succeeds if nothing is still attached, so this is itself
+          // proof of the connection-closure claim above, not merely a
+          // cleanup convenience.
+          await observer.query(`DROP DATABASE ${databaseName}`);
+          const stillExists = await observer.query<{ datname: string }>(
+            'SELECT datname FROM pg_database WHERE datname = $1',
+            [databaseName]
+          );
+          expect(stillExists.rows).toHaveLength(0);
+        });
       },
-      TEST_TIMEOUT_MS
+      TEST_TIMEOUT_MS_LONG
     );
   }
 );
 
 describe.skipIf(!databaseAvailable)('fail-closed on a missing authority capability (real PostgreSQL)', () => {
   it(
-    'a room reference captured before real teardown cannot simulate once production room dependencies have actually been uninstalled',
+    'a live, primed ship/projectile cannot advance on the one tick where the dependency lookup itself returns undefined, without emptying or disposing the room',
     async () => {
       const server = await bootAuthorityTestServer();
       const mover = createObservedClient(server.url);
@@ -673,35 +772,90 @@ describe.skipIf(!databaseAvailable)('fail-closed on a missing authority capabili
         const room = serverRoom(roomId);
         const startX = room.state.ships.get(moverSessionId)?.x ?? 0;
 
-        mover.client.sendPlayerInput(rightInput());
-        await waitFor(() => (room.state.ships.get(moverSessionId)?.x ?? 0) > startX + 5, 'real movement while safe');
+        // Healthy positive control: with the real capability present, a
+        // moving+firing input genuinely advances position and creates a
+        // real projectile. This proves the fixture is not accidentally
+        // priming an inactive/stationary ship where "no advance" would be
+        // true regardless of any fence.
+        mover.client.sendPlayerInput(movingAndShootingInput());
+        await waitFor(() => (room.state.ships.get(moverSessionId)?.x ?? 0) > startX + 5, 'positive control: real movement while the capability is present');
+        await waitFor(
+          () => projectilesFor(room, moverSessionId).length > 0,
+          'positive control: a real projectile while the capability is present'
+        );
+        const positiveControlShip = room.state.ships.get(moverSessionId);
+        expect(positiveControlShip?.velocityX ?? 0).toBeGreaterThan(0);
 
-        // Real bounded teardown: productionRoomDependenciesInstallation is
-        // actually restored (uninstalled) as part of this, so
-        // getActiveProductionRoomDependencies() genuinely returns undefined
-        // afterwards inside isProcessAuthoritySafe() -- not a stub standing
-        // in for it. mover.dispose()'s own onLeave cleanup legitimately
-        // removes the ship as ordinary disconnect handling, independent of
-        // the authority fence, so the assertion below checks that no
-        // simulation tick can run or recreate anything afterward, not that
-        // the (now-gone) ship's old position survives unchanged.
-        await mover.dispose();
-        await server.stop();
+        // Weapon cooldown from the positive-control shot above; wait it out
+        // in real time so the fresh input primed below is not silently
+        // rate-limited away on the tick under test.
+        await delay(NETWORK_WEAPON_FIRE_INTERVAL_MS + 100);
+
+        // Fresh recent input, still with the room/ship fully intact and
+        // alive -- the capability is made unavailable ONLY for the single
+        // updateSimulation() call below, not by destroying or emptying
+        // anything.
+        mover.client.sendPlayerInput(movingAndShootingInput());
+        await delay(20);
+        const primedShip = { ...room.state.ships.get(moverSessionId)! };
+        expect(primedShip.alive).toBe(true);
+        expect(primedShip.velocityX).toBeGreaterThan(0);
+
+        // Captured immediately adjacent to the spied call (no further
+        // await in between until it is restored below): the room's own
+        // real background simulation timer keeps running throughout this
+        // whole test on its own schedule, so a snapshot taken any earlier
+        // could race a later, entirely legitimate, real-authority tick
+        // that fires its own new projectile for unrelated reasons.
+        const beforeProjectileIds = new Set(projectilesFor(room, moverSessionId).map((projectile) => projectile.id));
+
+        let lookupReached = false;
+        const dependenciesSpy = vi
+          .spyOn(productionRoomDependenciesModule, 'getActiveProductionRoomDependencies')
+          .mockImplementation(() => {
+            lookupReached = true;
+            return undefined;
+          });
 
         let threw = false;
+        let afterShip: ReturnType<typeof room.state.ships.get>;
+        let afterProjectileIds: Set<string>;
         try {
           room.updateSimulation(NETWORK_TICK_INTERVAL_MS);
+          afterShip = room.state.ships.get(moverSessionId);
+          afterProjectileIds = new Set(projectilesFor(room, moverSessionId).map((projectile) => projectile.id));
         } catch {
           threw = true;
+          afterShip = undefined;
+          afterProjectileIds = new Set();
+        } finally {
+          // Restored synchronously, before any further async work (in
+          // particular before the cleanup below), so the room's own
+          // real background simulation timer is never left observing a
+          // permanently-missing capability for longer than this one
+          // deliberate tick.
+          dependenciesSpy.mockRestore();
         }
 
-        if (!threw) {
-          let shipCount = 0;
-          room.state.ships.forEach(() => {
-            shipCount += 1;
-          });
-          expect(shipCount).toBe(0);
+        // Ordered so the primary behavioral claim (the primed simulation
+        // did not advance) is the first thing checked -- see the negative
+        // control in the ARCH-FIX2 evidence: against the pre-fix
+        // BattleRoom.ts this is exactly where the corrected scenario fails
+        // (the ship genuinely keeps moving), rather than failing on the
+        // spy-mechanism assertion below.
+        expect(threw).toBe(false);
+        expect(afterShip).toBeDefined();
+        expect(afterShip?.alive).toBe(true);
+        expect(afterShip?.x).toBeCloseTo(primedShip.x, 4);
+        expect(afterShip?.velocityX).toBeCloseTo(primedShip.velocityX, 4);
+
+        for (const id of afterProjectileIds) {
+          expect(beforeProjectileIds.has(id)).toBe(true);
         }
+
+        // Confirms the missing-authority path was actually exercised (not
+        // merely that nothing happened to throw).
+        expect(lookupReached).toBe(true);
       } finally {
         await mover.dispose().catch(() => undefined);
         await server.stop().catch(() => undefined);
@@ -830,7 +984,12 @@ describe.skipIf(!databaseAvailable)(
         expect(server.persistence.writer.isControlSafe()).toBe(false);
 
         releaseGate?.();
-        await delay(300);
+        // Bounded wait on the room's own real per-session operation tail
+        // (the same mechanism BattleRoom.onLeave() itself awaits) rather
+        // than a fixed sleep: resolves exactly when this session's gated
+        // handleSetProfile() call -- including whichever branch it took --
+        // has fully settled.
+        await serverSideRoom.awaitProfileTail(room.sessionId);
 
         // Never accepted, never rejected via a normal profile message: the
         // now-stale completion returns silently after compensating, exactly
