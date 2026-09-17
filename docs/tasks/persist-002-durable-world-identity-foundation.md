@@ -171,16 +171,16 @@ Do not claim battle-state durability.
 ## Status
 
 **IMPLEMENTATION PUSHED AS PR #86 (OPEN). CORE PR CHECKS: SUCCESS AT
-IMPLEMENTATION CHECKPOINT `0dba3e74562b3d0e395a5cad2a29732512e68515` AND
-AGAIN AT QA-RECOVERY-001 HEAD `f146a3f2480525f13ae6691bd1fa75cb96927a8f`.
-CLAUDE QA AUTOMATION HAS NOT YET PRODUCED A VALIDATED REVIEW AT ANY HEAD:
-AT THE FIRST CHECKPOINT, TWO INDEPENDENT AUTOMATION FAILURES OCCURRED; AT
-THE SECOND, THE REVIEWER DID NOT EVEN START, BECAUSE THE WORKFLOW FILE
-DIFFERED FROM THE TRUSTED DEFAULT-BRANCH VERSION. QA-RECOVERY-002
-RESTORES THAT TRUSTED WORKFLOW AND IS NOW COMMITTED; CORE/QA FOR THE
-RESULTING NEWEST HEAD ARE PENDING AND NOT YET OBSERVED. AWAITING
-INDEPENDENT REVIEWS, A VALIDATED QA RUN, PRODUCT ARCHITECT ACCEPTANCE,
-AND HUMAN MERGE.**
+IMPLEMENTATION CHECKPOINT `0dba3e74562b3d0e395a5cad2a29732512e68515`, AGAIN
+AT QA-RECOVERY-001 HEAD `f146a3f2480525f13ae6691bd1fa75cb96927a8f`, AND
+AGAIN AT QA-RECOVERY-002 HEAD `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`,
+WHERE GOVERNED CLAUDE QA ALSO RAN AND RETURNED "APPROVED WITH
+SUGGESTIONS". AN INDEPENDENT ARCHITECTURE REVIEW OF THAT HEAD THEN RAISED
+PERSIST002-C-01 (MEDIUM); PRODUCT ARCHITECT DISPOSITION WAS
+REQUEST_CHANGES. ARCH-FIX1 (BELOW) IMPLEMENTS THE FIX AND ITS OWN REAL
+REGRESSION EVIDENCE. INDEPENDENT DELTA REVIEW OF PERSIST002-C-01, CORE/QA
+FOR THE ARCH-FIX1 HEAD, PRODUCT ARCHITECT FINAL ACCEPTANCE, AND HUMAN
+MERGE ALL REMAIN OUTSTANDING.**
 
 All seven implementation packets plus four bounded post-implementation
 corrections (FIX1–FIX4) are pushed as local sequential commits on
@@ -319,15 +319,98 @@ or expected exit code in that file changed, and the sanitizer
 implemented and unaffected; the historical subreason for the original
 `0dba3e7...` QA run's `execution_file_invalid` result remains unknown.
 
-No validated QA approval or final PERSIST-002 acceptance has been obtained
-at any head. Next safe action: obtain and inspect Core Pull Request Checks
-and governed Claude QA for the newest PR head resulting from
-QA-RECOVERY-002, and record their exact outcome (run/job/attempt; whether
-the reviewer actually started; whether `execution_file` was produced; the
-sanitizer result and, if the sanitizer still fails, the "execution file
-subreason" value from its safe Summary table; whether structured output
-was validated; and any substantive verdict only if actually produced and
-validated). Independent Architecture, Network, Security, and QA reviews
-remain to be routed and bound to whichever HEAD is current when they
-begin; Product Architect final acceptance and human merge remain
-outstanding. See `docs/handoffs/CURRENT.md`.
+At `097cb92804ede1449f3fc1dca1a8a063f9aa3cef` (QA-RECOVERY-002 head): Core
+Pull Request Checks — **SUCCESS** (run `35193478755`), and the governed
+Claude QA reviewer ran and returned "Approved with suggestions" (run
+`35193478806`). An independent Architecture review of that head then
+raised one finding, addressed by ARCH-FIX1 below.
+
+**ARCH-FIX1 — PERSIST002-C-01 (MEDIUM), simulation not fenced on process
+authority loss:** the independent Architecture review found that
+`BattleRoom.updateSimulation()` (respawn, ship movement, firing,
+projectile movement/collision/damage, and simulation-origin combat
+broadcasts) ran without checking current process/world authority.
+Rejecting new input, or having started asynchronous graceful shutdown,
+does not by itself fence that simulation path — the reviewer did not
+claim simulation was observed to continue for the full shutdown timeout,
+only that the guard was missing. Product Architect disposition:
+**REQUEST_CHANGES** (implement a fix; do not accept as residual risk).
+The reviewer's original verdict, including its own stated limitation that
+it did not personally run the real-PostgreSQL test suites, is preserved
+above and is not altered by this fix.
+
+Implementation (`apps/server/src/index.ts`,
+`apps/server/src/rooms/BattleRoom.ts`):
+
+- `index.ts` now composes the `writer` capability handed to
+  `createProductionRoomDependencies()` from BOTH signals that can declare
+  process authority lost — `persistenceRuntime.writer.isControlSafe()`
+  (the writer's own local heartbeat/deadline check) AND
+  `lifecycle.state === 'ready'` (which the separate schema-maintenance-
+  connection authority-loss path, and voluntary graceful shutdown, both
+  also affect via the existing `handleAuthorityLost()`/`markFailed()`
+  path) — instead of passing the writer object through unchanged. No new
+  capability shape, no Pool/URL/database internals exposed to the room,
+  no change to writer claim/renewal/expiry algorithms, no change to boot
+  order.
+- `BattleRoom.ts` adds one private, room-local, synchronous authority
+  check (`isProcessAuthoritySafe()`) consulting only the above composed
+  signal via the existing `getActiveProductionRoomDependencies()`
+  accessor. It fences, at their single entry points: the entire
+  simulation tick (`updateSimulation()` — no respawn, movement, firing,
+  projectile update/collision/damage, or new combat broadcast from a
+  rejected tick); player input application (`handlePlayerInput()`); and
+  the async `SET_PROFILE` completion boundary (a durable transaction that
+  finishes after authority is lost releases any lease it just acquired
+  and returns, without spawning/updating a ship or sending
+  `PROFILE_ACCEPTED` — the already-committed durable faction/membership
+  is never rolled back, matching the existing generation-mismatch
+  branch it sits beside). The check is terminal per room instance once
+  authority has genuinely been observed lost (a two-flag latch:
+  `hasObservedAuthoritySafe` only becomes true on a genuine safe
+  observation, so a room created before the process reaches `'ready'`
+  during normal startup is never mistakenly disabled; once safe has been
+  observed, a later unsafe observation latches permanently, so a
+  subsequent superficially-safe value can never resume the room). No new
+  same-process recovery path; the existing bounded shutdown remains
+  solely responsible for teardown. Ordinary per-player disconnect
+  semantics are unchanged: this is a process/world-authority fence, not a
+  per-player control gate, so one player's lost lease or reconnect grace
+  never pauses the rest of the world while process authority stays safe.
+
+New regression file
+`apps/server/test/persistence/simulationAuthorityGate.test.ts` (8
+scenarios, real PostgreSQL, exercising the real `BattleRoom` simulation
+path via a real `startProductionServer()` composition with an injected
+writer clock, not only a boolean helper): a safe-authority positive
+control; authority lost immediately before a tick with a primed
+moving/firing ship, a live in-flight projectile aimed at another ship,
+and a killed ship whose respawn deadline is crossed only after the
+freeze (proving `tryRespawnShip` never runs once frozen); the local
+monotonic deadline alone (no lifecycle transition, no heartbeat callback)
+freezing the room; the asynchronous-teardown window (`lifecycle.markFailed()`
+called directly, mirroring `handleAuthorityLost()`'s own synchronous
+`markFailed()` step, deliberately without also triggering its coupled
+teardown — a real trigger disposes the room almost immediately regardless
+of this fence, which would prove nothing about the fence specifically);
+fail-closed when production room dependencies have actually been
+uninstalled (via real teardown); the terminal latch surviving a clock
+rewound back to an apparently-safe value; a delayed `SET_PROFILE`
+completion (gated via the existing `gameplayAuthorityTestHooks` seam)
+losing authority mid-flight; and ordinary per-player disconnect not
+freezing the rest of the world while authority stays safe. A negative
+control was run manually against this task's starting (pre-fix)
+`BattleRoom.ts`: 5 of the 8 scenarios failed as expected, confirming the
+suite actually detects the defect; the working tree was restored to the
+implemented fix afterward (this mutation was never committed).
+
+This implementation is by its author (the same agent that authored the
+fix); it is not independently verified merely because a fix now exists.
+Independent delta review of PERSIST002-C-01 remains required. No claim is
+made here that Core/QA for the resulting new head have already passed —
+see `docs/handoffs/CURRENT.md` for what is actually pending.
+
+Next safe action: independent delta review of PERSIST002-C-01, and
+observation of the ordinary push-triggered Core/governed-QA results for
+the ARCH-FIX1 head once available. Product Architect final acceptance and
+human merge remain outstanding.

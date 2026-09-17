@@ -169,6 +169,45 @@ export class BattleRoom extends Room<BattleState, unknown, unknown, DurableRoomA
   private leaseHeartbeatInFlight = false;
   private nextProjectileId = 1;
 
+  // PERSIST002-C-01 (Architecture review, ARCH-FIX1): terminal, room-local
+  // process-authority fence. `hasObservedAuthoritySafe` becomes true only
+  // once this room has actually seen a genuinely safe tick (never during
+  // normal startup, before RuntimeLifecycle has marked the process ready --
+  // so a healthy room is never terminally disabled just because it was
+  // created before the process finished booting). Once safe has been
+  // observed, any later unsafe observation latches `processAuthorityLost`
+  // permanently: a subsequent superficially-safe value can never resume
+  // this room, matching the architecture's "no automatic same-process
+  // recovery" rule.
+  private hasObservedAuthoritySafe = false;
+  private processAuthorityLost = false;
+
+  /**
+   * Single cheap, synchronous, local authority check shared by the
+   * simulation tick, input application, and the async profile-completion
+   * boundary (docs/architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md:
+   * "Check before each simulation tick, input application and authoritative
+   * publication"). Never queries the database, awaits, or starts a timer.
+   */
+  private isProcessAuthoritySafe(): boolean {
+    if (this.processAuthorityLost) {
+      return false;
+    }
+
+    const safe = getActiveProductionRoomDependencies()?.isAuthoritySafe() ?? false;
+
+    if (safe) {
+      this.hasObservedAuthoritySafe = true;
+      return true;
+    }
+
+    if (this.hasObservedAuthoritySafe) {
+      this.processAuthorityLost = true;
+    }
+
+    return false;
+  }
+
   onCreate(): void {
     // Exactly one canonical world room per process (BS-ARCH-011): it must
     // survive zero connected clients rather than self-disposing.
@@ -620,6 +659,20 @@ export class BattleRoom extends Room<BattleState, unknown, unknown, DurableRoomA
       return;
     }
 
+    // PERSIST002-C-01 (ARCH-FIX1): process authority may have been lost
+    // while this durable transaction was in flight. The durable commit
+    // itself already stands (faction/membership/revision are never rolled
+    // back here, same as the generation-mismatch branch above) -- only
+    // release the lease this stale completion may have just acquired, and
+    // never spawn/update a ship or acknowledge PROFILE_ACCEPTED based on
+    // authority that is no longer safe.
+    if (!this.isProcessAuthoritySafe()) {
+      if (result.kind === 'player_accepted') {
+        await dependencies.releaseSessionLease({ playerId: binding.playerId, leaseId: result.leaseId }).catch(() => undefined);
+      }
+      return;
+    }
+
     if (
       result.kind === 'writer_authority_lost' ||
       result.kind === 'credential_invalid' ||
@@ -765,6 +818,14 @@ export class BattleRoom extends Room<BattleState, unknown, unknown, DurableRoomA
   }
 
   private handlePlayerInput(client: Client, message: unknown): void {
+    // PERSIST002-C-01 (ARCH-FIX1): input arriving while process authority is
+    // unsafe (or after it has been observed lost) must never be accepted
+    // into the runtime input map, independent of this player's own
+    // per-session controlAllowed flag.
+    if (!this.isProcessAuthoritySafe()) {
+      return;
+    }
+
     if (!this.isControlAllowed(client.sessionId)) {
       return;
     }
@@ -804,6 +865,14 @@ export class BattleRoom extends Room<BattleState, unknown, unknown, DurableRoomA
   }
 
   private updateSimulation(deltaTimeMs: number): void {
+    // PERSIST002-C-01 (ARCH-FIX1): fence the entire tick at its single
+    // entry point. No respawn, movement/rotation, firing, projectile
+    // movement/collision/damage, or simulation-origin combat broadcast may
+    // occur from a tick observed while process authority is unsafe.
+    if (!this.isProcessAuthoritySafe()) {
+      return;
+    }
+
     const runtimeNow = performance.now();
     const wallNow = Date.now();
     const deltaSeconds = Math.min(deltaTimeMs / 1000, 0.1);

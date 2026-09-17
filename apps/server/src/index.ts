@@ -360,13 +360,36 @@ export async function startProductionServer(
       monotonicNow: options.freshAuthLimiterClock
     });
 
+    // PERSIST002-C-01 (Architecture review, ARCH-FIX1): persistenceRuntime.writer's
+    // own isControlSafe() reflects only the writer connection/heartbeat. A
+    // process-level authority loss can also be declared through the
+    // SEPARATE schema-maintenance-connection path inside bootPersistenceRuntime,
+    // or through the canonical-room-disposed-unexpectedly watchdog below --
+    // both call handleAuthorityLost(), which marks RuntimeLifecycle failed
+    // (lifecycle.markFailed()) WITHOUT ever touching the writer object. A
+    // room gating only on writer.isControlSafe() could therefore keep
+    // treating a process whose authority has already been declared lost as
+    // safe. Compose both signals here so every ProductionRoomDependencies
+    // capability that depends on the "writer" authority surface (onAuth,
+    // credential revalidation, profile transactions, lease renewal) reflects
+    // the COMPLETE process authority state. Graceful shutdown (draining) is
+    // included as unsafe too: async teardown after beginShutdown() must not
+    // let gameplay continue for the shutdown-timeout budget. This exposes no
+    // new capability surface -- it is the same WriterAuthoritySafe shape
+    // productionRoomDependencies.ts already expects, and never touches
+    // writer claim/renewal/expiry algorithms.
+    const roomAuthoritySafe = {
+      isControlSafe: (): boolean =>
+        lifecycle.state === 'ready' && (persistenceRuntime?.writer.isControlSafe() ?? false)
+    };
+
     productionRoomDependenciesInstallation = installProductionRoomDependencies(
       createProductionRoomDependencies({
         worldId: persistenceRuntime.worldId,
         serverInstanceId: persistenceRuntime.serverInstanceId,
         writerEpoch: persistenceRuntime.writerEpoch,
         pool: identityPool,
-        writer: persistenceRuntime.writer,
+        writer: roomAuthoritySafe,
         freshAuthLimiter,
         gameplayAuthorityTestHooks: options.gameplayAuthorityTestHooks
       })

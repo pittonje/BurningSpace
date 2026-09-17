@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-17
-Updated by: Implementation engineer — QA-RECOVERY-002: restored the trusted Claude QA workflow invocation and reconciled PR #86 evidence, committed and pushed
+Updated by: Implementation engineer — ARCH-FIX1: fenced BattleRoom simulation/input/async-profile-completion on process authority loss (PERSIST002-C-01), committed and pushed
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -39,7 +39,7 @@ PR #85 merge commit (current `origin/main`): `98bda8f5bed41112f5687eb4ef2fd52a0c
 
 Status: **ARCHITECTURE/SECURITY REVIEW APPROVED / PRODUCT ARCHITECT ACCEPTED / MERGED / CLOSED**
 
-Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7 plus four bounded post-implementation corrections (FIX1–FIX4) are pushed as local sequential commits through implementation checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515`; the branch itself has never been reset, rebased, or amended. Core Pull Request Checks are fully **SUCCESS** at that exact implementation checkpoint (run `34948430842`, job `104313315933`, attempt 1), including the Caddy edge contract and staging-container integration gates. Automated Claude QA at that same checkpoint did **not produce a validated review**: two independent automation failures occurred (see "PR #86 evidence" below) — this is an infrastructure gap, not a QA approval, not a QA rejection of the implementation. QA-RECOVERY-001, a bounded QA-infrastructure diagnosability/documentation patch, was committed on top of that checkpoint (Product Architect approved it for exactly one bounded commit/push); Core at that resulting head was SUCCESS, but the Claude QA reviewer did not start at all (workflow-content trust mismatch against the default branch — not a review outcome). QA-RECOVERY-002 restores the trusted workflow bytes and removes the three now-obsolete test assertions that depended on the deferred prompt text, under explicit Product Architect authorization; it is likewise committed and pushed. Core and Claude QA for this newest PR head are pending and have not yet been observed — see the task file's Status section for the exact new HEAD and current run status. Required independent Architecture, Network, Security, and QA reviews, Product Architect final acceptance, and human merge remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
+Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7 plus post-implementation corrections FIX1–FIX4 and the QA-RECOVERY-001/002 infrastructure patches are pushed as local sequential commits through `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`; the branch itself has never been reset, rebased, or amended. At that head, Core Pull Request Checks were **SUCCESS** (run `35193478755`) and governed Claude QA ran and returned **"Approved with suggestions"** (run `35193478806`). An independent Architecture review of that head then raised **PERSIST002-C-01 (MEDIUM)** — `BattleRoom.updateSimulation()` and related paths did not check process/world authority before running; Product Architect disposition was **REQUEST_CHANGES**. **ARCH-FIX1** implements the fix (fences the simulation tick, input application, and the async `SET_PROFILE` completion boundary on a composed process-authority signal) with its own new real-PostgreSQL regression suite; see the task file's ARCH-FIX1 section for full evidence. This fix is by its own author and is not independently verified merely because it exists — independent delta review of PERSIST002-C-01 remains required, and Core/Claude QA for the resulting ARCH-FIX1 head have not yet been observed. Required independent Network and Security reviews, Product Architect final acceptance, and human merge remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
 
 ## PERSIST-001 accepted architecture
 
@@ -259,29 +259,50 @@ Security, and QA reviews; Product Architect final acceptance; and human
 merge remain required. Staging/runtime deployment status is unchanged
 from the rest of this document.
 
+## ARCH-FIX1 (2026-09-17): fence simulation on process authority loss
+
+At the QA-RECOVERY-002 head `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`:
+Core Pull Request Checks — **SUCCESS** (run `35193478755`); governed
+Claude QA — ran and returned **"Approved with suggestions"** (run
+`35193478806`). An independent Architecture review of that same head
+raised **PERSIST002-C-01 (MEDIUM)**: `BattleRoom.updateSimulation()`
+(respawn, movement, firing, projectile update/collision/damage,
+simulation-origin combat broadcasts) ran without checking current
+process/world authority; rejecting new input, or having started
+asynchronous graceful shutdown, does not by itself fence that path.
+Product Architect disposition: **REQUEST_CHANGES** (implement a fix, not
+accept as residual risk).
+
+ARCH-FIX1 implements the fix, narrowly scoped to
+`apps/server/src/index.ts` (composes the `writer` capability passed into
+`createProductionRoomDependencies()` from both `persistenceRuntime.writer.isControlSafe()`
+and `lifecycle.state === 'ready'`, so the room reflects process-level
+authority loss reported through the separate schema-maintenance-
+connection path and voluntary shutdown, not only the writer's own local
+check) and `apps/server/src/rooms/BattleRoom.ts` (a single room-local,
+synchronous, terminal-once-observed-lost authority check fencing the
+simulation tick, player input application, and the async `SET_PROFILE`
+completion boundary), plus a new real-PostgreSQL regression file
+`apps/server/test/persistence/simulationAuthorityGate.test.ts` (8
+scenarios exercising the real `BattleRoom` simulation path). A manual
+negative control against this task's pre-fix `BattleRoom.ts` failed 5 of
+the 8 new scenarios as expected, then the working tree was restored to
+the fix (that mutation was never committed). Full detail, including exact
+fence behavior and what remains explicitly unverified, is in the task
+file's ARCH-FIX1 section.
+
+This fix is by its own author and is **not** independently verified
+merely because it exists. Core and governed Claude QA for the resulting
+ARCH-FIX1 head have not yet been observed — this document does not claim
+those checks have passed.
+
 ## Current next safe action
 
-*(Historical preparation evidence, dated 2026-09-15: QA-RECOVERY-001 was
-prepared as a local, uncommitted patch against the QA reporting
-infrastructure and this documentation, then inspected and approved by
-Product Architect for exactly one bounded commit/push, with its three
-technical files' Git blob hashes frozen and verified unchanged before
-that commit. Dated 2026-09-16/17: QA-RECOVERY-002 was likewise prepared
-locally — restoring the trusted workflow bytes and, after a pre-commit
-STOP over a resulting test-assertion conflict, removing exactly the three
-now-obsolete deferred-guidance assertions under explicit Product
-Architect authorization — before being committed and pushed.)*
-
-QA-RECOVERY-001 and QA-RECOVERY-002 are both now committed on top of
-implementation checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515` and
-pushed to PR #86. The resulting new PR head has not yet had Core or Claude
-QA observed — this document does not claim those checks have passed. The
-next action is: **obtain and inspect Core Pull Request Checks and governed
-Claude QA for the resulting new PR head**, and report their outcome
-(including, if the sanitizer still fails, the "execution file subreason"
-value from its safe Summary table). Independent Architecture, Network,
-Security, and QA reviews remain to be routed and bound to whichever HEAD
-is current when they begin; Product Architect final acceptance and human
-merge remain outstanding. Actual staging rollout with persistence enabled
-remains a later, separately authorized task — see
+The next action is: **independent delta review of PERSIST002-C-01**
+against ARCH-FIX1, and obtaining/inspecting Core Pull Request Checks and
+governed Claude QA for the resulting ARCH-FIX1 PR head. Independent
+Network and Security reviews remain to be routed and bound to whichever
+HEAD is current when they begin; Product Architect final acceptance and
+human merge remain outstanding. Actual staging rollout with persistence
+enabled remains a later, separately authorized task — see
 [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).
