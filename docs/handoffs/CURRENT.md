@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-09-16
-Updated by: Implementation engineer — QA-RECOVERY-001: PA-approved QA-infrastructure diagnosability patch and PR #86 evidence reconciliation, committed and pushed
+Last updated: 2026-09-17
+Updated by: Implementation engineer — QA-RECOVERY-002: restored the trusted Claude QA workflow invocation and reconciled PR #86 evidence, committed and pushed
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -39,7 +39,7 @@ PR #85 merge commit (current `origin/main`): `98bda8f5bed41112f5687eb4ef2fd52a0c
 
 Status: **ARCHITECTURE/SECURITY REVIEW APPROVED / PRODUCT ARCHITECT ACCEPTED / MERGED / CLOSED**
 
-Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7 plus four bounded post-implementation corrections (FIX1–FIX4) are pushed as local sequential commits through implementation checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515`; the branch itself has never been reset, rebased, or amended. Core Pull Request Checks are fully **SUCCESS** at that exact implementation checkpoint (run `34948430842`, job `104313315933`, attempt 1), including the Caddy edge contract and staging-container integration gates. Automated Claude QA at that same checkpoint did **not produce a validated review**: two independent automation failures occurred (see "PR #86 evidence" below) — this is an infrastructure gap, not a QA approval, not a QA rejection of the implementation. QA-RECOVERY-001, a bounded QA-infrastructure diagnosability/documentation patch, is now committed on top of that checkpoint (Product Architect approved it for exactly one bounded commit/push); Core and Claude QA for the resulting new PR head are pending and have not yet been observed — see the task file's Status section for the exact new HEAD and current run status. Required independent Architecture, Network, Security, and QA reviews, Product Architect final acceptance, and human merge remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
+Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7 plus four bounded post-implementation corrections (FIX1–FIX4) are pushed as local sequential commits through implementation checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515`; the branch itself has never been reset, rebased, or amended. Core Pull Request Checks are fully **SUCCESS** at that exact implementation checkpoint (run `34948430842`, job `104313315933`, attempt 1), including the Caddy edge contract and staging-container integration gates. Automated Claude QA at that same checkpoint did **not produce a validated review**: two independent automation failures occurred (see "PR #86 evidence" below) — this is an infrastructure gap, not a QA approval, not a QA rejection of the implementation. QA-RECOVERY-001, a bounded QA-infrastructure diagnosability/documentation patch, was committed on top of that checkpoint (Product Architect approved it for exactly one bounded commit/push); Core at that resulting head was SUCCESS, but the Claude QA reviewer did not start at all (workflow-content trust mismatch against the default branch — not a review outcome). QA-RECOVERY-002 restores the trusted workflow bytes and removes the three now-obsolete test assertions that depended on the deferred prompt text, under explicit Product Architect authorization; it is likewise committed and pushed. Core and Claude QA for this newest PR head are pending and have not yet been observed — see the task file's Status section for the exact new HEAD and current run status. Required independent Architecture, Network, Security, and QA reviews, Product Architect final acceptance, and human merge remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
 
 ## PERSIST-001 accepted architecture
 
@@ -214,6 +214,51 @@ occurred. The branch implementation above is distinct from the deployed
 staging environment described earlier in this document, which is
 unchanged and still non-persistent.
 
+## QA-RECOVERY-002 (2026-09-17): trusted workflow restoration
+
+At the QA-RECOVERY-001 head `f146a3f2480525f13ae6691bd1fa75cb96927a8f`:
+
+- **Core Pull Request Checks: SUCCESS** — run `35093811907`, job
+  `104786149103`, attempt 1, including all later diagnostics/Caddy/
+  container-integration checks.
+- **Claude QA Review Pilot** — run `35093811913`, job `104786148454`,
+  attempt 1: the reviewer **did not start**. The Action's own log reports
+  workflow-validation content mismatch against the default-branch
+  version of `.github/workflows/claude-qa-review-pilot.yml` and skips
+  before invoking the reviewer; this is not retryable by re-running the
+  same head. The empty `execution_file` and empty `structured_output`
+  observed at this head were downstream consequences of that skip, not a
+  reviewer or validator outcome.
+
+QA-RECOVERY-002 restores `.github/workflows/claude-qa-review-pilot.yml`
+to the existing trusted default-branch bytes (blob
+`89ccd3928ee452ebb23ecb632a7d93b6a3d76ddb`, independently confirmed equal
+on the default branch, in the known prior commit `0dba3e7...`, and in the
+restored working tree before commit). This removes the PR's
+workflow-content difference from the default branch; it does not bypass
+or weaken the Action's trust validation, and changes no runtime,
+permission, tool-policy, or Action-pin behavior. The generation-guidance
+enhancement QA-RECOVERY-001 had added to the reviewer prompt is thereby
+**deferred, not active** on this branch. After Product Architect
+authorization following a pre-commit STOP (the restoration otherwise left
+three audit assertions checking for that now-removed prompt text with no
+way to pass without touching the frozen test file), the three
+corresponding `check(...)` calls in
+`.github/scripts/test-claude-qa-audit.py` that asserted presence of that
+deferred guidance were removed; no other test, limit, fixture, or expected
+exit code in that file was changed, and the sanitizer
+(`sanitize-claude-diagnostic.py`) is byte-identical to before. Safe,
+allowlisted `execution_file_invalid` subreason reporting in the sanitizer
+remains implemented and unaffected; the historical subreason for the
+original `0dba3e7...` QA run's `execution_file_invalid` result remains
+unknown and is not claimed to be established by this change.
+
+No validated QA approval or final PERSIST-002 acceptance has been
+obtained at any head to date. Independent Architecture, Network,
+Security, and QA reviews; Product Architect final acceptance; and human
+merge remain required. Staging/runtime deployment status is unchanged
+from the rest of this document.
+
 ## Current next safe action
 
 *(Historical preparation evidence, dated 2026-09-15: QA-RECOVERY-001 was
@@ -221,18 +266,22 @@ prepared as a local, uncommitted patch against the QA reporting
 infrastructure and this documentation, then inspected and approved by
 Product Architect for exactly one bounded commit/push, with its three
 technical files' Git blob hashes frozen and verified unchanged before
-that commit.)*
+that commit. Dated 2026-09-16/17: QA-RECOVERY-002 was likewise prepared
+locally — restoring the trusted workflow bytes and, after a pre-commit
+STOP over a resulting test-assertion conflict, removing exactly the three
+now-obsolete deferred-guidance assertions under explicit Product
+Architect authorization — before being committed and pushed.)*
 
-QA-RECOVERY-001 is now committed on top of implementation checkpoint
-`0dba3e74562b3d0e395a5cad2a29732512e68515` and pushed to PR #86. The
-resulting new PR head has not yet had Core or Claude QA observed — this
-document does not claim those checks have passed. The next action is:
-**obtain and inspect Core Pull Request Checks and governed Claude QA for
-the resulting new PR head**, and report their outcome (including, if the
-sanitizer still fails, the "execution file subreason" value from its
-safe Summary table). Independent Architecture, Network, Security, and QA
-reviews remain to be routed and bound to whichever HEAD is current when
-they begin; Product Architect final acceptance and human merge remain
-outstanding. Actual staging rollout with persistence enabled remains a
-later, separately authorized task — see
+QA-RECOVERY-001 and QA-RECOVERY-002 are both now committed on top of
+implementation checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515` and
+pushed to PR #86. The resulting new PR head has not yet had Core or Claude
+QA observed — this document does not claim those checks have passed. The
+next action is: **obtain and inspect Core Pull Request Checks and governed
+Claude QA for the resulting new PR head**, and report their outcome
+(including, if the sanitizer still fails, the "execution file subreason"
+value from its safe Summary table). Independent Architecture, Network,
+Security, and QA reviews remain to be routed and bound to whichever HEAD
+is current when they begin; Product Architect final acceptance and human
+merge remain outstanding. Actual staging rollout with persistence enabled
+remains a later, separately authorized task — see
 [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).

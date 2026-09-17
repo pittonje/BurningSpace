@@ -171,12 +171,16 @@ Do not claim battle-state durability.
 ## Status
 
 **IMPLEMENTATION PUSHED AS PR #86 (OPEN). CORE PR CHECKS: SUCCESS AT
-IMPLEMENTATION CHECKPOINT `0dba3e74562b3d0e395a5cad2a29732512e68515`.
-CLAUDE QA AUTOMATION AT THAT CHECKPOINT: NOT VALIDATED (INFRASTRUCTURE
-GAP, SEE BELOW). QA-RECOVERY-001 IS NOW COMMITTED ON TOP OF THAT
-CHECKPOINT; CORE/QA FOR THE RESULTING NEW HEAD ARE PENDING AND NOT YET
-OBSERVED. AWAITING INDEPENDENT REVIEWS, A VALIDATED QA RUN, PRODUCT
-ARCHITECT ACCEPTANCE, AND HUMAN MERGE.**
+IMPLEMENTATION CHECKPOINT `0dba3e74562b3d0e395a5cad2a29732512e68515` AND
+AGAIN AT QA-RECOVERY-001 HEAD `f146a3f2480525f13ae6691bd1fa75cb96927a8f`.
+CLAUDE QA AUTOMATION HAS NOT YET PRODUCED A VALIDATED REVIEW AT ANY HEAD:
+AT THE FIRST CHECKPOINT, TWO INDEPENDENT AUTOMATION FAILURES OCCURRED; AT
+THE SECOND, THE REVIEWER DID NOT EVEN START, BECAUSE THE WORKFLOW FILE
+DIFFERED FROM THE TRUSTED DEFAULT-BRANCH VERSION. QA-RECOVERY-002
+RESTORES THAT TRUSTED WORKFLOW AND IS NOW COMMITTED; CORE/QA FOR THE
+RESULTING NEWEST HEAD ARE PENDING AND NOT YET OBSERVED. AWAITING
+INDEPENDENT REVIEWS, A VALIDATED QA RUN, PRODUCT ARCHITECT ACCEPTANCE,
+AND HUMAN MERGE.**
 
 All seven implementation packets plus four bounded post-implementation
 corrections (FIX1–FIX4) are pushed as local sequential commits on
@@ -278,16 +282,52 @@ recurrence of the oversized-item failure. It does not change persistence,
 authentication, or gameplay behavior. Product Architect inspected the
 technical bytes (three files, blob hashes verified unchanged before
 commit) and the documentation correction, and approved exactly one
-bounded commit/push. That commit is now made on top of implementation
-checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515` and pushed to PR
-#86; it has **not** itself been observed against Core or Claude QA yet —
-no claim of passing remote checks is made for it here.
+bounded commit/push. That commit was made on top of implementation
+checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515`
+(`f146a3f2480525f13ae6691bd1fa75cb96927a8f`) and pushed to PR #86.
 
-Next safe action: obtain and inspect Core Pull Request Checks and
-governed Claude QA for the resulting new PR head, and record their exact
-outcome (run/job/attempt, and — if the sanitizer still fails — the
-"execution file subreason" value from its safe Summary table). Independent
-Architecture, Network, Security, and QA reviews remain to be routed and
-bound to whichever HEAD is current when they begin; Product Architect
-final acceptance and human merge remain outstanding. See
-`docs/handoffs/CURRENT.md`.
+**Observed at `f146a3f...`:** Core Pull Request Checks — **SUCCESS** (run
+`35093811907`, job `104786149103`, attempt 1), including all later
+diagnostics/Caddy/staging-container-integration checks. Claude QA Review
+Pilot (run `35093811913`, job `104786148454`, attempt 1) — the reviewer
+**did not start**: the Action's own log reports a workflow-content trust
+mismatch against the default-branch version of
+`.github/workflows/claude-qa-review-pilot.yml` and skips before invoking
+the reviewer (not retryable by re-running the same head). The empty
+`execution_file` and empty `structured_output` seen at this head were
+downstream consequences of that skip, not a reviewer or sanitizer/
+validator outcome.
+
+**QA-RECOVERY-002:** restores `.github/workflows/claude-qa-review-pilot.yml`
+to the existing trusted default-branch bytes (blob
+`89ccd3928ee452ebb23ecb632a7d93b6a3d76ddb`; independently confirmed equal
+on the default branch, in the known prior commit
+`0dba3e74562b3d0e395a5cad2a29732512e68515`, and in the restored working
+tree before commit). This removes the PR's workflow-content difference
+without bypassing or weakening the Action's trust validation, and changes
+no runtime, permission, tool-policy, or Action-pin behavior. The
+generation-guidance enhancement QA-RECOVERY-001 added is thereby
+**deferred, not active** on this branch. Following a pre-commit STOP
+(restoring the workflow left three audit assertions checking for that
+now-removed prompt text with no way to pass without touching the frozen
+test file), Product Architect explicitly authorized removing exactly
+those three `check(...)` calls in
+`.github/scripts/test-claude-qa-audit.py`; no other test, limit, fixture,
+or expected exit code in that file changed, and the sanitizer
+(`sanitize-claude-diagnostic.py`) remains byte-identical. Safe, allowlisted
+`execution_file_invalid` subreason reporting in the sanitizer remains
+implemented and unaffected; the historical subreason for the original
+`0dba3e7...` QA run's `execution_file_invalid` result remains unknown.
+
+No validated QA approval or final PERSIST-002 acceptance has been obtained
+at any head. Next safe action: obtain and inspect Core Pull Request Checks
+and governed Claude QA for the newest PR head resulting from
+QA-RECOVERY-002, and record their exact outcome (run/job/attempt; whether
+the reviewer actually started; whether `execution_file` was produced; the
+sanitizer result and, if the sanitizer still fails, the "execution file
+subreason" value from its safe Summary table; whether structured output
+was validated; and any substantive verdict only if actually produced and
+validated). Independent Architecture, Network, Security, and QA reviews
+remain to be routed and bound to whichever HEAD is current when they
+begin; Product Architect final acceptance and human merge remain
+outstanding. See `docs/handoffs/CURRENT.md`.

@@ -173,14 +173,6 @@ def test_invocation_contract(text: str) -> None:
           and "under 20" in prompt_block
           and "under 100 characters" in prompt_block
           and "under 2000 characters" in prompt_block)
-    check("prompt adds conservative generation-guidance targets under the hard limits",
-          "Generation guidance" in prompt_block
-          and "300" in prompt_block and "1200" in prompt_block and "80 characters" in prompt_block)
-    check("prompt guidance forbids omitting findings or predetermining approval to fit length",
-          "Do not omit a" in prompt_block and "approval_status" in prompt_block)
-    check("prompt states pending CI as a time-bound observation, not a precondition",
-          "pending/unknown result observed at review" in prompt_block
-          and "precondition" in prompt_block)
 
     with open(AGENT_DEF, encoding="utf-8") as handle:
         agent = handle.read()
