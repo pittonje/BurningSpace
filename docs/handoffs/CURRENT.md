@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-17
-Updated by: Implementation engineer — ARCH-FIX2: corrected ARCH-FIX1's test evidence (REVIEW-C01-A resource leak, REVIEW-C01-B non-discriminating regression), committed and pushed
+Updated by: Implementation engineer — ARCH-FIX3: guaranteed cleanup for the REVIEW-C01-A early-test-failure path (moved into the harness's shared stop()), committed and pushed
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -39,7 +39,7 @@ PR #85 merge commit (current `origin/main`): `98bda8f5bed41112f5687eb4ef2fd52a0c
 
 Status: **ARCHITECTURE/SECURITY REVIEW APPROVED / PRODUCT ARCHITECT ACCEPTED / MERGED / CLOSED**
 
-Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7, post-implementation corrections FIX1–FIX4, the QA-RECOVERY-001/002 infrastructure patches, and ARCH-FIX1/ARCH-FIX2 are pushed as local sequential commits; the branch itself has never been reset, rebased, or amended. At the QA-RECOVERY-002 head `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`, Core Pull Request Checks were **SUCCESS** (run `35193478755`) and governed Claude QA ran and returned **"Approved with suggestions"** (run `35193478806`). An independent Architecture review of that head then raised **PERSIST002-C-01 (MEDIUM)** — `BattleRoom.updateSimulation()` and related paths did not check process/world authority before running; Product Architect disposition was **REQUEST_CHANGES**. **ARCH-FIX1** (`cc87ab0c679acbce5c16f866f84780c1804c4e31`) implemented the runtime fix; **independent delta review CLOSED the runtime finding PERSIST002-C-01 at that commit**, but found ARCH-FIX1's own test evidence insufficient (REVIEW-C01-A: a resource leak in the teardown-window scenario's cleanup; REVIEW-C01-B: a missing-capability regression that passed on both pre-fix and fixed code), so ARCH-FIX1's overall delta disposition remained **REQUEST_CHANGES**. **ARCH-FIX2** is a bounded, test-only correction of both findings — see the task file's ARCH-FIX2 section, and the section below, for full evidence. Independent verification of ARCH-FIX2, and Core/Claude QA for the resulting ARCH-FIX2 head, have not yet been observed. Required independent Network and Security reviews, Product Architect final acceptance, and human merge remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
+Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7, post-implementation corrections FIX1–FIX4, the QA-RECOVERY-001/002 infrastructure patches, and ARCH-FIX1/ARCH-FIX2 are pushed as local sequential commits; the branch itself has never been reset, rebased, or amended. At the QA-RECOVERY-002 head `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`, Core Pull Request Checks were **SUCCESS** (run `35193478755`) and governed Claude QA ran and returned **"Approved with suggestions"** (run `35193478806`). An independent Architecture review of that head then raised **PERSIST002-C-01 (MEDIUM)** — `BattleRoom.updateSimulation()` and related paths did not check process/world authority before running; Product Architect disposition was **REQUEST_CHANGES**. **ARCH-FIX1** (`cc87ab0c679acbce5c16f866f84780c1804c4e31`) implemented the runtime fix; **independent delta review CLOSED the runtime finding PERSIST002-C-01 at that commit**, but found ARCH-FIX1's own test evidence insufficient (REVIEW-C01-A: a resource leak in the teardown-window scenario's cleanup; REVIEW-C01-B: a missing-capability regression that passed on both pre-fix and fixed code), so ARCH-FIX1's overall delta disposition remained **REQUEST_CHANGES**. **ARCH-FIX2** was a bounded, test-only correction of both findings. Independent review of ARCH-FIX2 then **CLOSED REVIEW-C01-B** and confirmed REVIEW-C01-A's successful-path cleanup, but found its early-assertion-failure cleanup path still defective (could leak resources and obscure the original test failure behind a secondary error). **ARCH-FIX3** moves all cleanup responsibility into the harness's shared, guaranteed `stop()` path — see the task file's ARCH-FIX3 section, and the section below, for full evidence. Independent verification of the remaining REVIEW-C01-A path, and Core/Claude QA for the resulting ARCH-FIX3 head, have not yet been observed. Required independent Network and Security reviews, Product Architect final acceptance, and human merge remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
 
 ## PERSIST-001 accepted architecture
 
@@ -374,14 +374,57 @@ verified merely because it exists. Core and governed Claude QA for the
 resulting ARCH-FIX2 head have not yet been observed — this document does
 not claim those checks have passed.
 
+Independent review of ARCH-FIX2 **closed REVIEW-C01-B** and confirmed
+REVIEW-C01-A's successful-path cleanup, but reproduced the confirmed
+early-assertion-failure cleanup gap in the teardown-window scenario — see
+ARCH-FIX3 below. **The two `ERR_IPC_CHANNEL_CLOSED` crashes noted above
+were NOT unrelated infrastructure noise**: at least this same harness
+defect is now confirmed as one real cause. It is not established that
+every historical occurrence of this flake elsewhere in the project shares
+this cause, and ARCH-FIX3 does not claim to eliminate every possible
+cause of it.
+
+## ARCH-FIX3 (2026-09-17): guaranteed cleanup for the REVIEW-C01-A early-failure path
+
+All cleanup responsibility moved into `bootAuthorityTestServer()`'s
+`stop()` — shared, idempotent, and state-aware (normal starting/ready;
+synthetic-failed-lifecycle-with-owning-writer; teardown already
+initiated; already stopped) — called unconditionally from every
+scenario's afterEach/finally, never depending on the test body reaching
+any particular line. A new permanent regression ("guaranteed cleanup
+after an early test failure") boots a real server, creates genuine
+authenticated activity, marks the lifecycle failed, throws a unique
+synthetic marker before any explicit teardown-triggering code, exercises
+the same shared `stop()` path, and independently re-verifies resource
+baselines, zero connections, and database removal while confirming the
+marker survived. A scratch, disposable-worktree probe (not committed)
+injected the identical early failure into the real teardown-window test
+under the default `forks` pool: against the pre-ARCH-FIX3 harness it
+reproduced the same unhandled pg/IPC crash; against the corrected harness
+it failed cleanly on the marker alone, with cleanup still completing.
+
+Full suite: **49 files / 455 tests / 0 failed / 0 skipped** (+1 test, the
+new regression; no file added). One `npm test` attempt hit the same
+pre-existing flake in an unrelated file (after this file's own 9 tests
+had already passed cleanly); a retry completed cleanly. That attempt left
+exactly 1 orphaned `bs_test_*` database, confirmed to have zero active
+connections and dropped by its exact name; the pre-existing 19
+`bs_test_*` databases and the `deploy-postgres-1` container were left
+untouched.
+
+This correction is by its own author and is **not** independently
+verified merely because it exists. Core and governed Claude QA for the
+resulting ARCH-FIX3 head have not yet been observed — this document does
+not claim those checks have passed.
+
 ## Current next safe action
 
-The next action is: **independent verification of ARCH-FIX2's corrected
-test evidence for REVIEW-C01-A and REVIEW-C01-B**, and
-obtaining/inspecting Core Pull Request Checks and governed Claude QA for
-the resulting ARCH-FIX2 PR head. Independent Network and Security
-reviews remain to be routed and bound to whichever HEAD is current when
-they begin; Product Architect final acceptance and human merge remain
-outstanding. Actual staging rollout with persistence enabled remains a
+The next action is: **independent verification of the remaining
+REVIEW-C01-A early-failure cleanup path**, and obtaining/inspecting Core
+Pull Request Checks and governed Claude QA for the resulting ARCH-FIX3
+PR head. Independent Network and Security reviews remain to be routed
+and bound to whichever HEAD is current when they begin; Product
+Architect final acceptance and human merge remain outstanding. Actual
+staging rollout with persistence enabled remains a
 later, separately authorized task — see
 [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).

@@ -42,12 +42,32 @@ import {
 const TEST_TIMEOUT_MS = 15_000;
 const TEST_TIMEOUT_MS_LONG = 20_000;
 const WAIT_TIMEOUT_MS = 5_000;
+// Bound for each individual observable-teardown-completion check inside
+// the shared cleanup path (see bootAuthorityTestServer's stop()). Kept
+// well under HOOK_TIMEOUT_MS even if every one of them had to use its
+// full budget.
+const CLEANUP_STEP_DEADLINE_MS = 6_000;
+// Explicit afterEach/hook timeout: default Vitest hook timeout (10s) is
+// not guaranteed to cover the shared cleanup path's worst case (multiple
+// sequential CLEANUP_STEP_DEADLINE_MS-bounded waits plus a real DB round
+// trip), even though it resolves near-instantly in the common case.
+const HOOK_TIMEOUT_MS = 40_000;
 // Large enough that this harness's own real setInterval-based heartbeat
 // never fires during a test -- every authority-unsafe observation below
 // comes from the synchronous writer.isControlSafe() clock check (or an
 // explicit lifecycle.markFailed() call), never from a heartbeat failure
 // callback actually running.
 const NEVER_FIRING_HEARTBEAT_INTERVAL_MS = 999_999_999;
+// Matches createTestDatabase()'s own bs_test_<32-hex> naming exactly, but
+// is re-validated here (rather than trusted) before this file interpolates
+// the name into a DROP DATABASE statement.
+const SAFE_DATABASE_IDENTIFIER_PATTERN = /^[a-zA-Z0-9_]+$/;
+
+function assertSafeDatabaseIdentifier(name: string): void {
+  if (!SAFE_DATABASE_IDENTIFIER_PATTERN.test(name)) {
+    throw new Error(`Refusing to interpolate an unsafe database identifier: ${JSON.stringify(name)}.`);
+  }
+}
 
 const databaseAvailable = await isTestDatabaseReachable();
 
@@ -102,11 +122,63 @@ interface AuthorityTestServer {
   readonly persistence: PersistenceRuntime;
   /** Mutable box backing the injected writer MonotonicClock -- advance or rewind `.value` to control writer.isControlSafe() deterministically. */
   readonly writerClock: { value: number };
+  /**
+   * Guaranteed, state-aware, idempotent cleanup. Does not depend on the
+   * test body having reached any particular line -- REVIEW-C01-A's
+   * confirmed defect was that this used to live inline in one scenario's
+   * body, after its freeze assertions, so an earlier thrown assertion
+   * skipped it entirely. Every scenario's afterEach/finally (and this
+   * harness's own boot-failure path) calls this exact method; there is no
+   * separate cleanup implementation anywhere else in this file.
+   */
   stop(): Promise<void>;
 }
 
 interface BootAuthorityTestServerOptions {
   readonly gameplayAuthorityTestHooks?: GameplayAuthorityTestHooks;
+}
+
+async function waitForAsync(
+  condition: () => Promise<boolean>,
+  label: string,
+  timeoutMs = WAIT_TIMEOUT_MS
+): Promise<void> {
+  const startedAt = Date.now();
+
+  for (;;) {
+    if (await condition()) {
+      return;
+    }
+
+    if (Date.now() - startedAt >= timeoutMs) {
+      throw new Error(`Timed out after ${timeoutMs}ms waiting for ${label}.`);
+    }
+
+    await delay(20);
+  }
+}
+
+/**
+ * True only once nothing is listening on this origin at all (a definitive
+ * ECONNREFUSED from the underlying connection attempt). A 503 (or any
+ * other) HTTP response means the listener is still accepting connections;
+ * an aborted/timed-out attempt is inconclusive (the process could simply
+ * be slow for an unrelated reason) and must NOT be treated as proof of
+ * closure either way.
+ */
+async function isHttpListenerClosed(url: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 500);
+
+  try {
+    await fetch(url, { signal: controller.signal });
+    return false;
+  } catch (error) {
+    const cause = (error as { cause?: { code?: string } } | undefined)?.cause;
+    return cause?.code === 'ECONNREFUSED';
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /**
@@ -126,7 +198,14 @@ async function bootAuthorityTestServer(
   const writerClock = { value: 0 };
   const clock: MonotonicClock = { now: () => writerClock.value };
 
+  // Captured BEFORE booting, inside the harness, so cleanup can always
+  // compare against the true pre-boot baseline even if the test body
+  // itself never reaches a line that would otherwise have captured it.
+  const dependenciesBaselineBeforeBoot = productionRoomDependenciesModule.getActiveProductionRoomDependencies();
+  const networkBoundaryBaselineBeforeBoot = getActiveNetworkBoundaryConfig();
+
   const database = await createBootstrappedTestDatabase();
+  assertSafeDatabaseIdentifier(database.databaseName);
   let server: ProductionServerHandle | undefined;
 
   try {
@@ -152,7 +231,115 @@ async function bootAuthorityTestServer(
   }
 
   const runningServer = server;
-  let stopped = false;
+  // Published before startProductionServer()'s own promise resolves (see
+  // index.ts's boot order), so this is already available here regardless
+  // of whether the test body ever discovers the room itself.
+  const roomId = runningServer.persistence.getCanonicalRoomId();
+  let cleanupPromise: Promise<void> | undefined;
+
+  async function performCleanup(): Promise<void> {
+    const writer = runningServer.persistence.writer;
+    const lifecycle = runningServer.lifecycle;
+
+    // State 2: a synthetic scenario already declared RuntimeLifecycle
+    // failed directly (bypassing handleAuthorityLost()'s own teardown
+    // trigger), but the writer itself was never touched and still
+    // believes it owns control. Drive the REAL authority-loss callback
+    // via the exact method production's heartbeat timer would have
+    // called, BEFORE any direct release/shutdown below -- release()/
+    // persistence.shutdown() would stop the heartbeat and leave
+    // performHeartbeat()'s stateValue==='owning' guard permanently
+    // false, disabling this route. A test body that already drove this
+    // itself (or a genuine schema-maintenance-connection loss that never
+    // touched the writer) leaves writer.state !== 'owning' or
+    // lifecycle.state !== 'failed', so this is skipped either way --
+    // state 1 (still starting/ready) never takes this branch, and
+    // performHeartbeat() is never called on a healthy server.
+    if (lifecycle.state === 'failed' && writer.state === 'owning') {
+      writerClock.value += 999_999;
+      await writer.performHeartbeat().catch(() => undefined);
+    }
+
+    // State 1 (still starting/ready): begins real teardown normally.
+    // State 2 (now failed via the branch above) and state 3 (teardown
+    // already initiated for real, by this cleanup's own earlier call or
+    // by the test body itself): beginShutdown()'s guard makes this a
+    // harmless no-op, since lifecycle.state is already 'failed' either
+    // way -- the waits below observe the actual completion regardless of
+    // who triggered it, never assuming completion from state alone.
+    await runningServer.shutdown('SIGTERM').catch(() => undefined);
+
+    if (roomId) {
+      await waitForAsync(
+        async () => matchMaker.getLocalRoomById(roomId) === undefined,
+        'the canonical room to be disposed by teardown',
+        CLEANUP_STEP_DEADLINE_MS
+      );
+    }
+    await waitForAsync(
+      async () => isHttpListenerClosed(`${runningServer.url}/world/battle-room`),
+      'the HTTP listener to stop accepting connections',
+      CLEANUP_STEP_DEADLINE_MS
+    );
+    await waitForAsync(
+      async () =>
+        productionRoomDependenciesModule.getActiveProductionRoomDependencies() ===
+        dependenciesBaselineBeforeBoot,
+      'production room dependencies installation to be restored to its pre-boot baseline',
+      CLEANUP_STEP_DEADLINE_MS
+    );
+    await waitForAsync(
+      async () => getActiveNetworkBoundaryConfig() === networkBoundaryBaselineBeforeBoot,
+      'the network boundary installation to be restored to its pre-boot baseline',
+      CLEANUP_STEP_DEADLINE_MS
+    );
+
+    // Application DB connections (writer, schema-maintenance, and the
+    // process-private HTTP identity pool) must all be closed by the real
+    // teardown above -- proven with a separate observer connection to a
+    // DIFFERENT database, never the disposable one itself, so it can
+    // never appear in its own count.
+    await withDirectConnection(ADMIN_DATABASE_URL, async (observer) => {
+      await waitForAsync(
+        async () => {
+          const result = await observer.query<{ count: string }>(
+            'SELECT count(*)::text AS count FROM pg_stat_activity WHERE datname = $1',
+            [database.databaseName]
+          );
+          return result.rows[0]?.count === '0';
+        },
+        'every application connection to this disposable database to close',
+        CLEANUP_STEP_DEADLINE_MS
+      );
+
+      const existing = await observer.query<{ datname: string }>(
+        'SELECT datname FROM pg_database WHERE datname = $1',
+        [database.databaseName]
+      );
+
+      if (existing.rows.length === 0) {
+        // State 4: a previous cleanup attempt (or a concurrent/repeated
+        // stop() call already sharing this same promise) already
+        // dropped it -- nothing destructive left to repeat.
+        return;
+      }
+
+      assertSafeDatabaseIdentifier(database.databaseName);
+      // A plain DROP DATABASE (no FORCE, no pg_terminate_backend): it
+      // only succeeds if nothing is still attached, so this is itself
+      // proof of the connection-closure claim above, not merely a
+      // cleanup convenience.
+      await observer.query(`DROP DATABASE ${database.databaseName}`);
+      const stillExists = await observer.query<{ datname: string }>(
+        'SELECT datname FROM pg_database WHERE datname = $1',
+        [database.databaseName]
+      );
+
+      if (stillExists.rows.length > 0) {
+        throw new Error(`Disposable database ${database.databaseName} still exists after DROP DATABASE.`);
+      }
+    });
+  }
 
   return {
     url: runningServer.url,
@@ -162,48 +349,23 @@ async function bootAuthorityTestServer(
     lifecycle: runningServer.lifecycle,
     persistence: runningServer.persistence,
     writerClock,
-    async stop(): Promise<void> {
-      if (stopped) {
-        return;
+    stop(): Promise<void> {
+      if (cleanupPromise) {
+        return cleanupPromise;
       }
 
-      stopped = true;
-      try {
-        await runningServer.shutdown('SIGTERM');
-        // Defensive/idempotent only: production shutdown()'s
-        // beginShutdown() guard proceeds only from 'starting'/'ready', so
-        // if a scenario already drove RuntimeLifecycle to 'failed' through
-        // a REAL authority-loss path before calling stop() (see the
-        // asynchronous-teardown-window scenario, which waits for that real
-        // teardown to fully complete before this ever runs), this call is
-        // a harmless no-op -- persistenceRuntime's own shutdown() is
-        // idempotent via its own shuttingDown guard either way.
-        await runningServer.persistence.shutdown().catch(() => undefined);
-      } finally {
-        await database.drop().catch(() => undefined);
-      }
+      // Concurrent/repeated callers share this exact in-flight promise.
+      // On rejection, the slot is cleared (not cached as a permanent
+      // failure) so a later call can genuinely retry rather than either
+      // repeating already-succeeded destructive work or silently
+      // reporting success without having actually re-verified anything.
+      cleanupPromise = performCleanup().catch((error: unknown) => {
+        cleanupPromise = undefined;
+        throw error;
+      });
+      return cleanupPromise;
     }
   };
-}
-
-async function waitForAsync(
-  condition: () => Promise<boolean>,
-  label: string,
-  timeoutMs = WAIT_TIMEOUT_MS
-): Promise<void> {
-  const startedAt = Date.now();
-
-  for (;;) {
-    if (await condition()) {
-      return;
-    }
-
-    if (Date.now() - startedAt >= timeoutMs) {
-      throw new Error(`Timed out after ${timeoutMs}ms waiting for ${label}.`);
-    }
-
-    await delay(20);
-  }
 }
 
 /**
@@ -321,7 +483,7 @@ describe.skipIf(!databaseAvailable)('healthy positive control (real PostgreSQL)'
     await Promise.allSettled(clients.splice(0).map((observed) => observed.dispose()));
     await server?.stop();
     server = undefined;
-  });
+  }, HOOK_TIMEOUT_MS);
 
   it(
     'a safe-authority tick actually advances real movement, firing, and projectile state',
@@ -369,7 +531,7 @@ describe.skipIf(!databaseAvailable)('authority loss before the next tick freezes
     await Promise.allSettled(clients.splice(0).map((observed) => observed.dispose()));
     await server?.stop();
     server = undefined;
-  });
+  }, HOOK_TIMEOUT_MS);
 
   it(
     'freezes a moving/firing ship, its in-flight projectile aimed at a live target, and a respawn-due dead ship the instant authority becomes unsafe',
@@ -536,7 +698,7 @@ describe.skipIf(!databaseAvailable)(
       await Promise.allSettled(clients.splice(0).map((observed) => observed.dispose()));
       await server?.stop();
       server = undefined;
-    });
+    }, HOOK_TIMEOUT_MS);
 
     it(
       'a tick at/after the (unmodified) local safety deadline is rejected purely via writer.isControlSafe(), even though the heartbeat timer has not run its own failure callback and RuntimeLifecycle is still ready',
@@ -584,20 +746,6 @@ describe.skipIf(!databaseAvailable)(
   }
 );
 
-async function isHttpEndpointReachable(url: string): Promise<boolean> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 500);
-
-  try {
-    await fetch(url, { signal: controller.signal });
-    return true;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 describe.skipIf(!databaseAvailable)(
   'the asynchronous teardown window is fenced even while the writer alone still reports safe (real PostgreSQL)',
   () => {
@@ -606,23 +754,20 @@ describe.skipIf(!databaseAvailable)(
 
     afterEach(async () => {
       await Promise.allSettled(clients.splice(0).map((observed) => observed.dispose()));
-      // By the time this runs, the test body below has already driven a
-      // REAL authority-loss teardown to completion and independently
-      // dropped its own disposable database -- this is a harmless,
-      // idempotent no-op safety net, not a required cleanup step anymore.
+      // ARCH-FIX3: the shared, guaranteed harness cleanup (see
+      // bootAuthorityTestServer's stop()) is solely responsible for
+      // driving and observing the real authority-loss teardown this
+      // scenario's ending state (lifecycle 'failed', writer still
+      // 'owning') requires -- not inline code in the test body below,
+      // which an earlier thrown assertion would have skipped entirely
+      // (REVIEW-C01-A's confirmed defect).
       await server?.stop();
       server = undefined;
-    });
+    }, HOOK_TIMEOUT_MS);
 
     it(
-      'a room must not resume gameplay merely because writer.isControlSafe() remains true after RuntimeLifecycle has already been marked failed, and the real authority-loss path this scenario later drives cleans up every resource it owns',
+      'a room must not resume gameplay merely because writer.isControlSafe() remains true after RuntimeLifecycle has already been marked failed',
       async () => {
-        // Captured BEFORE booting: the baseline every module-level
-        // installation stack this harness touches must return to once its
-        // own server's real teardown has fully run.
-        const dependenciesBaselineBeforeBoot = productionRoomDependenciesModule.getActiveProductionRoomDependencies();
-        const networkBoundaryBaselineBeforeBoot = getActiveNetworkBoundaryConfig();
-
         server = await bootAuthorityTestServer();
         const mover = createObservedClient(server.url);
         clients.push(mover);
@@ -654,9 +799,11 @@ describe.skipIf(!databaseAvailable)(
         // window that follows it -- deliberately WITHOUT also triggering
         // handleAuthorityLost's real teardown yet, since a real trigger
         // tears the room down almost immediately regardless of this fence,
-        // which would prove nothing about the fence specifically. Teardown
-        // is driven for real further below, only AFTER the freeze
-        // assertions this scenario exists to make.
+        // which would prove nothing about the fence specifically. The
+        // shared afterEach cleanup above drives the real authority-loss
+        // path and proves its full resource teardown, strictly AFTER this
+        // test function returns -- never before the freeze assertions
+        // below, which must prove the fence itself, not disposal.
         server.lifecycle.markFailed();
 
         // The writer connection/heartbeat itself was never touched: this is
@@ -672,81 +819,105 @@ describe.skipIf(!databaseAvailable)(
         const after = room.state.ships.get(moverSessionId)!;
         expect(after.x).toBeCloseTo(frozen.x, 4);
         expect(after.velocityX).toBeCloseTo(frozen.velocityX, 4);
+      },
+      TEST_TIMEOUT_MS_LONG
+    );
+  }
+);
 
-        // Freeze assertions are done. Now drive the REAL authority-loss
-        // handler (rather than leaving this test's own lifecycle.markFailed()
-        // bypass permanently uncoupled from teardown) by making the writer's
-        // own local safety check fail too, then invoking the exact method
-        // production's heartbeat timer would have called. Not calling
-        // writer.release()/persistence.shutdown() first: performHeartbeat()
-        // only proceeds past its guard while stateValue is still 'owning'.
-        server.writerClock.value += 999_999;
-        await server.persistence.writer.performHeartbeat();
-        expect(server.persistence.writer.isControlSafe()).toBe(false);
-        // Confirms the intended route was actually taken (the owning-state
-        // local-safety-deadline failure path), not merely that some
-        // unrelated state changed.
-        expect(server.persistence.writer.state).toBe('failed');
+describe.skipIf(!databaseAvailable)(
+  'guaranteed cleanup after an early test failure (real PostgreSQL, REVIEW-C01-A regression)',
+  () => {
+    it(
+      'the shared stop() path fully tears down and drops its database even when a synthetic assertion throws before any explicit teardown-triggering code runs, and preserves the original failure',
+      async () => {
+        // Independent baseline, captured the same way the harness captures
+        // its own -- this test does not trust stop()'s internal checks to
+        // self-report success; it re-verifies resource state itself.
+        const dependenciesBaselineBeforeBoot = productionRoomDependenciesModule.getActiveProductionRoomDependencies();
+        const networkBoundaryBaselineBeforeBoot = getActiveNetworkBoundaryConfig();
 
-        // performHeartbeat() resolving does NOT mean index.ts's real,
-        // asynchronous performTeardown() has finished -- it only means the
-        // failure callback (which starts that teardown) has been invoked.
-        // Wait boundedly for each independently observable effect.
-        await waitForAsync(
-          async () => matchMaker.getLocalRoomById(roomId) === undefined,
-          'the canonical room to be disposed by real teardown',
-          8_000
-        );
-        await waitForAsync(
-          async () => !(await isHttpEndpointReachable(`${server?.url}/world/battle-room`)),
-          'the HTTP listener to stop accepting connections',
-          8_000
-        );
-        await waitForAsync(
-          async () =>
-            productionRoomDependenciesModule.getActiveProductionRoomDependencies() ===
-            dependenciesBaselineBeforeBoot,
-          'production room dependencies installation to be restored to its pre-boot baseline',
-          8_000
-        );
-        await waitForAsync(
-          async () => getActiveNetworkBoundaryConfig() === networkBoundaryBaselineBeforeBoot,
-          'the network boundary installation to be restored to its pre-boot baseline',
-          8_000
-        );
+        const server = await bootAuthorityTestServer();
+        const mover = createObservedClient(server.url);
 
-        // Application DB connections (writer, schema-maintenance, and the
-        // process-private HTTP identity pool) must all be closed by the
-        // real teardown above -- proven with a separate observer
-        // connection to a DIFFERENT database, never the disposable one
-        // itself, so it can never appear in its own count.
-        const databaseName = server.databaseName;
-        await withDirectConnection(ADMIN_DATABASE_URL, async (observer) => {
-          await waitForAsync(
-            async () => {
-              const result = await observer.query<{ count: string }>(
-                'SELECT count(*)::text AS count FROM pg_stat_activity WHERE datname = $1',
-                [databaseName]
-              );
-              return result.rows[0]?.count === '0';
-            },
-            'every application connection to this disposable database to close',
-            8_000
+        const SYNTHETIC_MARKER = 'ARCH-FIX3-SYNTHETIC-EARLY-FAILURE-7f3c1a9b';
+        let caught: unknown;
+        let roomId: string | undefined;
+
+        try {
+          await mover.client.connect();
+          mover.client.setProfile({ nickname: 'Mover', mode: 'player', faction: 'red' });
+          await waitFor(() => mover.client.profile?.faction === 'red', 'profile acceptance');
+
+          const moverSessionId = mover.client.getSessionId();
+          if (!moverSessionId) {
+            throw new Error('Expected a session id.');
+          }
+
+          // Sufficient authenticated activity that the identity pool and
+          // the room/ship genuinely exist before the synthetic failure --
+          // this must not be a test that "fails" trivially against an
+          // empty server.
+          roomId = await discoverCanonicalBattleRoom(server.url);
+          const room = serverRoom(roomId);
+          await waitFor(
+            () => room.state.ships.get(moverSessionId) !== undefined,
+            'a real ship to exist before the synthetic failure'
           );
 
-          // A plain DROP DATABASE (no FORCE, no pg_terminate_backend): it
-          // only succeeds if nothing is still attached, so this is itself
-          // proof of the connection-closure claim above, not merely a
-          // cleanup convenience.
-          await observer.query(`DROP DATABASE ${databaseName}`);
+          // The exact precondition REVIEW-C01-A's confirmed defect
+          // required: RuntimeLifecycle failed directly (bypassing
+          // handleAuthorityLost()'s own teardown trigger), writer still
+          // 'owning'.
+          server.lifecycle.markFailed();
+
+          // Thrown BEFORE any explicit performHeartbeat()-style
+          // teardown-triggering code in this test body -- there is none
+          // here at all; only the shared stop() path in the finally below
+          // may ever drive it.
+          throw new Error(SYNTHETIC_MARKER);
+        } catch (error) {
+          caught = error;
+        } finally {
+          // The exact same guaranteed path every other scenario's
+          // afterEach/finally uses -- not a bespoke cleanup helper an
+          // ordinarily failing test would never reach.
+          await server.stop();
+          // Repeated/concurrent callers must stay safe once cleanup has
+          // already fully succeeded once.
+          await Promise.all([server.stop(), server.stop()]);
+          await mover.dispose().catch(() => undefined);
+        }
+
+        // The original failure must survive cleanup, whatever cleanup did.
+        expect(caught).toBeInstanceOf(Error);
+        expect((caught as Error).message).toBe(SYNTHETIC_MARKER);
+
+        // Independent resource verification -- not merely that stop()
+        // returned without throwing.
+        if (roomId) {
+          expect(matchMaker.getLocalRoomById(roomId)).toBeUndefined();
+        }
+        expect(
+          productionRoomDependenciesModule.getActiveProductionRoomDependencies()
+        ).toBe(dependenciesBaselineBeforeBoot);
+        expect(getActiveNetworkBoundaryConfig()).toBe(networkBoundaryBaselineBeforeBoot);
+
+        await withDirectConnection(ADMIN_DATABASE_URL, async (observer) => {
+          const connections = await observer.query<{ count: string }>(
+            'SELECT count(*)::text AS count FROM pg_stat_activity WHERE datname = $1',
+            [server.databaseName]
+          );
+          expect(connections.rows[0]?.count).toBe('0');
+
           const stillExists = await observer.query<{ datname: string }>(
             'SELECT datname FROM pg_database WHERE datname = $1',
-            [databaseName]
+            [server.databaseName]
           );
           expect(stillExists.rows).toHaveLength(0);
         });
       },
-      TEST_TIMEOUT_MS_LONG
+      HOOK_TIMEOUT_MS
     );
   }
 );
@@ -875,7 +1046,7 @@ describe.skipIf(!databaseAvailable)(
       await Promise.allSettled(clients.splice(0).map((observed) => observed.dispose()));
       await server?.stop();
       server = undefined;
-    });
+    }, HOOK_TIMEOUT_MS);
 
     it(
       'repeated callbacks after loss keep rejecting simulation, and winding the writer clock back to a safe value again cannot resurrect the room',
@@ -940,7 +1111,7 @@ describe.skipIf(!databaseAvailable)(
     afterEach(async () => {
       await server?.stop();
       server = undefined;
-    });
+    }, HOOK_TIMEOUT_MS);
 
     it(
       'process authority lost while a durable profile transaction is gated in flight: the durable commit stands, but no ship spawns, no PROFILE_ACCEPTED is sent, and the newly-acquired lease is released -- input arriving after loss is separately covered by the deadline/teardown/latch scenarios above',
@@ -1043,7 +1214,7 @@ describe.skipIf(!databaseAvailable)(
       await Promise.allSettled(clients.splice(0).map((observed) => observed.dispose()));
       await server?.stop();
       server = undefined;
-    });
+    }, HOOK_TIMEOUT_MS);
 
     it(
       "one disconnecting player does not stop another player's ship from continuing to move under safe authority",

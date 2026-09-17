@@ -183,11 +183,16 @@ REVIEW FOUND TWO PROBLEMS IN ARCH-FIX1's OWN TEST EVIDENCE
 (REVIEW-C01-A: A RESOURCE-LEAK IN THE TEARDOWN-WINDOW SCENARIO'S CLEANUP;
 REVIEW-C01-B: A NON-DISCRIMINATING MISSING-CAPABILITY REGRESSION), SO
 ARCH-FIX1's OVERALL DELTA DISPOSITION REMAINED REQUEST_CHANGES.
-ARCH-FIX2 (BELOW) IS A BOUNDED, TEST-ONLY CORRECTION OF BOTH, WITH ITS OWN
-NEGATIVE-CONTROL EVIDENCE, AND DOES NOT REOPEN THE ALREADY-CLOSED RUNTIME
-FIX. INDEPENDENT VERIFICATION OF ARCH-FIX2, CORE/QA FOR THE ARCH-FIX2
-HEAD, PRODUCT ARCHITECT FINAL ACCEPTANCE, AND HUMAN MERGE ALL REMAIN
-OUTSTANDING.**
+ARCH-FIX2 CORRECTED BOTH WITH ITS OWN NEGATIVE-CONTROL EVIDENCE.
+INDEPENDENT REVIEW OF ARCH-FIX2 THEN CLOSED REVIEW-C01-B AND CONFIRMED
+A'S SUCCESSFUL-PATH CLEANUP, BUT FOUND ITS EARLY-ASSERTION-FAILURE
+CLEANUP PATH STILL DEFECTIVE. ARCH-FIX3 (BELOW) MOVES ALL CLEANUP
+RESPONSIBILITY INTO THE HARNESS'S GUARANTEED `stop()` PATH, WITH A
+PERMANENT REGRESSION AND A SCRATCH FAILURE-PROBE REPRODUCING AND THEN
+RESOLVING THE CONFIRMED DEFECT. IT DOES NOT REOPEN THE ALREADY-CLOSED
+RUNTIME FIX OR REVIEW-C01-B. INDEPENDENT VERIFICATION OF THE REMAINING
+REVIEW-C01-A EARLY-FAILURE PATH, CORE/QA FOR THE ARCH-FIX3 HEAD, PRODUCT
+ARCHITECT FINAL ACCEPTANCE, AND HUMAN MERGE ALL REMAIN OUTSTANDING.**
 
 All seven implementation packets plus four bounded post-implementation
 corrections (FIX1–FIX4) are pushed as local sequential commits on
@@ -516,21 +521,63 @@ Every ARCH-FIX2 run recorded above used the repository's normal
 started or stopped by this task) and this task's own disposable
 `bs_test_*` databases (each created and dropped by the run that created
 it). Two `npm test` attempts hit the already-documented, pre-existing
-Vitest/tinypool `ERR_IPC_CHANNEL_CLOSED` worker-crash flake (unrelated to
-any assertion in this file); a third attempt completed cleanly. Those two
-crashed attempts left exactly 3 orphaned `bs_test_*` databases (named
-individually, not identified by wildcard), which were confirmed to have
-zero active connections and then dropped by their exact names; the
-19 `bs_test_*` databases already present before this task began were left
-untouched.
+Vitest/tinypool `ERR_IPC_CHANNEL_CLOSED` worker-crash flake; a third
+attempt completed cleanly. Those two crashed attempts left exactly 3
+orphaned `bs_test_*` databases (named individually, not identified by
+wildcard), which were confirmed to have zero active connections and then
+dropped by their exact names; the 19 `bs_test_*` databases already
+present before this task began were left untouched.
 
-No claim is made here that Core/QA for the ARCH-FIX2 head have already
+**Correction (ARCH-FIX3):** the line above originally called those two
+crashes "unrelated to any assertion in this file." An independent
+reviewer reproduced the underlying cause: the asynchronous-teardown-
+window scenario drove its explicit teardown-triggering code only after
+its freeze assertions, in the test body itself (REVIEW-C01-A); an
+assertion thrown before that point left the process-private HTTP identity
+pool, and other resources, still connected when the harness's plain
+`database.drop()` then force-terminated them, producing exactly this
+class of unhandled pg/worker error. This is a harness defect, now fixed
+below — it is **not** established that every historical
+`ERR_IPC_CHANNEL_CLOSED` occurrence in this project shared this same
+cause, and this fix does not claim to eliminate every possible cause of
+that flake; only this specific, now-reproduced-and-fixed path is
+attributed here.
+
+**ARCH-FIX3 — REVIEW-C01-A, remaining early-failure cleanup gap:**
+independent review disposition: PERSIST002-C-01 and REVIEW-C01-B remain
+independently **CLOSED**; A's successful-path cleanup was already proved,
+but its early-assertion-failure path could still leak resources (as
+above) and obscure the original test failure behind a secondary
+pg/worker error. ARCH-FIX3 moves all cleanup responsibility into
+`bootAuthorityTestServer()`'s `stop()` (shared, idempotent, state-aware:
+normal starting/ready, synthetic-failed-with-owning-writer, teardown-
+already-initiated, and already-stopped are all handled by the one
+implementation), called unconditionally from every scenario's
+afterEach/finally regardless of where or whether the test body itself
+threw. A new permanent regression
+("guaranteed cleanup after an early test failure") boots a real server,
+creates genuine authenticated activity, marks the lifecycle failed,
+throws a unique synthetic marker before any explicit teardown-triggering
+code, then exercises the exact same shared `stop()` path and
+independently re-verifies the resource baselines, zero application
+connections, and database removal, while confirming the original marker
+survived. A scratch, disposable-worktree probe (not committed) injected
+the identical early failure into the actual teardown-window test and ran
+it with the default `forks` pool: against the pre-ARCH-FIX3 harness it
+reproduced the same unhandled "terminating connection due to
+administrator command" / IPC crash observed above; against the
+ARCH-FIX3-corrected harness it instead failed cleanly on the injected
+marker alone, with cleanup still completing (database dropped, zero
+residual connections). This is by its own author and is **not**
+independently verified merely because it exists.
+
+No claim is made here that Core/QA for the ARCH-FIX3 head have already
 passed — see `docs/handoffs/CURRENT.md` for what is actually pending.
-**Independent verification of ARCH-FIX2 (REVIEW-C01-A and REVIEW-C01-B)
-remains outstanding.**
+**Independent verification of the remaining REVIEW-C01-A early-failure
+cleanup path remains outstanding.**
 
-Next safe action: independent verification of ARCH-FIX2's corrected test
-evidence for REVIEW-C01-A and REVIEW-C01-B, and observation of the
-ordinary push-triggered Core/governed-QA results for the ARCH-FIX2 head
+Next safe action: independent verification of ARCH-FIX3's early-failure
+cleanup evidence for REVIEW-C01-A, and observation of the ordinary
+push-triggered Core/governed-QA results for the ARCH-FIX3 head
 once available. Product Architect final acceptance and human merge remain
 outstanding.
