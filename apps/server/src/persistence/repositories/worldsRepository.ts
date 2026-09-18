@@ -228,9 +228,16 @@ export async function claimWorldWriter(client: Queryable, params: ClaimWorldWrit
       );
       writerExpiresAt = claimResult.rows[0]!.writer_expires_at;
 
+      // A single db_time evaluation, reused for both columns: two independent
+      // clock_timestamp() calls can return different values, which can
+      // violate active_session_leases_state_shape_check's
+      // (status = 'released' ... AND expires_at <= updated_at) requirement.
       await client.query(
-        `UPDATE active_session_leases
-         SET status = 'released', reconnect_deadline = NULL, updated_at = clock_timestamp(), expires_at = clock_timestamp()
+        `WITH db_time AS (SELECT clock_timestamp() AS now)
+         UPDATE active_session_leases
+         SET status = 'released', reconnect_deadline = NULL,
+             updated_at = (SELECT now FROM db_time), expires_at = (SELECT now FROM db_time)
+         FROM db_time
          WHERE world_id = $1 AND status <> 'released' AND writer_epoch <> $2`,
         [worldId, writerEpoch.toString()]
       );

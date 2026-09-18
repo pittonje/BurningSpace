@@ -195,10 +195,15 @@ ARCH-FIX3 HEAD THEN RAISED PERSIST002-NET-01 (HIGH): PUBLIC
 CREATE/JOINORCREATE COULD SPAWN A PARALLEL BATTLEROOM AGAINST THE SAME
 DURABLE WORLD. NET-FIX1 (BELOW) RESTRICTS PUBLIC MATCHMAKING TO EXACTLY
 JOINBYID/RECONNECT. PERSIST002-NET-02 (MEDIUM) REMAINS OPEN,
-DOCUMENTATION-ONLY IN THIS FIX. INDEPENDENT VERIFICATION OF THE REMAINING
-REVIEW-C01-A EARLY-FAILURE PATH, INDEPENDENT NETWORK DELTA REVIEW OF
-NET-FIX1, CORE/QA FOR THE NET-FIX1 HEAD, PRODUCT ARCHITECT FINAL
-ACCEPTANCE, AND HUMAN MERGE ALL REMAIN OUTSTANDING.**
+DOCUMENTATION-ONLY IN THIS FIX. AN INDEPENDENT PERSISTENCE REVIEW OF THE
+NET-FIX1 HEAD THEN RAISED PERSIST002-PERS-01: STALE-LEASE RECONCILIATION IN
+`claimWorldWriter()` EVALUATED `clock_timestamp()` TWICE, INDEPENDENTLY, FOR
+THE SAME RELEASED ROW'S `updated_at`/`expires_at`. PERS-FIX1 (BELOW) MAKES
+ONE DB-TIME SAMPLE SUPPLY BOTH COLUMNS. INDEPENDENT VERIFICATION OF THE
+REMAINING REVIEW-C01-A EARLY-FAILURE PATH, INDEPENDENT NETWORK DELTA REVIEW
+OF NET-FIX1, INDEPENDENT PERSISTENCE DELTA REVIEW OF PERS-FIX1, CORE/QA FOR
+THE PERS-FIX1 HEAD, PRODUCT ARCHITECT FINAL ACCEPTANCE, AND HUMAN MERGE ALL
+REMAIN OUTSTANDING.**
 
 All seven implementation packets plus four bounded post-implementation
 corrections (FIX1–FIX4) are pushed as local sequential commits on
@@ -679,7 +684,109 @@ by this fix.
 This implementation is by its own author and is **not** independently
 verified merely because it exists.
 
-Next safe action: independent Network delta review of PERSIST002-NET-01,
-alongside the still-outstanding independent verification of ARCH-FIX3's
-REVIEW-C01-A early-failure cleanup evidence. Product Architect final
-acceptance and human merge remain outstanding for both.
+**PERS-FIX1 — PERSIST002-PERS-01, two independent DB-clock evaluations in
+stale-lease reconciliation:** an independent Persistence review of the
+NET-FIX1 head (`c2777bbccfd8b69587379c1cac5ec1d7355b2451`) raised
+**PERSIST002-PERS-01**: `claimWorldWriter()`'s stale-lease reconciliation
+`UPDATE active_session_leases ... SET updated_at = clock_timestamp(),
+expires_at = clock_timestamp()` called the VOLATILE `clock_timestamp()`
+twice, independently evaluated; the two calls can return different values,
+which can violate migration 001's `active_session_leases_state_shape_check`
+(a `status = 'released'` row requires `expires_at <= updated_at`). This
+concerns the two independent DB-clock evaluations in stale-lease
+reconciliation — not any canonical-profile timeout.
+
+Fix (`apps/server/src/persistence/repositories/worldsRepository.ts`): the
+reconciliation statement now uses `WITH db_time AS (SELECT clock_timestamp()
+AS now) ... FROM db_time`, sampling the DB clock exactly once and reusing
+that one value for both `updated_at` and `expires_at`, the same idiom
+already used by `credentialsRepository.ts`'s `releaseLeasesForCredential()`
+and `sessionLeasesRepository.ts`'s `releaseGameplayLease()`/
+`markRecovering()`.
+
+Evidence, all against real PostgreSQL
+(`apps/server/test/persistence/writerFencing.test.ts`): the two existing
+takeover tests gained a PostgreSQL-level `expires_at = updated_at` equality
+assertion (evaluated inside the database, not a JS-side comparison of two
+separately fetched `Date`s) and a `worlds.state_revision`-unchanged
+assertion; a new isolation test proves a takeover reconciles only its own
+world's non-released, prior-epoch leases (an unrelated world's lease and an
+already-released same-world lease are byte-for-byte untouched, including
+`updated_at`); a new deterministic regression installs a schema-qualified,
+test-only VOLATILE clock function (`test_only.advancing_clock()`, backed by
+a real table insert so each call is provably distinct without depending on
+wall-clock timing, confined to the disposable test database) behind a
+narrow `Queryable`-forwarding probe that rewrites `clock_timestamp()` to the
+test clock inside only the one fingerprinted reconciliation statement,
+forwarding every other call unchanged — transaction control, predicates,
+assignments and the real constraint are all left intact. Against the fixed
+candidate: exactly one substituted-clock call (proving single evaluation
+under the installed PostgreSQL version, via the multiply-referenced CTE's
+automatic materialization), the claim succeeds, and the shape check holds.
+**Negative control:** the identical test file, copied unmodified into a
+disposable, detached scratch `git worktree` at the pre-fix head
+(`c2777bbccfd8b69587379c1cac5ec1d7355b2451`), failed the same deterministic
+test with the real PostgreSQL error `violates check constraint
+"active_session_leases_state_shape_check"`, thrown from the exact pre-fix
+statement — not a fixture or boot failure; the other three tests passed
+either way, confirming the deterministic test is the reliable, non-flaky
+detector. The scratch worktree was removed afterward; the implementation
+worktree was never mutated for this control.
+
+`writerFencing.test.ts` alone (`npx vitest run
+apps/server/test/persistence/writerFencing.test.ts`, from the worktree
+root): 4/4 pass. Full real-PostgreSQL suite (`npx vitest run`, from the
+worktree root): 49 files / 463 tests (baseline 49/461 plus the 2 new cases
+above), 0 skipped, 0 failed. Full-workspace `npm run typecheck` clean;
+`writerFencing.test.ts` sits outside every workspace's own
+`tsconfig.json`/`tsconfig.test.json` `include`, so it was additionally
+typechecked via a temporary, throwaway `apps/server/tsconfig.tmp-test-check.json`
+(extending the real server config, adding `test` to `include`), confirmed
+zero errors specific to this file, then deleted — not part of any commit.
+`npm run build`, with `VITE_BURNINGSPACE_SERVER_URL=http://127.0.0.1:2567`
+set only in the invoking process's environment (never written to a
+repository `.env` file, absent again afterward), completed clean.
+
+**Docker note:** mid-session, Docker Desktop's daemon became unresponsive
+(`docker ps`/`docker info` timing out) and needed a user-initiated restart;
+a second user-initiated restart was then needed because the first left
+containerd's own metadata store mounted read-only (`write .../meta.db:
+read-only file system`), which blocked creating *any* new container —
+including `backupRestore.test.ts`'s own ephemeral role-separated Postgres
+containers, which failed for that reason on the first full-suite attempt.
+Both restarts were performed by the user, not by this task. The
+pre-existing `deploy-postgres-1` container was `docker start`ed back up
+unchanged after each restart (never recreated, reconfigured, or had its
+data touched by this task); two ephemeral `bs_backup_test_*` containers left
+behind by the interrupted first `backupRestore.test.ts` attempt were removed
+(`docker rm`) once Docker was healthy, and a repeat run of that file then
+passed cleanly (2/2). A subsequent full-suite run after resolving the
+containerd issue was clean (49/463 above).
+
+**Resource accounting:** `docker inspect deploy-postgres-1` reports
+`Mounts: []` — it has no persistent volume; all of its data lives in the
+container's own writable layer, and the container itself was not recreated
+across either restart (`Created` unchanged from 2026-09-17). This document's
+NET-FIX1 section above records a baseline of 19 pre-existing `bs_test_*`
+databases as of the previous session; **that baseline is no longer
+current** — after the Docker Desktop incident, `deploy-postgres-1` now
+contains 4 total databases and zero matching `bs_test_*`/`bs_backup_test_*`.
+This is not attributable to this task's own test runs (which only ever
+create and drop their own uniquely-named disposable databases, confirmed
+zero left over after every run in this session) and most plausibly followed
+from the containerd-repair restart resetting the container's writable-layer
+contents; the exact mechanism was not directly observed and is not claimed
+with more certainty than that. No other task's resources were deleted by
+wildcard, or assumed unchanged without checking.
+
+This fix is by its own author and is **not** independently verified merely
+because it exists. Core and governed Claude QA for the resulting PERS-FIX1
+head have not yet been observed — this document does not claim those checks
+have passed.
+
+Next safe action: independent Persistence delta review of
+PERSIST002-PERS-01 for the PERS-FIX1 head, alongside the still-outstanding
+independent Network delta review of PERSIST002-NET-01 and the
+still-outstanding independent verification of ARCH-FIX3's REVIEW-C01-A
+early-failure cleanup evidence. Product Architect final acceptance and
+human merge remain outstanding for all three.

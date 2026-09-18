@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-18
-Updated by: Implementation engineer — NET-FIX1: restricted public matchmaking to canonical admission (PERSIST002-NET-01), committed and pushed
+Updated by: Implementation engineer — PERS-FIX1: reused DB timestamp for stale-lease release (PERSIST002-PERS-01), committed and pushed
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -489,15 +489,84 @@ because it exists. Core and governed Claude QA for the resulting NET-FIX1
 head have not yet been observed — this document does not claim those
 checks have passed.
 
+## PERS-FIX1 (2026-09-18): reuse one DB timestamp for stale-lease release
+
+An independent Persistence review of the NET-FIX1 head
+(`c2777bbccfd8b69587379c1cac5ec1d7355b2451`) raised **PERSIST002-PERS-01**:
+`claimWorldWriter()`'s stale-lease reconciliation UPDATE called the
+VOLATILE `clock_timestamp()` twice, independently, for the same released
+row's `updated_at`/`expires_at` — the two calls can diverge and violate
+migration 001's `active_session_leases_state_shape_check`. This concerns
+the two independent DB-clock evaluations in stale-lease reconciliation,
+**not** any canonical-profile timeout.
+
+**PERS-FIX1** (`apps/server/src/persistence/repositories/worldsRepository.ts`)
+samples `clock_timestamp()` once via a `WITH db_time AS (...)` CTE reused
+for both columns, matching the same idiom already used in
+`credentialsRepository.ts`/`sessionLeasesRepository.ts`. Evidence
+(`apps/server/test/persistence/writerFencing.test.ts`): PostgreSQL-level
+`expires_at = updated_at` and `state_revision`-unchanged assertions added
+to the existing takeover tests; a new row-isolation test (unrelated world
+and an already-released same-world lease untouched); a new deterministic
+regression using a schema-qualified test-only advancing-clock function
+behind a narrow `Queryable`-forwarding probe that substitutes
+`clock_timestamp()` only inside the fingerprinted reconciliation statement
+— exactly one substituted call under the fix (proving single evaluation).
+**Negative control:** the same test file, copied unmodified into a
+disposable scratch worktree at the pre-fix head
+(`c2777bbccfd8b69587379c1cac5ec1d7355b2451`), failed with the real
+PostgreSQL error `violates check constraint
+"active_session_leases_state_shape_check"` at the exact pre-fix statement;
+removed afterward, implementation worktree never mutated.
+
+`writerFencing.test.ts`: 4/4 pass. Full suite: **49 files / 463 tests, 0
+failed** (baseline 49/461 + 2 new cases). Full-workspace typecheck clean,
+including the test file via a temporary throwaway tsconfig (deleted, not
+committed). `npm run build` with `VITE_BURNINGSPACE_SERVER_URL` set only in
+the invoking process's environment (never written to a repository `.env`,
+restored/absent afterward) completed clean.
+
+**Docker note:** mid-session Docker Desktop's daemon became unresponsive
+and needed a user-initiated restart, then a second because the first left
+containerd's metadata store read-only, blocking new-container creation
+(this is why `backupRestore.test.ts` failed on the first full-suite
+attempt; it passed 2/2 after the second restart). Both restarts were
+user-initiated, not by this task. `deploy-postgres-1` was `docker start`ed
+back up unchanged each time (never recreated/reconfigured); two leftover
+ephemeral `bs_backup_test_*` containers from the interrupted attempt were
+removed once Docker was healthy.
+
+**Resource accounting:** `deploy-postgres-1` has no persistent volume
+(`Mounts: []`); its data lives entirely in the container's own writable
+layer, and the container itself was not recreated across either restart.
+The NET-FIX1 section above records a baseline of **19** pre-existing
+`bs_test_*` databases; **that baseline is no longer current** — after the
+Docker Desktop incident, `deploy-postgres-1` now holds 4 total databases
+and zero matching `bs_test_*`/`bs_backup_test_*`. This is not attributable
+to this task's own test runs (which always create/drop their own
+uniquely-named disposable databases; confirmed zero left over) and most
+plausibly followed from the containerd-repair restart resetting the
+container's writable layer; the exact mechanism was not directly observed.
+No other task's resources were deleted or assumed unchanged without
+checking.
+
+This fix is by its own author and is **not** independently verified merely
+because it exists. Core and governed Claude QA for the resulting PERS-FIX1
+head have not yet been observed — this document does not claim those checks
+have passed. The runtime fix and negative-control evidence fit the
+Product-Architect-authorized PERS-FIX1 direction; this is **not**
+independent PERS-01 closure or merge approval.
+
 ## Current next safe action
 
-The next action is: **independent Network delta review of
-PERSIST002-NET-01** for the NET-FIX1 head, alongside the still-outstanding
-**independent verification of the remaining REVIEW-C01-A early-failure
-cleanup path**, and obtaining/inspecting Core Pull Request Checks and
-governed Claude QA for the resulting NET-FIX1 head. Independent Security
-review remains to be routed and bound to whichever HEAD is current when it
-begins; Product Architect final acceptance and human merge remain
+The next action is: **independent Persistence delta review of
+PERSIST002-PERS-01** for the PERS-FIX1 head, alongside the still-outstanding
+**independent Network delta review of PERSIST002-NET-01** and the
+still-outstanding **independent verification of the remaining REVIEW-C01-A
+early-failure cleanup path**, and obtaining/inspecting Core Pull Request
+Checks and governed Claude QA for the resulting PERS-FIX1 head. Independent
+Security review remains to be routed and bound to whichever HEAD is current
+when it begins; Product Architect final acceptance and human merge remain
 outstanding. Actual staging rollout with persistence enabled remains a
 later, separately authorized task, explicitly gated on Security/Ops
 accepting a NET-02 mitigation or bounded operating policy — see
