@@ -164,6 +164,32 @@ migration that needs to be undone, and re-verify with
 database. Do not hand-edit `schema_migrations` or attempt to reverse-apply
 a migration's SQL.
 
+## Pre-rollout security gate — PERSIST002-NET-02 (MEDIUM, OPEN)
+
+An independent Network review (NET-FIX1) found that the current
+fresh-auth/guest-identity rate limiting keys budgets off the raw transport
+peer address, and this deployment does not trust `X-Forwarded-For`,
+`X-Real-IP`, or `Forwarded` from any proxy in front of it. Behind a single
+effective transport peer (any shared NAT, load balancer, or reverse proxy
+that does not preserve distinct per-client peer addresses), every guest
+identity created through that peer shares one fresh-auth/guest budget. This
+is a **deployment availability constraint** — legitimate concurrent guests
+behind the same peer can throttle each other — **not an authentication
+bypass or a way to forge another identity's credential**.
+
+Public persistence rollout to real staging is **not authorized** until
+Security/Ops explicitly accepts either a bounded operating policy (e.g. a
+documented acceptable concurrent-guest ceiling per effective peer for the
+planned staging topology) or an explicit mitigation. Any future
+trusted-proxy mitigation must define its trust boundary explicitly (which
+specific proxy hop is trusted, and why nothing upstream of it can forge the
+header) and include spoof-resistance tests proving an untrusted client
+cannot inject a fabricated peer identity through the trusted header path.
+Do **not** start trusting `X-Forwarded-For`/`X-Real-IP`/`Forwarded`, and do
+**not** raise fresh-auth/guest-identity rate-limit quotas, as a substitute
+for that explicit acceptance. NET-02 is not marked fixed, waived, or
+accepted by this document.
+
 ## Not a production or HA claim
 
 This plan describes a single-instance PostgreSQL database with a

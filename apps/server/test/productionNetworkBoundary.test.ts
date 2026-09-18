@@ -21,7 +21,11 @@ import {
   startProductionBattleServer,
   type ProductionBattleServerHandle
 } from './support/startProductionBattleServer.js';
-import { createTestGuestIdentity, joinCanonicalBattleRoom } from './support/testIdentityHelper.js';
+import {
+  createTestGuestIdentity,
+  discoverCanonicalBattleRoom,
+  joinCanonicalBattleRoom
+} from './support/testIdentityHelper.js';
 
 const ALLOWED_ORIGIN = 'https://play.example.com';
 const HOSTILE_ORIGIN = 'https://hostile.example';
@@ -173,12 +177,35 @@ describe('production network boundary', () => {
     expect(deniedPreflight.headers.get('access-control-allow-origin')).not.toBe(HOSTILE_ORIGIN);
     expect(deniedPreflight.headers.get('vary')).toBe('Origin');
 
-    await expect(
-      createClient(server.url, HOSTILE_ORIGIN).joinOrCreate('battle')
-    ).rejects.toThrow('onAuth failed');
-    await expect(createClient(server.url).joinOrCreate('battle')).rejects.toThrow(
-      'onAuth failed'
+    // PERSIST002-NET-01 restricts public matchmaking to joinById/reconnect, so
+    // joinOrCreate is rejected before onAuth ever runs (see
+    // canonicalRoomLifecycle.test.ts). The Origin boundary is proved here
+    // through joinById against the real canonical room instead, using a
+    // credential obtained through the allowed-origin identity path so a
+    // hostile/missing Origin -- not a bad credential -- is what's on trial.
+    const { credential: originBoundaryCredential } = await createTestGuestIdentity(
+      server.url,
+      ALLOWED_ORIGIN
     );
+    const canonicalRoomId = await discoverCanonicalBattleRoom(server.url, ALLOWED_ORIGIN);
+
+    await expect(
+      createClient(server.url, HOSTILE_ORIGIN).joinById(canonicalRoomId, {
+        credential: originBoundaryCredential
+      })
+    ).rejects.toThrow('onAuth failed');
+    await expect(
+      createClient(server.url).joinById(canonicalRoomId, {
+        credential: originBoundaryCredential
+      })
+    ).rejects.toThrow('onAuth failed');
+
+    const allowedOriginControlRoom = await createClient(
+      server.url,
+      ALLOWED_ORIGIN
+    ).joinById<BattleStateSchema>(canonicalRoomId, { credential: originBoundaryCredential });
+    expect(allowedOriginControlRoom.sessionId).toBeTruthy();
+    await allowedOriginControlRoom.leave(true);
 
     const health = await fetch(`${server.url}/health`);
     expect(health.status).toBe(200);

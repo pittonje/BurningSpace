@@ -190,9 +190,15 @@ CLEANUP PATH STILL DEFECTIVE. ARCH-FIX3 (BELOW) MOVES ALL CLEANUP
 RESPONSIBILITY INTO THE HARNESS'S GUARANTEED `stop()` PATH, WITH A
 PERMANENT REGRESSION AND A SCRATCH FAILURE-PROBE REPRODUCING AND THEN
 RESOLVING THE CONFIRMED DEFECT. IT DOES NOT REOPEN THE ALREADY-CLOSED
-RUNTIME FIX OR REVIEW-C01-B. INDEPENDENT VERIFICATION OF THE REMAINING
-REVIEW-C01-A EARLY-FAILURE PATH, CORE/QA FOR THE ARCH-FIX3 HEAD, PRODUCT
-ARCHITECT FINAL ACCEPTANCE, AND HUMAN MERGE ALL REMAIN OUTSTANDING.**
+RUNTIME FIX OR REVIEW-C01-B. AN INDEPENDENT NETWORK REVIEW OF THE
+ARCH-FIX3 HEAD THEN RAISED PERSIST002-NET-01 (HIGH): PUBLIC
+CREATE/JOINORCREATE COULD SPAWN A PARALLEL BATTLEROOM AGAINST THE SAME
+DURABLE WORLD. NET-FIX1 (BELOW) RESTRICTS PUBLIC MATCHMAKING TO EXACTLY
+JOINBYID/RECONNECT. PERSIST002-NET-02 (MEDIUM) REMAINS OPEN,
+DOCUMENTATION-ONLY IN THIS FIX. INDEPENDENT VERIFICATION OF THE REMAINING
+REVIEW-C01-A EARLY-FAILURE PATH, INDEPENDENT NETWORK DELTA REVIEW OF
+NET-FIX1, CORE/QA FOR THE NET-FIX1 HEAD, PRODUCT ARCHITECT FINAL
+ACCEPTANCE, AND HUMAN MERGE ALL REMAIN OUTSTANDING.**
 
 All seven implementation packets plus four bounded post-implementation
 corrections (FIX1–FIX4) are pushed as local sequential commits on
@@ -576,8 +582,104 @@ passed — see `docs/handoffs/CURRENT.md` for what is actually pending.
 **Independent verification of the remaining REVIEW-C01-A early-failure
 cleanup path remains outstanding.**
 
-Next safe action: independent verification of ARCH-FIX3's early-failure
-cleanup evidence for REVIEW-C01-A, and observation of the ordinary
-push-triggered Core/governed-QA results for the ARCH-FIX3 head
-once available. Product Architect final acceptance and human merge remain
-outstanding.
+Independent verification of ARCH-FIX3's early-failure cleanup evidence for
+REVIEW-C01-A remains outstanding, superseded in urgency by NET-FIX1 below.
+
+**NET-FIX1 — PERSIST002-NET-01 (HIGH), public matchmaking could create a
+parallel battle room against the same durable world:** an independent
+Network review, run against real PostgreSQL, reproduced that a valid guest
+credential calling public `create`/`joinOrCreate` on the `'battle'` room
+name creates an additional, independent `BattleRoom` instance backed by the
+same canonical durable world — repeated calls accumulate rooms, they
+persist after clients leave (`autoDispose=false` is unchanged), and a rogue
+room accepts `SET_PROFILE` and real gameplay. This is parallel
+room/simulation instances for the one singleton world, not multiple durable
+world UUIDs.
+
+Fix (`apps/server/src/security/networkBoundary.ts`): `installNetworkBoundary()`
+now also narrows the shared, process-level
+`matchMaker.controller.exposedMethods` (Colyseus 0.16.5's own supported
+public-method restriction — no hand-written URL filtering, no monkey-patched
+room creation) to exactly `['joinById', 'reconnect']`, using the same
+install/nested-ownership/idempotent-restore lifecycle already trusted for
+CORS header restoration, so `restore()` never re-permits `create`/
+`joinOrCreate`/`join` while any owning installation could still be serving
+public requests. The internal bootstrap creation of the one canonical room
+(`matchMaker.createRoom('battle', {})` in `index.ts`) is a distinct,
+lower-level call that `exposedMethods` never gates, so no temporary reopen
+was ever needed; `index.ts` required no changes. `controller.invokeMethod()`
+rejects an unexposed method (`MATCHMAKE_NO_HANDLER`, code 4210) before
+`matchMaker[method]()` — and therefore before `onAuth` — is ever called, so
+a rejected public `create`/`joinOrCreate`/`join` reserves no seat, creates no
+room, and grants no authority, with or without a credential. This project's
+transport (`@colyseus/ws-transport` + `@colyseus/core`'s own matchmake route)
+always answers HTTP 200 for `/matchmake/*`; only the JSON body's `code`
+field distinguishes success from rejection, so the new/adapted tests assert
+on that body/SDK error code, never on `response.ok` alone.
+
+Evidence, all against real PostgreSQL and the real production HTTP/WS
+composition (`apps/server/test/persistence/canonicalRoomLifecycle.test.ts`,
+extended existing test plus 6 new cases; `apps/server/test/
+productionNetworkBoundary.test.ts`, Origin-boundary assertions moved from
+`joinOrCreate` to `joinById` against the real canonical room ID with a
+credential obtained through the allowed-origin identity path, keeping a
+positive allowed-origin control and the exact `'onAuth failed'` rejection):
+free-capacity `create`/`joinOrCreate`/`join` all rejected (authenticated and
+unauthenticated, proving `onAuth` never runs for them) with zero room/
+lease/membership growth; the raw `/matchmake/create/battle` HTTP response
+inspected directly (status 200, body `code: 4210`); repeated sequential and
+bounded concurrent creation attempts all rejected with the real room-count
+inventory (`matchMaker.query({name: 'battle'})`) staying at exactly one
+room throughout and after a real client joins and leaves; an unknown room
+ID through the still-public `joinById` rejected with the distinct
+`MATCHMAKE_INVALID_ROOM_ID` (4212), not `MATCHMAKE_NO_HANDLER`, and creates
+no replacement room; ordinary `joinById` → `SET_PROFILE` admission still
+acquires exactly one real `active_session_leases` row whose `room_id`
+column is the actual canonical room ID. A full-room case, extended from the
+pre-existing test, additionally proves `create`/`joinOrCreate` stay
+rejected even while the canonical room has no free capacity. A disposable,
+detached scratch `git worktree` at this task's starting head
+(`4f02a00cc9e51d17d24fd80c3a0da6833daf2480`, i.e. the unmodified pre-fix
+`networkBoundary.ts`) with only the new regression tests copied in
+reproduced the defect directly — the representative case failed because
+`create()` returned successfully (no `MATCHMAKE_NO_HANDLER`) and a real
+second `battle` room actually existed in the inventory afterward, not
+because the fixture failed to boot; the same tests pass against the fixed
+candidate. The scratch worktree was removed afterward; the implementation
+worktree was never mutated for this control.
+
+Full real-PostgreSQL suite: 49 files / 461 tests (baseline 49/455 plus the
+6 new cases above), 0 skipped, 0 failures. Full-workspace `npm run
+typecheck` and `npm run build` (with
+`VITE_BURNINGSPACE_SERVER_URL=http://127.0.0.1:2567`) both clean. The
+standalone Network client callback diagnostic
+(`apps/client/scripts/network-client-callback-check.ts`, which already used
+discovery-then-`joinById`) and `apps/server/scripts/public-arena-smoke.ts`
+(also already `joinById`-based) both ran clean against, respectively, the
+real test-database composition and a disposable local production-mode
+integration server — never real staging. No pre-existing `bs_test_*`
+database or the `deploy-postgres-1` container was touched; the baseline of
+19 pre-existing disposable databases was unchanged after all runs,
+including the scratch negative-control run (cleaned via its own harness).
+
+**PERSIST002-NET-02 (MEDIUM) remains OPEN, documentation-only in this
+fix:** raw transport-peer attribution is unchanged; `X-Forwarded-For`/
+`X-Real-IP`/`Forwarded` remain untrusted; no quota or rate-limit change was
+made. Recorded in
+[`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md):
+behind a single effective transport peer, guest/fresh-auth budgets are
+shared — a deployment availability constraint, not an authentication
+bypass — and public persistence rollout is not authorized until Security/
+Ops accepts an explicit mitigation or bounded operating policy; a future
+trusted-proxy solution needs an explicit trust boundary and
+spoof-resistance tests, not arbitrary header trust. NET-02 is not marked
+fixed, waived, or accepted here, and no merge/deployment approval is implied
+by this fix.
+
+This implementation is by its own author and is **not** independently
+verified merely because it exists.
+
+Next safe action: independent Network delta review of PERSIST002-NET-01,
+alongside the still-outstanding independent verification of ARCH-FIX3's
+REVIEW-C01-A early-failure cleanup evidence. Product Architect final
+acceptance and human merge remain outstanding for both.

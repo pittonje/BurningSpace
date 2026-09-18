@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-09-17
-Updated by: Implementation engineer — ARCH-FIX3: guaranteed cleanup for the REVIEW-C01-A early-test-failure path (moved into the harness's shared stop()), committed and pushed
+Last updated: 2026-09-18
+Updated by: Implementation engineer — NET-FIX1: restricted public matchmaking to canonical admission (PERSIST002-NET-01), committed and pushed
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -39,7 +39,7 @@ PR #85 merge commit (current `origin/main`): `98bda8f5bed41112f5687eb4ef2fd52a0c
 
 Status: **ARCHITECTURE/SECURITY REVIEW APPROVED / PRODUCT ARCHITECT ACCEPTED / MERGED / CLOSED**
 
-Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7, post-implementation corrections FIX1–FIX4, the QA-RECOVERY-001/002 infrastructure patches, and ARCH-FIX1/ARCH-FIX2 are pushed as local sequential commits; the branch itself has never been reset, rebased, or amended. At the QA-RECOVERY-002 head `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`, Core Pull Request Checks were **SUCCESS** (run `35193478755`) and governed Claude QA ran and returned **"Approved with suggestions"** (run `35193478806`). An independent Architecture review of that head then raised **PERSIST002-C-01 (MEDIUM)** — `BattleRoom.updateSimulation()` and related paths did not check process/world authority before running; Product Architect disposition was **REQUEST_CHANGES**. **ARCH-FIX1** (`cc87ab0c679acbce5c16f866f84780c1804c4e31`) implemented the runtime fix; **independent delta review CLOSED the runtime finding PERSIST002-C-01 at that commit**, but found ARCH-FIX1's own test evidence insufficient (REVIEW-C01-A: a resource leak in the teardown-window scenario's cleanup; REVIEW-C01-B: a missing-capability regression that passed on both pre-fix and fixed code), so ARCH-FIX1's overall delta disposition remained **REQUEST_CHANGES**. **ARCH-FIX2** was a bounded, test-only correction of both findings. Independent review of ARCH-FIX2 then **CLOSED REVIEW-C01-B** and confirmed REVIEW-C01-A's successful-path cleanup, but found its early-assertion-failure cleanup path still defective (could leak resources and obscure the original test failure behind a secondary error). **ARCH-FIX3** moves all cleanup responsibility into the harness's shared, guaranteed `stop()` path — see the task file's ARCH-FIX3 section, and the section below, for full evidence. Independent verification of the remaining REVIEW-C01-A path, and Core/Claude QA for the resulting ARCH-FIX3 head, have not yet been observed. Required independent Network and Security reviews, Product Architect final acceptance, and human merge remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
+Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7, post-implementation corrections FIX1–FIX4, the QA-RECOVERY-001/002 infrastructure patches, and ARCH-FIX1/ARCH-FIX2 are pushed as local sequential commits; the branch itself has never been reset, rebased, or amended. At the QA-RECOVERY-002 head `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`, Core Pull Request Checks were **SUCCESS** (run `35193478755`) and governed Claude QA ran and returned **"Approved with suggestions"** (run `35193478806`). An independent Architecture review of that head then raised **PERSIST002-C-01 (MEDIUM)** — `BattleRoom.updateSimulation()` and related paths did not check process/world authority before running; Product Architect disposition was **REQUEST_CHANGES**. **ARCH-FIX1** (`cc87ab0c679acbce5c16f866f84780c1804c4e31`) implemented the runtime fix; **independent delta review CLOSED the runtime finding PERSIST002-C-01 at that commit**, but found ARCH-FIX1's own test evidence insufficient (REVIEW-C01-A: a resource leak in the teardown-window scenario's cleanup; REVIEW-C01-B: a missing-capability regression that passed on both pre-fix and fixed code), so ARCH-FIX1's overall delta disposition remained **REQUEST_CHANGES**. **ARCH-FIX2** was a bounded, test-only correction of both findings. Independent review of ARCH-FIX2 then **CLOSED REVIEW-C01-B** and confirmed REVIEW-C01-A's successful-path cleanup, but found its early-assertion-failure cleanup path still defective (could leak resources and obscure the original test failure behind a secondary error). **ARCH-FIX3** moves all cleanup responsibility into the harness's shared, guaranteed `stop()` path. Independent verification of the remaining REVIEW-C01-A path, and Core/Claude QA for the resulting ARCH-FIX3 head, have not yet been observed. A separate independent Network review of that head then raised **PERSIST002-NET-01 (HIGH)**: public `create`/`joinOrCreate` could create additional parallel `BattleRoom` instances against the same durable world and acquire real gameplay leases. **NET-FIX1** restricts the shared Colyseus `matchMaker.controller.exposedMethods` to exactly `joinById`/`reconnect`, so only admission into and reconnection to the already-published canonical room are ever exposed publicly — see the task file's NET-FIX1 section, and the section below, for full evidence. **PERSIST002-NET-02 (MEDIUM) remains OPEN**, documentation-only in this fix. Independent Network delta review of NET-FIX1, the still-outstanding REVIEW-C01-A verification, required independent Security review, Product Architect final acceptance, and human merge all remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
 
 ## PERSIST-001 accepted architecture
 
@@ -417,14 +417,88 @@ verified merely because it exists. Core and governed Claude QA for the
 resulting ARCH-FIX3 head have not yet been observed — this document does
 not claim those checks have passed.
 
+## NET-FIX1 (2026-09-18): restrict public matchmaking to canonical admission
+
+Independent Network review of the ARCH-FIX3 head raised
+**PERSIST002-NET-01 (HIGH)**: a valid guest credential calling public
+`create`/`joinOrCreate` on the `'battle'` room name created an additional,
+independent `BattleRoom` instance backed by the same canonical durable
+world (`autoDispose=false` means it never self-cleans; it can accept
+`SET_PROFILE` and acquire real gameplay leases) — parallel room/simulation
+instances for the one singleton world, not multiple world UUIDs.
+
+`installNetworkBoundary()` (`apps/server/src/security/networkBoundary.ts`)
+now also narrows the shared, process-level
+`matchMaker.controller.exposedMethods` to exactly `['joinById',
+'reconnect']`, using Colyseus's own supported public-method restriction and
+the same install/nested-ownership/idempotent-restore lifecycle already
+trusted for CORS header restoration. `controller.invokeMethod()` rejects an
+unexposed method (`MATCHMAKE_NO_HANDLER`, code 4210) before `onAuth` ever
+runs, so a rejected `create`/`joinOrCreate`/`join` reserves no seat and
+grants no authority. The internal bootstrap room creation
+(`matchMaker.createRoom('battle', {})`) is a distinct call `exposedMethods`
+never gates, so `apps/server/src/index.ts` needed no changes.
+
+Evidence (real PostgreSQL, real production HTTP/WS composition): extended
+`canonicalRoomLifecycle.test.ts` plus 6 new cases prove free-capacity and
+full-room `create`/`joinOrCreate`/`join` all rejected (authenticated and
+unauthenticated) with the real room inventory
+(`matchMaker.query({name:'battle'})`) staying at exactly one room across
+repeated/concurrent attempts and after real clients join/leave; the raw
+`/matchmake/create/battle` HTTP response is always status 200 with body
+`code: 4210` (this project's transport never uses HTTP status to signal
+matchmake rejection); an unknown room ID through the still-public
+`joinById` gets the distinct `MATCHMAKE_INVALID_ROOM_ID` (4212) and creates
+no replacement room; ordinary `joinById` → `SET_PROFILE` still acquires
+exactly one real lease referencing the actual canonical room ID.
+`productionNetworkBoundary.test.ts`'s Origin-boundary assertions moved from
+`joinOrCreate` to `joinById` against the real canonical room ID with a
+credential from the allowed-origin identity path, keeping a positive
+allowed-origin control and the exact `'onAuth failed'` rejection. A
+disposable, detached scratch `git worktree` at the unmodified pre-fix head
+(`4f02a00cc9e51d17d24fd80c3a0da6833daf2480`) with only the new tests copied
+in reproduced the defect directly (a representative case failed because
+`create()` succeeded and a real second room existed afterward, not a boot
+failure); the fixed candidate passes the same tests. The scratch worktree
+was removed afterward; the implementation worktree was never mutated for
+this control.
+
+Full suite: **49 files / 461 tests / 0 failed / 0 skipped** (+6 new cases,
+baseline 49/455 → 49/461). Full-workspace typecheck and build (with
+`VITE_BURNINGSPACE_SERVER_URL=http://127.0.0.1:2567`) both clean. The
+standalone Network client callback diagnostic and
+`apps/server/scripts/public-arena-smoke.ts` (both already `joinById`-based)
+ran clean against, respectively, the real test-database composition and a
+disposable local production-mode server — never real staging. No
+pre-existing `bs_test_*` database or the `deploy-postgres-1` container was
+touched; the baseline of 19 pre-existing disposable databases was
+unchanged after all runs.
+
+**PERSIST002-NET-02 (MEDIUM) remains OPEN**, documentation-only in this
+fix: raw transport-peer attribution is unchanged, `X-Forwarded-For`/
+`X-Real-IP`/`Forwarded` remain untrusted, and no quota/rate-limit change
+was made — recorded in
+[`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md)
+as a deployment availability constraint (shared guest/fresh-auth budgets
+behind a single effective transport peer), not an authentication bypass;
+public persistence rollout is not authorized until Security/Ops accepts an
+explicit mitigation or bounded operating policy.
+
+This fix is by its own author and is **not** independently verified merely
+because it exists. Core and governed Claude QA for the resulting NET-FIX1
+head have not yet been observed — this document does not claim those
+checks have passed.
+
 ## Current next safe action
 
-The next action is: **independent verification of the remaining
-REVIEW-C01-A early-failure cleanup path**, and obtaining/inspecting Core
-Pull Request Checks and governed Claude QA for the resulting ARCH-FIX3
-PR head. Independent Network and Security reviews remain to be routed
-and bound to whichever HEAD is current when they begin; Product
-Architect final acceptance and human merge remain outstanding. Actual
-staging rollout with persistence enabled remains a
-later, separately authorized task — see
+The next action is: **independent Network delta review of
+PERSIST002-NET-01** for the NET-FIX1 head, alongside the still-outstanding
+**independent verification of the remaining REVIEW-C01-A early-failure
+cleanup path**, and obtaining/inspecting Core Pull Request Checks and
+governed Claude QA for the resulting NET-FIX1 head. Independent Security
+review remains to be routed and bound to whichever HEAD is current when it
+begins; Product Architect final acceptance and human merge remain
+outstanding. Actual staging rollout with persistence enabled remains a
+later, separately authorized task, explicitly gated on Security/Ops
+accepting a NET-02 mitigation or bounded operating policy — see
 [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).
