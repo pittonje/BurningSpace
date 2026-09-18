@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve as resolvePath } from 'node:path';
 import { matchMaker } from 'colyseus';
-import { Client } from 'pg';
+import { Client, Pool } from 'pg';
 import { afterAll, afterEach, describe, expect, test } from 'vitest';
 import { SCHEMA_MAINTENANCE_LOCK_KEY } from '../../src/persistence/advisoryLocks.js';
 import { redactDatabaseUrl } from '../../src/persistence/config.js';
+import { PersistenceConfigError } from '../../src/persistence/errors.js';
 import { runMigrations } from '../../src/persistence/migrationRunner.js';
 import {
   bootPersistenceRuntime,
@@ -12,6 +16,11 @@ import {
 import { bootstrapWorld, claimWorldWriter, WorldNotFoundError } from '../../src/persistence/repositories/worldsRepository.js';
 import { WriterClaimTimeoutError } from '../../src/persistence/writerLifecycle.js';
 import { startProductionServer, type ProductionServerHandle } from '../../src/index.js';
+import { runPsqlFile } from '../../scripts/persistence-tooling.js';
+import { startRoleSeparatedPostgres, withDirectConnection, type RoleSeparatedPostgres } from '../support/testPersistenceDatabase.js';
+
+const REPO_ROOT = resolvePath(process.cwd());
+const GRANTS_SQL_PATH = resolvePath(REPO_ROOT, 'deploy/postgres/apply-runtime-grants.sql');
 
 const PM2_TELEMETRY_FILTER_MARKER = Symbol.for('burningspace.test.pm2-telemetry-worker-filter');
 
@@ -389,4 +398,106 @@ describe.skipIf(!databaseAvailable)('startProductionServer persistence integrati
       await dropDatabase(databaseName);
     }
   }, 15_000);
+});
+
+describe('bootPersistenceRuntime role separation (PERSIST002-SEC-01, real Docker, real role-separated PostgreSQL)', () => {
+  let roleSeparated: RoleSeparatedPostgres | undefined;
+  let workDir: string | undefined;
+
+  afterEach(async () => {
+    await roleSeparated?.stop().catch(() => undefined);
+    if (workDir) {
+      await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+    }
+    roleSeparated = undefined;
+    workDir = undefined;
+  }, 30_000);
+
+  test(
+    'given both DATABASE_URL and MIGRATION_DATABASE_URL against distinct roles on the same DB, the runtime boots using exactly burningspace_runtime, never burningspace_migrator, for every connection including the identity/gameplay pool',
+    async () => {
+      roleSeparated = await startRoleSeparatedPostgres();
+      await runMigrations(roleSeparated.migratorUrl);
+      const bootstrap = await withDirectConnection(roleSeparated.migratorUrl, (client) =>
+        bootstrapWorld(client, 'public-arena')
+      );
+
+      workDir = await mkdtemp(join(tmpdir(), 'bs-sec01-'));
+      const grantsSqlWorkPath = join(workDir, 'apply-runtime-grants.sql');
+      await writeFile(grantsSqlWorkPath, await readFile(GRANTS_SQL_PATH, 'utf8'), 'utf8');
+      await runPsqlFile({ targetUrl: roleSeparated.migratorUrl, sqlPath: grantsSqlWorkPath });
+
+      const runtime = await bootPersistenceRuntime({
+        environment: {
+          DATABASE_URL: roleSeparated.runtimeUrl,
+          MIGRATION_DATABASE_URL: roleSeparated.migratorUrl
+        }
+      });
+
+      try {
+        expect(runtime.worldId).toBe(bootstrap.world.worldId);
+        expect(runtime.writer.state).toBe('owning');
+
+        // A separate identity/gameplay pool, exactly as index.ts composes
+        // it, using the SAME runtime selector -- exercised with a real
+        // query so it actually opens a real backend, not just a Pool
+        // object that never connects.
+        const identityPool = new Pool({ connectionString: roleSeparated.runtimeUrl, max: 2 });
+        try {
+          await identityPool.query('SELECT 1');
+
+          const usenames = await withDirectConnection(roleSeparated.adminUrl, async (observer) => {
+            const result = await observer.query<{ usename: string }>(
+              "SELECT usename FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND usename IS NOT NULL"
+            );
+            return result.rows.map((row) => row.usename);
+          });
+
+          expect(usenames.length).toBeGreaterThan(0);
+          for (const usename of usenames) {
+            expect(usename).toBe('burningspace_runtime');
+          }
+        } finally {
+          await identityPool.end();
+        }
+
+        // Representative forbidden DDL: burningspace_runtime has no
+        // CREATE on schema public (apply-runtime-grants.sql revokes it
+        // from PUBLIC and never grants it back), and no DDL privilege at
+        // all -- proving the role restriction is real, not merely assumed.
+        await withDirectConnection(roleSeparated.runtimeUrl, async (client) => {
+          await expect(client.query('CREATE TABLE sec01_forbidden_ddl_probe (id int)')).rejects.toMatchObject({
+            code: '42501'
+          });
+        });
+
+        // The writer claim itself (runtime.writer.state === 'owning' above)
+        // and the identity pool query above are already the required
+        // runtime operations succeeding under the restricted role; the
+        // forbidden-DDL probe above is the negative control proving that
+        // role is genuinely restricted, not merely assumed.
+      } finally {
+        await runtime.shutdown();
+      }
+    },
+    30_000
+  );
+
+  test(
+    'MIGRATION_DATABASE_URL alone (no DATABASE_URL) fails closed before any connection or readiness attempt',
+    async () => {
+      roleSeparated = await startRoleSeparatedPostgres();
+      await runMigrations(roleSeparated.migratorUrl);
+
+      let caught: unknown;
+      try {
+        await bootPersistenceRuntime({ environment: { MIGRATION_DATABASE_URL: roleSeparated.migratorUrl } });
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(PersistenceConfigError);
+    },
+    30_000
+  );
 });

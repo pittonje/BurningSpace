@@ -41,6 +41,29 @@ export function readMigrationDatabaseUrl(env: PersistenceEnv = process.env): str
 }
 
 /**
+ * The running application (server process) always connects with
+ * DATABASE_URL -- never MIGRATION_DATABASE_URL, even when DATABASE_URL is
+ * absent and only MIGRATION_DATABASE_URL is set. An operator's migration
+ * step configuring MIGRATION_DATABASE_URL in the same environment must
+ * never let the running application implicitly acquire elevated migration
+ * credentials, and an invalid/unreachable MIGRATION_DATABASE_URL must never
+ * break an otherwise valid DATABASE_URL runtime configuration -- this
+ * function never inspects MIGRATION_DATABASE_URL at all. Use this for every
+ * runtime-created database connection (schema checking, writer/maintenance
+ * connections, and the HTTP identity/gameplay pool); it is distinct from
+ * readMigrationDatabaseUrl()/readMigrationStatusDatabaseUrl(), which remain
+ * the operator CLI's own, separately documented selection policies.
+ */
+export function readRuntimeDatabaseUrl(env: PersistenceEnv = process.env): string {
+  if (isSetValue(env.DATABASE_URL)) {
+    return env.DATABASE_URL;
+  }
+  throw new PersistenceConfigError(
+    'DATABASE_URL is required to start the runtime; MIGRATION_DATABASE_URL is not an accepted substitute.'
+  );
+}
+
+/**
  * Read-only migration status may fall back to DATABASE_URL when
  * MIGRATION_DATABASE_URL is not configured.
  */

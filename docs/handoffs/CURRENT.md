@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-18
-Updated by: Implementation engineer — PERS-FIX1: reused DB timestamp for stale-lease release (PERSIST002-PERS-01), committed and pushed
+Updated by: Implementation engineer — SEC-FIX1: runtime DB selection, profile authorization ordering, and operator secret transport (PERSIST002-SEC-01/02/03), committed and pushed
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -557,17 +557,105 @@ have passed. The runtime fix and negative-control evidence fit the
 Product-Architect-authorized PERS-FIX1 direction; this is **not**
 independent PERS-01 closure or merge approval.
 
+## SEC-FIX1 (2026-09-18): runtime DB selection, profile authorization ordering, operator secret transport
+
+An independent Security review of the PERS-FIX1 head (supplied report hash
+`97ef06b569bb05c5f5ce44d6e37bf25d98cdecdb169c0936ae1e1a5de2cafce0`, treated
+as supplied provenance, not independently re-verified here) confirmed three
+findings — low severity is not treated as license to leave a confirmed
+defect unaddressed:
+
+- **PERSIST002-SEC-01 (MEDIUM):** the runtime (`bootPersistenceRuntime()`
+  and `index.ts`'s identity/gameplay pool) could select
+  `MIGRATION_DATABASE_URL` (elevated migrator credentials), the same
+  selector correctly used by the read-only migration-status CLI command.
+  Fixed with a new `readRuntimeDatabaseUrl()`
+  (`apps/server/src/persistence/config.ts`) that uses `DATABASE_URL` only,
+  unconditionally, never inspecting `MIGRATION_DATABASE_URL` at all, used
+  for every runtime connection. The operator CLI's own two selectors are
+  byte-for-byte unchanged.
+- **PERSIST002-SEC-02 (LOW):** `lockProfilePrefix()`
+  (`apps/server/src/persistence/gameplayAuthority.ts`) mutated
+  `display_name` before verifying the credential/player association was
+  active, so a rejected (invalid/revoked/mismatched) credential could
+  still durably rename a player (`withTransaction` commits on any normal
+  return). Fixed by moving the mutation after the credential check, same
+  transaction and lock order, no new preflight step.
+- **PERSIST002-SEC-03 (LOW):** `runPgDumpSnapshot`/`runPgRestore`/
+  `runPsqlFile` (`apps/server/scripts/persistence-tooling.ts`) passed the
+  raw connection password as a `--dbname` docker/tool argument, visible in
+  host docker CLI argv, container command metadata, and the tool's own
+  argv. Fixed with a `.pgpass`-format entry (host/port/db/user wildcarded,
+  password escaped and control-character/percent-encoding validated)
+  supplied over stdin into a file created inside the ephemeral container's
+  own filesystem (never a host bind mount) by a fixed, never-interpolated
+  shell wrapper, relying on the container's own `--rm` plus its own
+  `trap ... EXIT` for cleanup.
+
+Evidence, all against real PostgreSQL/Docker: a 15-case unit matrix for
+`readRuntimeDatabaseUrl()` plus a real role-separated-Postgres regression
+proving every real connection (including a real query through a separate
+identity pool) used exactly `burningspace_runtime` via `pg_stat_activity`,
+a forbidden `CREATE TABLE` failing with SQLSTATE `42501`, and
+migration-only startup failing closed before any connection
+(`apps/server/test/persistence/config.test.ts`,
+`persistenceRuntimeBoot.test.ts` +2); 5 real-PostgreSQL cases proving a
+revoked or mismatched credential never mutates `display_name` (including
+an authenticate-then-revoke-then-resubmit spectator case), with a valid-
+credential positive control still succeeding
+(`gameplayAuthorityProfileMutation.test.ts`); a unit matrix for the new
+password-stripping/pgpass-escaping logic plus a real backup+restore cycle
+with the genuine `node:child_process.spawn` wrapped (never replaced) to
+prove no captured `docker run` argv ever contained the password, while
+stdin genuinely did
+(`persistenceToolingSecretTransport.test.ts`). **Negative controls:** all
+three test files (SEC-03's trimmed to drop the new-export-only unit
+matrix, which cannot exist pre-fix), copied unmodified into a disposable
+scratch worktree at the PERS-FIX1 head
+(`cbc91039fee1b7bd5329553383080bea5ed40844`), failed exactly as expected —
+real `burningspace_migrator` usage and a silent migration-only boot for
+SEC-01, 4/5 mutated-display_name failures for SEC-02 (the positive
+control correctly non-discriminating), and the real password plainly
+visible in captured argv for SEC-03. Both scratch worktrees were removed
+after use; the implementation worktree was never mutated for either.
+`db-privilege-check.ts` (unchanged) run against a fresh role-separated
+instance: 22/22 probes passed.
+
+Full suite: **52 files / 495 tests, 0 failed** (baseline 49/463 + 32 new
+cases). Full-workspace typecheck, both script-specific tsconfig checks,
+and the three new test files (via a temporary, deleted throwaway
+tsconfig) all clean. `npm run build` with `VITE_BURNINGSPACE_SERVER_URL`
+scoped to that one process only (confirmed absent from the shell before
+and after) completed clean. No Docker restart was needed this session;
+resource inventory before/after matched (`deploy-postgres-1` untouched at
+4 total databases, 0 disposable residue).
+
+This fix is by its own author and is **not** independently verified
+merely because it exists. Core and governed Claude QA for the resulting
+SEC-FIX1 head have not yet been observed. This is **not** independent
+SEC-01/02/03 closure or merge approval, and does not reopen the
+already-closed C-01/REVIEW-C01-B/NET-01/PERS-01 dispositions above.
+
+**PERSIST002-NET-02 (MEDIUM) now explicitly BLOCKS PUBLIC PERSISTENCE
+ROLLOUT**, not merely repository merge: deferring its implementation
+relative to merge is accepted; deferring it relative to public
+persistence deployment is not — see
+[`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md)
+for the updated gate (implemented mitigation + spoof-resistance/
+multi-client tests + explicit Security/Ops acceptance + separate PA
+deployment authorization required; a documented "bounded operating
+policy" or a raised quota alone does not close it).
+
 ## Current next safe action
 
-The next action is: **independent Persistence delta review of
-PERSIST002-PERS-01** for the PERS-FIX1 head, alongside the still-outstanding
-**independent Network delta review of PERSIST002-NET-01** and the
-still-outstanding **independent verification of the remaining REVIEW-C01-A
-early-failure cleanup path**, and obtaining/inspecting Core Pull Request
-Checks and governed Claude QA for the resulting PERS-FIX1 head. Independent
-Security review remains to be routed and bound to whichever HEAD is current
-when it begins; Product Architect final acceptance and human merge remain
-outstanding. Actual staging rollout with persistence enabled remains a
-later, separately authorized task, explicitly gated on Security/Ops
-accepting a NET-02 mitigation or bounded operating policy — see
+The next action is: **independent Security delta review of
+PERSIST002-SEC-01/02/03** for the SEC-FIX1 head, alongside the
+still-outstanding **independent Persistence delta review of
+PERSIST002-PERS-01**, **independent Network delta review of
+PERSIST002-NET-01**, and **independent verification of the remaining
+REVIEW-C01-A early-failure cleanup path**, plus obtaining/inspecting Core
+Pull Request Checks and governed Claude QA for the resulting SEC-FIX1
+head. Product Architect final acceptance and human merge remain
+outstanding for all four. Public persistence rollout additionally remains
+blocked on the NET-02 gate above regardless of merge status — see
 [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).

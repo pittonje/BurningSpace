@@ -164,7 +164,7 @@ migration that needs to be undone, and re-verify with
 database. Do not hand-edit `schema_migrations` or attempt to reverse-apply
 a migration's SQL.
 
-## Pre-rollout security gate — PERSIST002-NET-02 (MEDIUM, OPEN)
+## Pre-rollout security gate — PERSIST002-NET-02 (MEDIUM, OPEN, BLOCKS PUBLIC PERSISTENCE ROLLOUT)
 
 An independent Network review (NET-FIX1) found that the current
 fresh-auth/guest-identity rate limiting keys budgets off the raw transport
@@ -177,18 +177,32 @@ is a **deployment availability constraint** — legitimate concurrent guests
 behind the same peer can throttle each other — **not an authentication
 bypass or a way to forge another identity's credential**.
 
-Public persistence rollout to real staging is **not authorized** until
-Security/Ops explicitly accepts either a bounded operating policy (e.g. a
-documented acceptable concurrent-guest ceiling per effective peer for the
-planned staging topology) or an explicit mitigation. Any future
-trusted-proxy mitigation must define its trust boundary explicitly (which
-specific proxy hop is trusted, and why nothing upstream of it can forge the
-header) and include spoof-resistance tests proving an untrusted client
-cannot inject a fabricated peer identity through the trusted header path.
-Do **not** start trusting `X-Forwarded-For`/`X-Real-IP`/`Forwarded`, and do
+Product Architect disposition (SEC-FIX1): deferring NET-02's
+**implementation** relative to repository merge is accepted; deferring it
+relative to **public persistence deployment** is not. Repository merge may
+be considered once the other acceptance gates for this task pass — a merge
+is not itself, and does not imply, a public persistence rollout, and no
+automatic deployment follows from it.
+
+Public persistence rollout to real staging requires, before it may proceed:
+
+- an implemented admission-budget mitigation (not merely documented);
+- spoof-resistance tests (an untrusted client cannot inject a fabricated
+  peer identity through whatever trusted-header/trust-boundary mechanism
+  the mitigation uses) and multi-client budget tests;
+- explicit Security/Ops acceptance of that mitigation;
+- a separate, explicit Product Architect deployment authorization.
+
+A publicly documented "bounded operating policy" (e.g. an acceptable
+concurrent-guest ceiling), an increased global rate-limit quota, or asking
+users to retry more slowly are each, on their own, **not an accepted
+mitigation** — they do not close this gate. Any future trusted-proxy
+mitigation must define its trust boundary explicitly (which specific proxy
+hop is trusted, and why nothing upstream of it can forge the header). Do
+**not** start trusting `X-Forwarded-For`/`X-Real-IP`/`Forwarded`, and do
 **not** raise fresh-auth/guest-identity rate-limit quotas, as a substitute
-for that explicit acceptance. NET-02 is not marked fixed, waived, or
-accepted by this document.
+for the mitigation above. NET-02 is not marked fixed, waived, or accepted
+by this document.
 
 ## Not a production or HA claim
 
@@ -227,8 +241,14 @@ environment.
    and confirm every assertion passes.
 10. Take and verify an initial backup (see above) before any real traffic
     is ever accepted.
-11. Add the real `BURNINGSPACE_DATABASE_URL` (using `burningspace_runtime`)
-    to the operator secret store.
+11. Add the real `DATABASE_URL` (using `burningspace_runtime`, never
+    `burningspace_migrator`) to the operator secret store. Since SEC-FIX1,
+    the running server only ever reads `DATABASE_URL` for every runtime
+    connection (schema check, writer/maintenance, and the HTTP identity/
+    gameplay pool) and never falls back to `MIGRATION_DATABASE_URL` even if
+    that variable is still set in the process environment from steps 6/8
+    above — there is nothing to remember to unset between the migration
+    steps and starting the server.
 12. Start or replace the `server` service only under a separately
     authorized rollout step, combining
     `deploy/docker-compose.staging.yml` with

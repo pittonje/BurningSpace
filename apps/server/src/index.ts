@@ -11,7 +11,7 @@ import {
   RuntimeLifecycle,
   type OperationalLogSink
 } from './ops/runtimeLifecycle.js';
-import { readMigrationStatusDatabaseUrl, type PersistenceEnv } from './persistence/config.js';
+import { readRuntimeDatabaseUrl, type PersistenceEnv } from './persistence/config.js';
 import { createPersistencePool } from './persistence/pool.js';
 import {
   bootPersistenceRuntime,
@@ -350,7 +350,7 @@ export async function startProductionServer(
     // semantics are intentionally not touched by this packet. Same
     // connection string PersistenceRuntime itself resolved (pure function
     // of the same environment).
-    identityPool = createPersistencePool(readMigrationStatusDatabaseUrl(environment));
+    identityPool = createPersistencePool(readRuntimeDatabaseUrl(environment));
 
     const freshAuthLimiter = new PeerRateLimiter({
       capacity: FRESH_AUTH_LIMITER_CAPACITY,

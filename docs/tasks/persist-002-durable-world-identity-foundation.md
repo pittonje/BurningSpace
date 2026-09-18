@@ -198,11 +198,22 @@ JOINBYID/RECONNECT. PERSIST002-NET-02 (MEDIUM) REMAINS OPEN,
 DOCUMENTATION-ONLY IN THIS FIX. AN INDEPENDENT PERSISTENCE REVIEW OF THE
 NET-FIX1 HEAD THEN RAISED PERSIST002-PERS-01: STALE-LEASE RECONCILIATION IN
 `claimWorldWriter()` EVALUATED `clock_timestamp()` TWICE, INDEPENDENTLY, FOR
-THE SAME RELEASED ROW'S `updated_at`/`expires_at`. PERS-FIX1 (BELOW) MAKES
-ONE DB-TIME SAMPLE SUPPLY BOTH COLUMNS. INDEPENDENT VERIFICATION OF THE
-REMAINING REVIEW-C01-A EARLY-FAILURE PATH, INDEPENDENT NETWORK DELTA REVIEW
-OF NET-FIX1, INDEPENDENT PERSISTENCE DELTA REVIEW OF PERS-FIX1, CORE/QA FOR
-THE PERS-FIX1 HEAD, PRODUCT ARCHITECT FINAL ACCEPTANCE, AND HUMAN MERGE ALL
+THE SAME RELEASED ROW'S `updated_at`/`expires_at`. PERS-FIX1 MADE ONE
+DB-TIME SAMPLE SUPPLY BOTH COLUMNS. AN INDEPENDENT SECURITY REVIEW OF THE
+PERS-FIX1 HEAD (SUPPLIED REPORT HASH
+`97ef06b569bb05c5f5ce44d6e37bf25d98cdecdb169c0936ae1e1a5de2cafce0`, TREATED
+AS SUPPLIED PROVENANCE, NOT INDEPENDENTLY VERIFIED BY THIS TASK) THEN
+CONFIRMED THREE FINDINGS: **PERSIST002-SEC-01 (MEDIUM)** — THE RUNTIME
+COULD SELECT `MIGRATION_DATABASE_URL` (ELEVATED MIGRATOR CREDENTIALS) FOR
+ITS OWN CONNECTIONS; **PERSIST002-SEC-02 (LOW)** — A REJECTED (INVALID/
+REVOKED/MISMATCHED) CREDENTIAL COULD STILL MUTATE `display_name`;
+**PERSIST002-SEC-03 (LOW)** — `pg_dump`/`pg_restore`/`psql` INVOCATIONS
+PLACED THE RAW CONNECTION PASSWORD IN DOCKER/TOOL ARGV. SEC-FIX1 (BELOW)
+CORRECTS ALL THREE. INDEPENDENT VERIFICATION OF THE REMAINING REVIEW-C01-A
+EARLY-FAILURE PATH, INDEPENDENT NETWORK DELTA REVIEW OF NET-FIX1,
+INDEPENDENT PERSISTENCE DELTA REVIEW OF PERS-FIX1, INDEPENDENT SECURITY
+DELTA REVIEW OF SEC-FIX1, CORE/QA FOR THE SEC-FIX1 HEAD, PRODUCT ARCHITECT
+FINAL ACCEPTANCE, AND HUMAN MERGE ALL
 REMAIN OUTSTANDING.**
 
 All seven implementation packets plus four bounded post-implementation
@@ -784,9 +795,193 @@ because it exists. Core and governed Claude QA for the resulting PERS-FIX1
 head have not yet been observed — this document does not claim those checks
 have passed.
 
-Next safe action: independent Persistence delta review of
-PERSIST002-PERS-01 for the PERS-FIX1 head, alongside the still-outstanding
-independent Network delta review of PERSIST002-NET-01 and the
-still-outstanding independent verification of ARCH-FIX3's REVIEW-C01-A
-early-failure cleanup evidence. Product Architect final acceptance and
-human merge remain outstanding for all three.
+**SEC-FIX1 — PERSIST002-SEC-01 (MEDIUM)/SEC-02 (LOW)/SEC-03 (LOW):** an
+independent Security review of the PERS-FIX1 head (supplied report hash
+`97ef06b569bb05c5f5ce44d6e37bf25d98cdecdb169c0936ae1e1a5de2cafce0`,
+treated as supplied provenance, not independently re-verified here)
+confirmed three findings, all corrected in one bounded commit. Low
+severity is not treated as license to leave a confirmed defect
+unaddressed.
+
+**SEC-01 — runtime selected migration credentials:**
+`readMigrationStatusDatabaseUrl()` (MIGRATION_DATABASE_URL-preferring,
+correct for the read-only migration-status CLI command) was also being
+used by `bootPersistenceRuntime()` and `index.ts`'s identity/gameplay
+pool — the running application itself, not an operator tool. A new
+`readRuntimeDatabaseUrl()` (`apps/server/src/persistence/config.ts`) uses
+DATABASE_URL only, unconditionally, and never inspects
+MIGRATION_DATABASE_URL at all (so an invalid/unreachable one can never
+break an otherwise-valid runtime), used for every runtime-created
+connection: schema checking, the writer/maintenance connections
+(`persistenceRuntime.ts`), and the HTTP identity/gameplay pool
+(`index.ts`). `readMigrationDatabaseUrl()` (operator migration
+application) and `readMigrationStatusDatabaseUrl()` (the CLI status
+command) are both byte-for-byte unchanged — this narrows only the
+runtime's own selection, not either operator contract.
+
+Evidence: a new unit matrix
+(`apps/server/test/persistence/config.test.ts`, 15 cases) covers
+runtime-only, both-set (DATABASE_URL wins), migration-only (fails
+closed), missing, blank, a syntactically invalid DATABASE_URL (returned
+as-is — connection-attempt failure, not this selector's job), and an
+irrelevant invalid MIGRATION_DATABASE_URL (never inspected), plus pins
+down `readMigrationStatusDatabaseUrl()`'s and `readMigrationDatabaseUrl()`'s
+own unchanged behavior side by side so the two selectors are never
+confused. A new real-Docker, real role-separated-PostgreSQL regression
+(`apps/server/test/persistence/persistenceRuntimeBoot.test.ts`, +2 cases)
+boots the runtime with both DATABASE_URL (`burningspace_runtime`) and
+MIGRATION_DATABASE_URL (`burningspace_migrator`) set against the SAME
+database and proves, via `pg_stat_activity`, that every real connection —
+including a real query through a separate identity/gameplay `Pool` built
+the same way `index.ts` builds its own — used exactly `burningspace_runtime`,
+never `burningspace_migrator`; a representative forbidden DDL
+(`CREATE TABLE`) under that role fails with SQLSTATE `42501` (proving the
+role restriction is real, not merely assumed); and MIGRATION_DATABASE_URL
+alone (no DATABASE_URL) fails closed with `PersistenceConfigError` before
+any connection attempt. **Negative control:** both new tests, copied
+unmodified into a disposable scratch worktree at the PERS-FIX1 head
+(`cbc91039fee1b7bd5329553383080bea5ed40844`), failed exactly as expected —
+the role-separation test observed real `pg_stat_activity` rows as
+`burningspace_migrator`, and the fail-closed test observed a real
+`WorldNotFoundError` (i.e. it had silently proceeded using migrator
+credentials) instead of the expected upfront config error.
+`db-privilege-check.ts` (unchanged, out of scope) was additionally run
+against a fresh role-separated instance as a smoke check: 22/22 probes
+passed, confirming SEC-01 did not disturb the existing grants boundary.
+
+**SEC-02 — rejected credentials could mutate display_name:**
+`lockProfilePrefix()` (`apps/server/src/persistence/gameplayAuthority.ts`)
+called `playersRepository.updatePlayerDisplayName()` immediately after
+locking the player row, *before* `credentialsRepository.lockActiveCredentialForPlayer()`
+verified the credential/player association — and `withTransaction()`
+commits on any normal (non-throwing) return, so a `credential_invalid`
+result still durably persisted the attempted name. The mutation now runs
+only after the credential check succeeds, using the same existing
+transaction and world → player → credential lock order — no new
+preflight transaction, no TOCTOU gap, `withTransaction` unchanged.
+
+Evidence, all real PostgreSQL, genuine repository-level fixtures (never a
+fabricated row shape)
+(`apps/server/test/persistence/gameplayAuthorityProfileMutation.test.ts`,
+5 new cases): a revoked credential is rejected by both
+`applySpectatorProfile` and `applyPlayerProfile` with `display_name`
+verified unchanged afterward (and, for the player path, zero
+membership/lease rows created); a genuine cross-player credential/player
+mismatch is rejected without mutating *either* player's name; a valid
+credential positive control still updates the name via both profile
+paths (proving the reordering didn't break the accepted path); and a
+"connected spectator" case authenticates while valid, revokes, then
+submits a second profile update with the same (now-revoked) credential —
+rejected, with the durable name read back fresh from the database
+afterward still equal to the pre-revocation value, not the
+rejected-but-attempted one. **Negative control:** the same file, copied
+unmodified into the same PERS-FIX1-head scratch worktree, failed 4 of 5
+cases exactly as expected (`display_name` observed as the attempted,
+rejected nickname instead of the expected prior/null value); the valid-
+credential positive control passed on both versions, correctly
+non-discriminating.
+
+**SEC-03 — tool passwords present in argv:** `runPgDumpSnapshot`/
+`runPgRestore`/`runPsqlFile` (`apps/server/scripts/persistence-tooling.ts`)
+passed the full connection URL, including its password, as a `--dbname`
+argument to `docker run ... pg_dump|pg_restore|psql`, visible in host
+docker CLI argv, the container's own configured command/arguments, and
+the tool's own argv. A new `toPasswordFreeConnection()` strips the
+password from the URL (decoding it exactly once via `decodeURIComponent`,
+rejecting an invalid percent-encoding or an embedded control character —
+e.g. a percent-encoded newline or NUL — by throwing rather than injecting
+a broken or multi-line `.pgpass` entry) and returns a single, wildcarded
+(`*:*:*:*:<escaped password>`) libpq `.pgpass`-format line; TLS and other
+non-secret query parameters are preserved unchanged. A new, fixed
+(never-interpolated) shell wrapper reads that line from its own stdin
+into a file created (`mktemp`) inside the ephemeral tool container's own
+filesystem — never a host bind mount, so `chmod 600` always takes effect
+regardless of Windows bind-mount permission translation — exports
+`PGPASSFILE` (a path, never a secret) for the real tool invocation, and
+relies on the container's own `--rm` for guaranteed cleanup (the shell's
+own `trap ... EXIT` provides defense-in-depth on top of that). A URL with
+no password skips the wrapper entirely, unchanged from before.
+
+Evidence: a unit matrix directly exercising `toPasswordFreeConnection()`
+(exported for this purpose) covers a plain password, colon/backslash
+escaping, percent-encoded specials (decoded then escaped), preserved TLS
+query parameters, no-password passthrough, invalid percent-encoding, an
+embedded newline, and an embedded NUL byte — all failing safe via
+`PersistenceToolError` where required. A real-Docker, real
+role-separated-PostgreSQL test
+(`apps/server/test/persistence/persistenceToolingSecretTransport.test.ts`)
+wraps the genuine `node:child_process.spawn` (never replacing its
+behavior, only recording argv and stdin) around a full real
+`performQuiescedBackup` → `restoreAndVerify` cycle (exercising all three
+tool functions for real, against real synthetic UUID passwords) and
+proves every captured `docker run ... pg_dump|pg_restore|psql|sh`
+invocation's argv contains neither the raw nor the percent-encoded
+password, while at least one call's stdin genuinely carried it (a
+positive control against a vacuous pass); a second case forces a real
+tool failure (invalid SQL) and confirms the thrown `PersistenceToolError`
+message also never contains the password. **Negative control:** the same
+real-Docker test (trimmed to omit the new-export-only unit matrix, which
+cannot exist pre-fix), copied unmodified into the PERS-FIX1-head scratch
+worktree, failed both cases with the real password plainly visible in
+the captured argv (`--dbname postgres://burningspace_migrator:<real
+password>@host.docker.internal:<port>/burningspace`) — not a
+simulated or assumed leak.
+
+Full real-PostgreSQL suite (`npx vitest run`, from the worktree root):
+**52 files / 495 tests / 0 failed / 0 skipped** (baseline 49/463 plus the
+3 new files above: 15 + 5 + 10 = 30 cases, plus 2 more added directly
+into `persistenceRuntimeBoot.test.ts` = 32; 463 + 32 = 495). Full-workspace
+`npm run typecheck`, `npx tsc -p apps/server/scripts/tsconfig.persistence-tools.json --noEmit`,
+and `npx tsc -p apps/server/scripts/tsconfig.external-staging.json --noEmit`
+all clean; the three new test files were additionally typechecked via a
+temporary, throwaway `apps/server/tsconfig.tmp-test-check.json` (deleted,
+never committed) confirming zero errors specific to any of them or to any
+of the five changed production files. `npm run build`, with
+`VITE_BURNINGSPACE_SERVER_URL=http://127.0.0.1:2567` set only in the
+invoking process's environment (confirmed absent from the persistent
+shell both before and after, never written to a repository `.env` file),
+completed clean.
+
+**Resource accounting:** no Docker restart was needed this session;
+`deploy-postgres-1` remained healthy throughout and untouched (still 4
+total databases, 0 matching `bs_test_*`/`bs_backup_test_*`, unchanged from
+the PERS-FIX1 session's finding). Every disposable role-separated
+container and database this session created (via `startRoleSeparatedPostgres()`
+and the plain-admin disposable-database harness) was removed by its own
+test's cleanup; a final inventory (`docker ps -a`, a `bs_test_*`/
+`bs_backup_test_*` database query) confirmed zero residue. Both scratch
+negative-control `git worktree`s were removed immediately after use; the
+implementation worktree itself was never mutated for either control. No
+other task's resources were deleted by wildcard or assumed unchanged
+without checking.
+
+This fix is by its own author and is **not** independently verified
+merely because it exists. Core and governed Claude QA for the resulting
+SEC-FIX1 head have not yet been observed — this document does not claim
+those checks have passed. The corrections fit the Product-Architect-
+authorized SEC-FIX1 direction; this is **not** independent SEC-01/02/03
+closure or merge approval, and it does not reopen or reinterpret the
+already-closed C-01 runtime fix, REVIEW-C01-B, NET-01, or PERS-01
+dispositions above.
+
+**PERSIST002-NET-02 (MEDIUM) remains OPEN and now explicitly BLOCKS
+PUBLIC PERSISTENCE ROLLOUT** (not merely repository merge): Product
+Architect disposition is that deferring NET-02's *implementation*
+relative to merge is accepted, but deferring it relative to *public
+persistence deployment* is not — see
+[`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md)
+for the updated, explicit pre-rollout gate (an implemented
+admission-budget mitigation, spoof-resistance and multi-client budget
+tests, explicit Security/Ops acceptance, and a separate Product Architect
+deployment authorization — a documented "bounded operating policy," a
+raised global quota, or asking users to retry slowly are each,
+individually, not an accepted mitigation).
+
+Next safe action: independent Security delta review of SEC-01/02/03 for
+the SEC-FIX1 head, alongside the still-outstanding independent
+Persistence delta review of PERSIST002-PERS-01, independent Network delta
+review of PERSIST002-NET-01, and independent verification of ARCH-FIX3's
+REVIEW-C01-A early-failure cleanup evidence. Product Architect final
+acceptance and human merge remain outstanding for all four; public
+persistence rollout additionally remains blocked on the NET-02 gate above
+regardless of merge status.

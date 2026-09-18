@@ -134,6 +134,124 @@ export class PersistenceToolError extends Error {
   }
 }
 
+const PGPASS_CONTROL_CHARACTER_PATTERN = /[\x00-\x1f\x7f]/u;
+
+function escapePgpassField(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/:/g, '\\:');
+}
+
+interface PasswordFreeConnection {
+  /** Same connection URL, with any password stripped from the userinfo component. */
+  readonly dbUrl: string;
+  /** A single-line libpq .pgpass entry, or undefined when the URL carried no password to protect. */
+  readonly pgpassFileContent: string | undefined;
+}
+
+/**
+ * Strips the password out of a Postgres connection URL (PERSIST002-SEC-03)
+ * so it can never appear in host docker CLI argv, the container's own
+ * configured command/arguments, or pg_dump/pg_restore/psql's own argv.
+ * Host/port/database/username are wildcarded in the returned .pgpass entry
+ * ('*'): every call site here is a single-shot invocation against exactly
+ * one connection, so there is no ambiguity to resolve, and this keeps the
+ * escaping surface limited to the password field alone. TLS and other
+ * non-secret query parameters are preserved unchanged. Returns
+ * pgpassFileContent === undefined when the URL has no password at all --
+ * callers must then run the tool without the wrapper, unchanged.
+ */
+export function toPasswordFreeConnection(hostUrl: string): PasswordFreeConnection {
+  const url = new URL(hostUrl);
+  if (url.password === '') {
+    return { dbUrl: hostUrl, pgpassFileContent: undefined };
+  }
+
+  let rawPassword: string;
+  try {
+    rawPassword = decodeURIComponent(url.password);
+  } catch {
+    throw new PersistenceToolError('Connection string password is not validly percent-encoded.');
+  }
+
+  if (PGPASS_CONTROL_CHARACTER_PATTERN.test(rawPassword)) {
+    throw new PersistenceToolError('Connection string password contains a disallowed control character.');
+  }
+
+  url.password = '';
+  return { dbUrl: url.toString(), pgpassFileContent: `*:*:*:*:${escapePgpassField(rawPassword)}\n` };
+}
+
+/**
+ * Fixed, static shell wrapper text -- never interpolated with any secret or
+ * caller-supplied data. Reads the .pgpass entry from its own stdin into a
+ * file created (via mktemp) inside the ephemeral tool container's OWN
+ * filesystem -- never a host bind mount, so chmod 600 always takes effect
+ * exactly as libpq requires, on both native Linux Docker and Docker
+ * Desktop, without depending on Windows bind-mount permission translation.
+ * PGPASSFILE (a path, never a secret) is exported for the real tool
+ * command, passed as ordinary argv after this script text. The container
+ * always runs with --rm, so the file is destroyed with the container even
+ * if the EXIT trap somehow could not run (e.g. the container is killed
+ * before graceful exit) -- though an abrupt kill or host power loss may
+ * still leave residue in Docker's own layer/storage until that removal
+ * completes, and neither this script nor --rm promise protection from a
+ * privileged host administrator inspecting Docker's storage directly.
+ */
+const PGPASSFILE_WRAPPER_SCRIPT = `set -eu
+umask 077
+PGPASSFILE="$(mktemp)"
+trap 'rm -f "$PGPASSFILE"' EXIT
+cat > "$PGPASSFILE"
+chmod 600 "$PGPASSFILE"
+export PGPASSFILE
+"$@"
+`;
+
+/**
+ * Runs one Postgres tool (pg_dump/pg_restore/psql) inside the pinned
+ * postgres:17 image against hostUrl, never placing hostUrl's password in
+ * any docker/tool argv or container command/arguments metadata
+ * (PERSIST002-SEC-03). buildToolArgs receives the already password-free
+ * connection URL to place wherever the caller's own --dbname/--file/etc.
+ * flags need it.
+ */
+async function runPgTool(
+  hostUrl: string,
+  extraDockerArgs: readonly string[],
+  buildToolArgs: (dbUrl: string) => readonly string[]
+): Promise<CommandResult> {
+  const access = resolveContainerDatabaseAccess(hostUrl);
+  const { dbUrl, pgpassFileContent } = toPasswordFreeConnection(access.dbUrl);
+
+  if (pgpassFileContent === undefined) {
+    return runCommand('docker', [
+      'run',
+      '--rm',
+      ...access.dockerArgs,
+      ...extraDockerArgs,
+      POSTGRES_17_IMAGE,
+      ...buildToolArgs(dbUrl)
+    ]);
+  }
+
+  return runCommand(
+    'docker',
+    [
+      'run',
+      '--rm',
+      '-i',
+      ...access.dockerArgs,
+      ...extraDockerArgs,
+      POSTGRES_17_IMAGE,
+      'sh',
+      '-c',
+      PGPASSFILE_WRAPPER_SCRIPT,
+      'sh',
+      ...buildToolArgs(dbUrl)
+    ],
+    { input: pgpassFileContent }
+  );
+}
+
 /**
  * On native Linux, a file the postgres:17 tool image writes into a
  * bind-mounted host directory (pg_dump's output) is otherwise created
@@ -168,27 +286,23 @@ export interface PgDumpSnapshotOptions {
  * transaction open on a separate connection until this resolves.
  */
 export async function runPgDumpSnapshot(options: PgDumpSnapshotOptions): Promise<void> {
-  const access = resolveContainerDatabaseAccess(options.sourceUrl);
   const hostDir = dirname(options.outputPath);
   const fileName = basename(options.outputPath);
 
-  const result = await runCommand('docker', [
-    'run',
-    '--rm',
-    ...access.dockerArgs,
-    ...resolveLinuxBindMountWriterArgs(),
-    '-v',
-    `${hostDir}:/work`,
-    POSTGRES_17_IMAGE,
-    'pg_dump',
-    '--format=custom',
-    '--snapshot',
-    options.snapshotId,
-    '--file',
-    `/work/${fileName}`,
-    '--dbname',
-    access.dbUrl
-  ]);
+  const result = await runPgTool(
+    options.sourceUrl,
+    [...resolveLinuxBindMountWriterArgs(), '-v', `${hostDir}:/work`],
+    (dbUrl) => [
+      'pg_dump',
+      '--format=custom',
+      '--snapshot',
+      options.snapshotId,
+      '--file',
+      `/work/${fileName}`,
+      '--dbname',
+      dbUrl
+    ]
+  );
 
   if (result.exitCode !== 0) {
     throw new PersistenceToolError(`pg_dump failed (exit ${result.exitCode}): ${result.stderr.slice(0, 2000)}`);
@@ -202,23 +316,16 @@ export interface PgRestoreOptions {
 }
 
 export async function runPgRestore(options: PgRestoreOptions): Promise<void> {
-  const access = resolveContainerDatabaseAccess(options.targetUrl);
   const hostDir = dirname(options.dumpPath);
   const fileName = basename(options.dumpPath);
 
-  const result = await runCommand('docker', [
-    'run',
-    '--rm',
-    ...access.dockerArgs,
-    '-v',
-    `${hostDir}:/work`,
-    POSTGRES_17_IMAGE,
+  const result = await runPgTool(options.targetUrl, ['-v', `${hostDir}:/work`], (dbUrl) => [
     'pg_restore',
     '--exit-on-error',
     '--no-owner',
     '--no-privileges',
     '--dbname',
-    access.dbUrl,
+    dbUrl,
     `/work/${fileName}`
   ]);
 
@@ -228,22 +335,15 @@ export async function runPgRestore(options: PgRestoreOptions): Promise<void> {
 }
 
 export async function runPsqlFile(options: { readonly targetUrl: string; readonly sqlPath: string }): Promise<void> {
-  const access = resolveContainerDatabaseAccess(options.targetUrl);
   const hostDir = dirname(options.sqlPath);
   const fileName = basename(options.sqlPath);
 
-  const result = await runCommand('docker', [
-    'run',
-    '--rm',
-    ...access.dockerArgs,
-    '-v',
-    `${hostDir}:/work`,
-    POSTGRES_17_IMAGE,
+  const result = await runPgTool(options.targetUrl, ['-v', `${hostDir}:/work`], (dbUrl) => [
     'psql',
     '-v',
     'ON_ERROR_STOP=1',
     '--dbname',
-    access.dbUrl,
+    dbUrl,
     '--file',
     `/work/${fileName}`
   ]);

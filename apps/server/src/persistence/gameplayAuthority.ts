@@ -141,7 +141,6 @@ export function createGameplayAuthority(
     if (!player) {
       return 'credential_invalid';
     }
-    await playersRepository.updatePlayerDisplayName(client, context.playerId, context.nickname);
 
     const credentialActive = await credentialsRepository.lockActiveCredentialForPlayer(
       client,
@@ -151,6 +150,11 @@ export function createGameplayAuthority(
     if (!credentialActive) {
       return 'credential_invalid';
     }
+
+    // Only mutate display_name once the credential/player association is
+    // itself verified active -- a rejected credential must never leave a
+    // durable side effect (PERSIST002-SEC-02).
+    await playersRepository.updatePlayerDisplayName(client, context.playerId, context.nickname);
 
     return 'ok';
   }

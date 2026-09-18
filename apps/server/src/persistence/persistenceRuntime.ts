@@ -5,7 +5,7 @@ import {
   releaseAdvisorySharedLock,
   tryAcquireAdvisorySharedLock
 } from './advisoryLocks.js';
-import { readMigrationStatusDatabaseUrl, readWorldSlug, type PersistenceEnv } from './config.js';
+import { readRuntimeDatabaseUrl, readWorldSlug, type PersistenceEnv } from './config.js';
 import { readMigrationStatus } from './migrationRunner.js';
 import { createPersistencePool } from './pool.js';
 import * as worldsRepository from './repositories/worldsRepository.js';
@@ -110,7 +110,7 @@ async function verifyExactSchemaState(connectionString: string, migrationsDir: s
  */
 export async function bootPersistenceRuntime(options: PersistenceRuntimeOptions = {}): Promise<PersistenceRuntime> {
   const environment = options.environment ?? process.env;
-  const connectionString = readMigrationStatusDatabaseUrl(environment);
+  const connectionString = readRuntimeDatabaseUrl(environment);
   const worldSlug = readWorldSlug(environment) ?? DEFAULT_WORLD_SLUG;
   const serverInstanceId = randomUUID();
 
