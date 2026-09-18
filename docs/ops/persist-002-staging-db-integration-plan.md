@@ -154,6 +154,25 @@ MIGRATION_DATABASE_URL=<target burningspace_migrator connection string> \
 
 Never restore over the source database.
 
+### Supported connection format for these operator tools (SEC-FIX2)
+
+`MIGRATION_DATABASE_URL`/`BACKUP_DATABASE_URL` above must carry the
+database login password in the URI's **userinfo**
+(`postgres://user:password@host/db`), never as a `password=` or
+`sslpassword=` **query parameter**. Since PERSIST002-SEC-FIX2, all three
+operator tool wrappers (`runPgDumpSnapshot`/`runPgRestore`/`runPsqlFile`
+in `apps/server/scripts/persistence-tooling.ts`) reject any connection
+URI containing a `password` or `sslpassword` query parameter outright,
+before spawning Docker or any PostgreSQL tool — conservatively, by
+parameter name, case-insensitively, regardless of whether the value is
+empty or a userinfo password is also present. This is a deliberate
+restriction, not an oversight: `sslpassword` (a TLS client-certificate
+private-key passphrase) is not supported by this tooling's secret
+channel at all, which exists only for the ordinary database login
+password. An operator connection string that needs an encrypted
+client-certificate key is out of scope for these wrappers as they exist
+today.
+
 ## Schema-compatibility rollback rule
 
 There is no automatic destructive downgrade path. If a deployed schema

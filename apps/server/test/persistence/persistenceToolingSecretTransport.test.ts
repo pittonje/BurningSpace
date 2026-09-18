@@ -39,7 +39,14 @@ import { runMigrations } from '../../src/persistence/migrationRunner.js';
 import { bootstrapWorld } from '../../src/persistence/repositories/worldsRepository.js';
 import { performQuiescedBackup } from '../../scripts/backup-dump.js';
 import { restoreAndVerify } from '../../scripts/backup-restore-verify.js';
-import { PersistenceToolError, runPsqlFile, toPasswordFreeConnection } from '../../scripts/persistence-tooling.js';
+import {
+  PersistenceToolError,
+  rejectSecretBearingQueryParameters,
+  runPgDumpSnapshot,
+  runPgRestore,
+  runPsqlFile,
+  toPasswordFreeConnection
+} from '../../scripts/persistence-tooling.js';
 import {
   startRoleSeparatedPostgres,
   withDirectConnection,
@@ -128,6 +135,114 @@ describe('toPasswordFreeConnection (PERSIST002-SEC-03 unit matrix)', () => {
     expect(() => toPasswordFreeConnection('postgres://myuser:bad%00pass@127.0.0.1:5432/mydb')).toThrow(
       PersistenceToolError
     );
+  });
+});
+
+/**
+ * PERSIST002-SEC-03 residual (SEC-FIX2): a `password`/`sslpassword` QUERY
+ * parameter is unsupported outright -- rejected before any docker/tool
+ * spawn, never given precedence over or silently dropped in favor of a
+ * userinfo password. Every sentinel value below is synthetic, never a
+ * retained credential.
+ */
+describe('rejectSecretBearingQueryParameters (PERSIST002-SEC-03 residual, SEC-FIX2 unit matrix)', () => {
+  test('query-only password is rejected', () => {
+    expect(() =>
+      rejectSecretBearingQueryParameters('postgres://myuser@127.0.0.1:5432/mydb?password=SENTINEL_QP1')
+    ).toThrow(PersistenceToolError);
+  });
+
+  test('query-only sslpassword is rejected', () => {
+    expect(() =>
+      rejectSecretBearingQueryParameters('postgres://myuser@127.0.0.1:5432/mydb?sslpassword=SENTINEL_QP2')
+    ).toThrow(PersistenceToolError);
+  });
+
+  test('a userinfo password plus a query password is still rejected -- no precedence rule', () => {
+    expect(() =>
+      rejectSecretBearingQueryParameters(
+        'postgres://myuser:userinfoSecret@127.0.0.1:5432/mydb?password=SENTINEL_QP3'
+      )
+    ).toThrow(PersistenceToolError);
+  });
+
+  test('a userinfo password plus a query sslpassword is still rejected', () => {
+    expect(() =>
+      rejectSecretBearingQueryParameters(
+        'postgres://myuser:userinfoSecret@127.0.0.1:5432/mydb?sslpassword=SENTINEL_QP4'
+      )
+    ).toThrow(PersistenceToolError);
+  });
+
+  test('both secret query keys present together are rejected', () => {
+    expect(() =>
+      rejectSecretBearingQueryParameters(
+        'postgres://myuser@127.0.0.1:5432/mydb?password=SENTINEL_QP5&sslpassword=SENTINEL_QP6'
+      )
+    ).toThrow(PersistenceToolError);
+  });
+
+  test('a repeated password key is rejected regardless of position among other params', () => {
+    expect(() =>
+      rejectSecretBearingQueryParameters(
+        'postgres://myuser@127.0.0.1:5432/mydb?sslmode=require&password=SENTINEL_QP7&password=SENTINEL_QP8'
+      )
+    ).toThrow(PersistenceToolError);
+  });
+
+  test('an empty password value is still rejected', () => {
+    expect(() => rejectSecretBearingQueryParameters('postgres://myuser@127.0.0.1:5432/mydb?password=')).toThrow(
+      PersistenceToolError
+    );
+  });
+
+  test('a bare password key with no "=" at all is still rejected', () => {
+    expect(() => rejectSecretBearingQueryParameters('postgres://myuser@127.0.0.1:5432/mydb?password')).toThrow(
+      PersistenceToolError
+    );
+  });
+
+  test('a percent-encoded parameter name is decoded and rejected (%70assword = "password")', () => {
+    expect(() =>
+      rejectSecretBearingQueryParameters('postgres://myuser@127.0.0.1:5432/mydb?%70assword=SENTINEL_QP9')
+    ).toThrow(PersistenceToolError);
+  });
+
+  test('mixed-case parameter names are rejected -- conservative case-insensitive matching', () => {
+    expect(() =>
+      rejectSecretBearingQueryParameters('postgres://myuser@127.0.0.1:5432/mydb?PassWord=SENTINEL_QP10')
+    ).toThrow(PersistenceToolError);
+    expect(() =>
+      rejectSecretBearingQueryParameters('postgres://myuser@127.0.0.1:5432/mydb?SSLPASSWORD=SENTINEL_QP11')
+    ).toThrow(PersistenceToolError);
+  });
+
+  test('malformed percent-encoding in a parameter name fails safe instead of reaching spawn', () => {
+    expect(() => rejectSecretBearingQueryParameters('postgres://myuser@127.0.0.1:5432/mydb?bad%zzname=x')).toThrow(
+      PersistenceToolError
+    );
+  });
+
+  test('a totally malformed connection string fails safe with a fixed message, not a raw parse error', () => {
+    expect(() => rejectSecretBearingQueryParameters('not a url at all')).toThrow(PersistenceToolError);
+  });
+
+  test('an ordinary value that merely CONTAINS the word "password" is accepted -- only names are inspected', () => {
+    expect(() =>
+      rejectSecretBearingQueryParameters('postgres://myuser@127.0.0.1:5432/mydb?application_name=password-check')
+    ).not.toThrow();
+  });
+
+  test('a plain connection string with no query at all is accepted', () => {
+    expect(() => rejectSecretBearingQueryParameters('postgres://myuser:secret@127.0.0.1:5432/mydb')).not.toThrow();
+  });
+
+  test('ordinary non-secret settings pass through untouched', () => {
+    expect(() =>
+      rejectSecretBearingQueryParameters(
+        'postgres://myuser:secret@127.0.0.1:5432/mydb?sslmode=require&connect_timeout=10&application_name=myapp'
+      )
+    ).not.toThrow();
   });
 });
 
@@ -233,9 +348,105 @@ describe('operator tool secret transport (PERSIST002-SEC-03, real Docker, real P
       const calls = dockerToolInvocations();
       expect(calls.length).toBeGreaterThan(0);
       for (const call of calls) {
-        expect(call.args.join(' ')).not.toContain(secret);
+        expect(call.args.join('\u0000')).not.toContain(secret);
       }
     },
     TEST_TIMEOUT_MS
   );
+
+  test(
+    'a real invocation with an ordinary application_name=password-check query value still succeeds -- only parameter NAMES are inspected, never values',
+    async () => {
+      source = await startRoleSeparatedPostgres();
+      await runMigrations(source.migratorUrl);
+      workDir = await mkdtemp(join(tmpdir(), 'bs-sec03-appname-'));
+      const sqlPath = join(workDir, 'noop.sql');
+      await writeFile(sqlPath, 'SELECT 1;\n', 'utf8');
+
+      const url = new URL(source.migratorUrl);
+      url.searchParams.set('application_name', 'password-check');
+
+      await expect(runPsqlFile({ targetUrl: url.toString(), sqlPath })).resolves.toBeUndefined();
+    },
+    TEST_TIMEOUT_MS
+  );
+});
+
+/**
+ * PERSIST002-SEC-03 residual (SEC-FIX2): the three PUBLIC operator
+ * functions themselves -- not merely the standalone parser helper -- must
+ * reject a secret-bearing query parameter before spawning docker/any
+ * PostgreSQL tool at all. Every sentinel value below is synthetic.
+ */
+describe('operator wrappers enforce query-parameter rejection before any spawn (PERSIST002-SEC-03, SEC-FIX2)', () => {
+  afterEach(() => {
+    vi.mocked(spawn).mockClear();
+  });
+
+  test('runPgDumpSnapshot rejects a query-string password before spawning anything', async () => {
+    const spawnCallsBefore = vi.mocked(spawn).mock.calls.length;
+    await expect(
+      runPgDumpSnapshot({
+        sourceUrl: 'postgres://myuser@127.0.0.1:55432/mydb?password=SENTINEL_WRAPPER_1',
+        snapshotId: 'irrelevant-snapshot-id',
+        outputPath: 'D:/irrelevant/backup.dump'
+      })
+    ).rejects.toBeInstanceOf(PersistenceToolError);
+    expect(vi.mocked(spawn).mock.calls.length).toBe(spawnCallsBefore);
+  });
+
+  test('runPgRestore rejects a query-string sslpassword before spawning anything', async () => {
+    const spawnCallsBefore = vi.mocked(spawn).mock.calls.length;
+    await expect(
+      runPgRestore({
+        targetUrl: 'postgres://myuser@127.0.0.1:55432/mydb?sslpassword=SENTINEL_WRAPPER_2',
+        dumpPath: 'D:/irrelevant/backup.dump'
+      })
+    ).rejects.toBeInstanceOf(PersistenceToolError);
+    expect(vi.mocked(spawn).mock.calls.length).toBe(spawnCallsBefore);
+  });
+
+  test('runPsqlFile rejects a query-string password before spawning anything', async () => {
+    const spawnCallsBefore = vi.mocked(spawn).mock.calls.length;
+    await expect(
+      runPsqlFile({
+        targetUrl: 'postgres://myuser@127.0.0.1:55432/mydb?password=SENTINEL_WRAPPER_3',
+        sqlPath: 'D:/irrelevant/script.sql'
+      })
+    ).rejects.toBeInstanceOf(PersistenceToolError);
+    expect(vi.mocked(spawn).mock.calls.length).toBe(spawnCallsBefore);
+  });
+
+  test('runPsqlFile also rejects a userinfo password combined with a query sslpassword before spawning anything', async () => {
+    const spawnCallsBefore = vi.mocked(spawn).mock.calls.length;
+    await expect(
+      runPsqlFile({
+        targetUrl: 'postgres://myuser:SENTINEL_USERINFO@127.0.0.1:55432/mydb?sslpassword=SENTINEL_WRAPPER_4',
+        sqlPath: 'D:/irrelevant/script.sql'
+      })
+    ).rejects.toBeInstanceOf(PersistenceToolError);
+    expect(vi.mocked(spawn).mock.calls.length).toBe(spawnCallsBefore);
+  });
+
+  test('the thrown error, including its own enumerable properties, never contains the rejected sentinel in plain or encoded form', async () => {
+    const sentinel = 'SENTINEL_WRAPPER_5_UNIQUE';
+    let caught: unknown;
+    try {
+      await runPsqlFile({
+        targetUrl: `postgres://myuser@127.0.0.1:55432/mydb?password=${sentinel}`,
+        sqlPath: 'D:/irrelevant/script.sql'
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(PersistenceToolError);
+    const error = caught as Error;
+    expect(error.message).not.toContain(sentinel);
+    expect(error.message).not.toContain(encodeURIComponent(sentinel));
+    for (const [key, value] of Object.entries(error)) {
+      expect(`${key}=${String(value)}`).not.toContain(sentinel);
+    }
+    expect(String((error as { cause?: unknown }).cause)).not.toContain(sentinel);
+  });
 });

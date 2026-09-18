@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-18
-Updated by: Implementation engineer — SEC-FIX1: runtime DB selection, profile authorization ordering, and operator secret transport (PERSIST002-SEC-01/02/03), committed and pushed
+Updated by: Implementation engineer — SEC-FIX2: reject secret-bearing database query options (residual PERSIST002-SEC-03), committed and pushed
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -646,16 +646,142 @@ multi-client tests + explicit Security/Ops acceptance + separate PA
 deployment authorization required; a documented "bounded operating
 policy" or a raised quota alone does not close it).
 
+## Status reconciliation (2026-09-18): SEC-01/SEC-02 independently closed; SEC-03 partially remained open
+
+An independent Security delta review of the SEC-FIX1 head
+(`de424972826bc6f8424658530958ed56de0a87f8`) **closed PERSIST002-SEC-01**
+and **PERSIST002-SEC-02**. **PERSIST002-SEC-03 remained LOW / OPEN**: the
+SEC-FIX1 correction only stripped a *userinfo* password; a `password` or
+`sslpassword` connection-string *query parameter* still reached
+Docker/pg-tool argv unchanged. SEC-FIX2 (below) closes that residual path.
+
+Per the same reconciliation, **C-01 (the ARCH-FIX1 runtime fix),
+REVIEW-C01-A, REVIEW-C01-B, PERSIST002-NET-01, and PERSIST002-PERS-01 are
+all previously closed** and are **not** pending repeat independent review.
+The individual sections above (ARCH-FIX1–3, NET-FIX1, PERS-FIX1, and the
+"Independent delta review of PERSIST002-C-01" section) remain as the
+historical record of how each was fixed and reviewed; they are preserved
+unchanged and should be read as history, not as open items.
+
+## SEC-FIX2 (2026-09-18): reject secret-bearing database query options
+
+**PERSIST002-SEC-03 residual — query-string `password`/`sslpassword`
+reached Docker/pg-tool argv unchanged:** SEC-FIX1's
+`toPasswordFreeConnection()` only ever stripped a *userinfo* password;
+`password=...` or `sslpassword=...` placed in the connection URI's
+*query string* rode straight through inside `dbUrl` into
+`docker run ... pg_dump|pg_restore|psql`'s `--dbname` argument,
+unprotected — the same argv-exposure class SEC-FIX1 fixed for userinfo,
+left open for this one query-parameter path.
+
+Product Architect decision, implemented in
+`apps/server/scripts/persistence-tooling.ts`: for all three operator
+wrappers (`runPgDumpSnapshot`/`runPgRestore`/`runPsqlFile`), a connection
+URI containing any query parameter **named** `password` or `sslpassword`
+(case-insensitive, checked before decoding so a percent-encoded name is
+still caught; rejected even when the value is empty, the parameter is
+repeated, or a userinfo password is also present) is now **rejected
+outright, before spawning Docker or any PostgreSQL tool** — no
+password-precedence rule, no silent discard. The new
+`rejectSecretBearingQueryParameters()` runs as the very first step inside
+the shared `runPgTool()`, before `resolveContainerDatabaseAccess()`'s own
+platform-specific URL transformation could throw an unsafe raw parse
+error, and before `toPasswordFreeConnection()`'s empty-userinfo-password
+early return could let a query-string secret through untouched. It
+parses the raw, still-percent-encoded query string by hand (never the
+lenient `URLSearchParams`) so malformed/ambiguous percent-encoding in a
+parameter *name* fails safe (rejected) rather than risking a permissive
+decode dodging the name check; only parameter names are ever inspected or
+decoded, values are never read, and the connection string itself is never
+mutated or reserialized, so every other accepted setting (`sslmode`,
+`connect_timeout`, `application_name`, etc.) keeps its exact existing
+semantics. `sslpassword` (a TLS private-key passphrase) is deliberately
+**not** supported by the `.pgpass`/stdin channel — that channel exists
+only for the ordinary database login password; adding encrypted-key or
+service-file support is explicitly out of scope for this correction. The
+accepted secret channel itself (stdin-to-private-container-file wrapper,
+`.pgpass` escaping/permissions, the fixed shell script, invocation-scoped
+cleanup, the pinned image, Linux host networking, Docker Desktop host
+resolution, snapshot lifetime/restore verification) is **unchanged**.
+
+Evidence, extending
+`apps/server/test/persistence/persistenceToolingSecretTransport.test.ts`
+(+21 cases, all against real PostgreSQL/Docker where relevant): a 15-case
+unit matrix for `rejectSecretBearingQueryParameters()` (query-only
+`password`/`sslpassword`, each combined with a userinfo password, both
+keys together, a repeated key, an empty value, a bare key with no `=`, a
+percent-encoded name, mixed case, malformed percent-encoding, a totally
+malformed URI, an ordinary value merely *containing* the word "password",
+no query at all, and ordinary settings passing through); a real
+`runPsqlFile` invocation with `application_name=password-check` still
+succeeding (names, not values, are inspected); 5 new cases calling the
+three actual exported wrappers directly with forbidden inputs, each
+asserting a safe `PersistenceToolError` rejection **and** an unchanged
+real `node:child_process.spawn` call count (snapshotted immediately
+around the call so unrelated fixture setup cannot satisfy the
+assertion) — proving zero Docker/tool processes are ever started for a
+rejected input — plus a check that the thrown error's own message and
+enumerable properties never contain the rejected sentinel. **Negative
+control:** the three wrapper-level tests, copied unmodified into a
+disposable scratch worktree at the SEC-FIX1 head
+(`de424972826bc6f8424658530958ed56de0a87f8`) without touching its
+pre-fix `persistence-tooling.ts`, all failed exactly as expected — the
+spawn count went from 0 to 1 in each case, proving the pre-fix wrappers
+really did spawn a real `docker run` with the query-string secret still
+present, instead of rejecting it. The scratch worktree was removed after
+use; the implementation worktree was never mutated for this control.
+
+Full targeted suite (`persistenceToolingSecretTransport.test.ts`): 31/31
+pass. Existing `backupRestore.test.ts` end-to-end coverage: 2/2 pass,
+unchanged. Both operator-script typechecks
+(`tsconfig.persistence-tools.json`/`tsconfig.external-staging.json`) and
+full-workspace `npm run typecheck` clean. `npm run build`, with
+`VITE_BURNINGSPACE_SERVER_URL=http://127.0.0.1:2567` scoped to that one
+process only (confirmed absent from the shell before and after), clean.
+
+**Unexpected failure, disclosed:** a full `npx vitest run` under this
+repository's default (forks) pool configuration hit the same
+pre-existing, previously documented Vitest/tinypool
+`ERR_IPC_CHANNEL_CLOSED` worker crash on **five** consecutive attempts in
+this session, each in a different, unrelated test file
+(`level2DurableRecovery.test.ts`, `persistenceRuntimeBoot.test.ts`,
+`productionReconnectLifecycle.test.ts`, `guestIdentityEndpoint.test.ts`,
+then again in an unrelated file), none of them touched by this change.
+Each crashed attempt's exactly-named orphaned disposable database was
+confirmed to have zero active connections and dropped by its exact name;
+no other resource was touched. A diagnostic-only `--pool=threads` run
+(explicitly **not** a substitute for the required default-pool
+configuration) completed cleanly at **52 files / 516 tests**, confirming
+no logic regression from this change; a clean run under the actual
+required default (forks) pool configuration was not obtained this
+session despite five disclosed attempts, and is recorded here as an
+unexpected, pre-existing environmental limitation rather than retried
+further or forced by altering pool/timeout settings.
+
+This fix is by its own author and is **not** independently verified
+merely because it exists. Core and governed Claude QA for the resulting
+SEC-FIX2 head have not yet been observed. This is **not** independent
+SEC-03 closure or merge approval.
+
+**PERSIST002-NET-02 (MEDIUM) remains OPEN and continues to explicitly
+BLOCK PUBLIC PERSISTENCE ROLLOUT** (unchanged from SEC-FIX1): its
+implementation may be separate from repository merge, but public rollout
+still requires an implemented admission-budget mitigation,
+spoof-resistance and multi-client budget tests, explicit Security/Ops
+acceptance, and a separate Product Architect deployment authorization —
+see
+[`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).
+No quota, proxy-trust, or Caddy change was made.
+
 ## Current next safe action
 
-The next action is: **independent Security delta review of
-PERSIST002-SEC-01/02/03** for the SEC-FIX1 head, alongside the
-still-outstanding **independent Persistence delta review of
-PERSIST002-PERS-01**, **independent Network delta review of
-PERSIST002-NET-01**, and **independent verification of the remaining
-REVIEW-C01-A early-failure cleanup path**, plus obtaining/inspecting Core
-Pull Request Checks and governed Claude QA for the resulting SEC-FIX1
-head. Product Architect final acceptance and human merge remain
-outstanding for all four. Public persistence rollout additionally remains
-blocked on the NET-02 gate above regardless of merge status — see
+The next action is: **independent delta verification of the residual
+PERSIST002-SEC-03** (query-parameter rejection) for the SEC-FIX2 head,
+then final QA. PERSIST002-SEC-01, PERSIST002-SEC-02, C-01, REVIEW-C01-A,
+REVIEW-C01-B, PERSIST002-NET-01, and PERSIST002-PERS-01 are already
+closed and are **not** part of that next action. Obtaining/inspecting
+Core Pull Request Checks and governed Claude QA for the resulting
+SEC-FIX2 head remains to be done. Product Architect final acceptance and
+human merge remain outstanding. Public persistence rollout additionally
+remains blocked on the NET-02 gate above regardless of merge status — see
 [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).

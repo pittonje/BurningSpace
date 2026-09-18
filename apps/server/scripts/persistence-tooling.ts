@@ -180,6 +180,78 @@ export function toPasswordFreeConnection(hostUrl: string): PasswordFreeConnectio
   return { dbUrl: url.toString(), pgpassFileContent: `*:*:*:*:${escapePgpassField(rawPassword)}\n` };
 }
 
+const FORBIDDEN_QUERY_PARAMETER_NAMES = new Set(['password', 'sslpassword']);
+
+/**
+ * PERSIST002-SEC-03 residual (SEC-FIX2): the accepted secret channel above
+ * only ever strips a USERINFO password. A `password` or `sslpassword`
+ * QUERY parameter would instead ride straight through inside `dbUrl` to
+ * docker/tool argv, unprotected. This wrapper deliberately does not
+ * support secret-bearing query parameters at all -- there is no
+ * password-precedence rule and no silent discard here, only outright
+ * rejection, conservatively by parameter NAME (case-insensitive), before
+ * anything else in runPgTool: before resolveContainerDatabaseAccess's own
+ * platform-specific URL parsing/transformation could throw an unguarded,
+ * unsafe raw parse error, and before toPasswordFreeConnection's
+ * empty-userinfo-password early return could let a query-string secret
+ * pass through untouched. sslpassword (a TLS private-key passphrase) is
+ * intentionally out of scope for the .pgpass/stdin channel above -- that
+ * channel exists only for the ordinary database login password; adding
+ * encrypted-key or service-file support is a separate, larger change, not
+ * part of this correction.
+ *
+ * Parses the raw, still-percent-encoded query string by hand (never
+ * URLSearchParams, whose own percent-decoding is lenient) so a malformed
+ * or ambiguous percent-encoded parameter NAME fails safe -- rejected --
+ * rather than being leniently decoded into something that might dodge the
+ * name comparison. Only parameter NAMES are inspected and decoded; no
+ * parameter VALUE is ever read, and the connection string itself is never
+ * mutated or reserialized, so every other accepted setting (sslmode,
+ * connect_timeout, application_name, etc.) keeps its exact existing
+ * semantics untouched. A repeated key, an empty value, or a
+ * percent-encoded name (e.g. `%70assword`) are all still just one more
+ * `name[=value]` pair in this loop, and each is checked independently, so
+ * every one of them is caught the same way.
+ */
+export function rejectSecretBearingQueryParameters(hostUrl: string): void {
+  let url: URL;
+  try {
+    url = new URL(hostUrl);
+  } catch {
+    throw new PersistenceToolError('Connection string could not be parsed.');
+  }
+
+  const rawQuery = url.search.startsWith('?') ? url.search.slice(1) : url.search;
+  if (rawQuery === '') {
+    return;
+  }
+
+  for (const pair of rawQuery.split('&')) {
+    if (pair === '') {
+      continue;
+    }
+    const separatorIndex = pair.indexOf('=');
+    const rawName = separatorIndex === -1 ? pair : pair.slice(0, separatorIndex);
+
+    let decodedName: string;
+    try {
+      // '+' means literal space in this query encoding; decode it the
+      // same way before comparing names, without ever touching a value.
+      decodedName = decodeURIComponent(rawName.replace(/\+/g, ' '));
+    } catch {
+      throw new PersistenceToolError('Connection string query parameters could not be parsed.');
+    }
+
+    if (FORBIDDEN_QUERY_PARAMETER_NAMES.has(decodedName.toLowerCase())) {
+      throw new PersistenceToolError(
+        'Connection string contains an unsupported secret-bearing query parameter ' +
+          '(password or sslpassword); pass the database login password via the ' +
+          'connection URI userinfo only.'
+      );
+    }
+  }
+}
+
 /**
  * Fixed, static shell wrapper text -- never interpolated with any secret or
  * caller-supplied data. Reads the .pgpass entry from its own stdin into a
@@ -219,6 +291,7 @@ async function runPgTool(
   extraDockerArgs: readonly string[],
   buildToolArgs: (dbUrl: string) => readonly string[]
 ): Promise<CommandResult> {
+  rejectSecretBearingQueryParameters(hostUrl);
   const access = resolveContainerDatabaseAccess(hostUrl);
   const { dbUrl, pgpassFileContent } = toPasswordFreeConnection(access.dbUrl);
 
