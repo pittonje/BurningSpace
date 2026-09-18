@@ -158,7 +158,7 @@ Never restore over the source database.
 
 `MIGRATION_DATABASE_URL`/`BACKUP_DATABASE_URL` above must carry the
 database login password in the URI's **userinfo**
-(`postgres://user:password@host/db`), never as a `password=` or
+(`postgres://user:password@127.0.0.1/db`), never as a `password=` or
 `sslpassword=` **query parameter**. Since PERSIST002-SEC-FIX2, all three
 operator tool wrappers (`runPgDumpSnapshot`/`runPgRestore`/`runPsqlFile`
 in `apps/server/scripts/persistence-tooling.ts`) reject any connection
