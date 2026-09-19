@@ -1,7 +1,3 @@
-import { createServer, type Server as HttpServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { Server } from 'colyseus';
-import { WebSocketTransport } from '@colyseus/ws-transport';
 import {
   BLUE_BASE_X,
   BLUE_BASE_Y,
@@ -14,18 +10,14 @@ import {
   type ShipSnapshot
 } from '@burningspace/shared';
 import { TestBattleRoom, TestRoomMessages } from '../../server/test/support/TestBattleRoom.js';
+import { startProductionBattleServer } from '../../server/test/support/startProductionBattleServer.js';
+import { createInMemoryIdentityStorage } from '../../server/test/support/testIdentityHelper.js';
 import { NetworkClient, type ConnectionState, type PlayerInputPayload } from '../src/network/NetworkClient';
 
-const TEST_ROOM_NAME = 'battle-test';
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 interface DiagnosticRoom {
   send(type: string, message: unknown): void;
-}
-
-interface TestServerHandle {
-  url: string;
-  stop(): Promise<void>;
 }
 
 interface TestShipStatePatch {
@@ -56,63 +48,21 @@ async function waitFor(condition: () => boolean, label: string, timeoutMs = 6000
   throw new Error(`Timed out waiting for ${label}`);
 }
 
-async function startTestServer(): Promise<TestServerHandle> {
-  const httpServer = createServer((request, response) => {
-    if (request.url === '/health') {
-      response.writeHead(200, { 'content-type': 'application/json' });
-      response.end(JSON.stringify({ ok: true, service: 'burningspace-test-server' }));
-      return;
-    }
-
-    response.writeHead(404, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ ok: false, error: 'not_found' }));
-  });
-  const gameServer = new Server({
-    transport: new WebSocketTransport({
-      server: httpServer
-    })
-  });
-  gameServer.define(TEST_ROOM_NAME, TestBattleRoom);
-
-  await new Promise<void>((resolve) => {
-    httpServer.listen(0, '127.0.0.1', resolve);
-  });
-
-  const address = httpServer.address();
-
-  if (!address || typeof address === 'string') {
-    throw new Error('Unable to resolve test server address.');
-  }
-
-  return {
-    url: `http://127.0.0.1:${(address as AddressInfo).port}`,
-    async stop(): Promise<void> {
-      await gameServer.gracefullyShutdown(false).catch(() => undefined);
-
-      if (httpServer.listening) {
-        await closeHttpServer(httpServer).catch(() => undefined);
-      }
-    }
-  };
-}
-
-function closeHttpServer(httpServer: HttpServer): Promise<void> {
-  return new Promise((resolve, reject) => {
-    httpServer.close((error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
-  });
-}
-
+/**
+ * Each call gets its own isolated in-memory identity slot (never a shared
+ * global localStorage, and never one slot reused across clients), so each
+ * of the two players and the spectator resolves a genuinely distinct
+ * durable guest identity the first time it connects -- through the real
+ * POST /identity/guest boundary, exactly as NetworkClient's own
+ * identityStorage constructor option is documented and already used
+ * elsewhere in this codebase's real-server integration tests (see
+ * createInMemoryIdentityStorage in testIdentityHelper.ts). No credential
+ * is ever read or logged by this diagnostic itself.
+ */
 function createClient(serverUrl: string): NetworkClient {
   return new NetworkClient({
     serverUrl,
-    roomName: TEST_ROOM_NAME
+    identityStorage: createInMemoryIdentityStorage()
   });
 }
 
@@ -172,10 +122,29 @@ async function waitForNoProjectiles(client: NetworkClient): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const testServer = await startTestServer();
-  const first = createClient(testServer.url);
-  const second = createClient(testServer.url);
-  const spectator = createClient(testServer.url);
+  // Real per-peer /identity/guest rate limiter (capacity 3, slow real-time
+  // refill) would otherwise block this diagnostic's fourth real guest
+  // identity (the late "rejoined" connection), since every request here
+  // shares one loopback peer address. Same sanctioned test-only clock
+  // override guestIdentityEndpoint.test.ts already uses -- advanced further
+  // below, never a bypass of the limiter or of authentication itself.
+  let guestIdentityLimiterClockValue = 0;
+
+  // Real Packet-3/4/5 production server composition: isolated migrated
+  //+ bootstrapped PostgreSQL database, real persistence/auth dependency
+  // installation, real /identity/guest + /world/battle-room endpoints, and
+  // the real canonical room -- with only the room CLASS swapped for the
+  // test-only TestBattleRoom subclass (diagnostic-only ship-state
+  // controls; still the real BattleRoom underneath). Never registers
+  // TestBattleRoom in the production room registry and never bypasses
+  // authentication.
+  const server = await startProductionBattleServer({
+    battleRoomClassOverride: TestBattleRoom,
+    guestIdentityLimiterClock: () => guestIdentityLimiterClockValue
+  });
+  const first = createClient(server.url);
+  const second = createClient(server.url);
+  const spectator = createClient(server.url);
   const firstEvents: string[] = [];
   const secondEvents: string[] = [];
   const shipEvents: string[] = [];
@@ -501,7 +470,10 @@ async function main(): Promise<void> {
       'disconnect projectile to clear after hit or range'
     );
 
-    const rejoined = createClient(testServer.url);
+    // Refill exactly one guest-identity token (1/60 per second) so this
+    // fourth real identity is accepted without waiting on real time.
+    guestIdentityLimiterClockValue += 65_000;
+    const rejoined = createClient(server.url);
     await rejoined.connect();
     rejoined.setProfile({ nickname: 'RejoinedBlue', mode: 'player', faction: 'blue' });
     await waitFor(
@@ -532,7 +504,7 @@ async function main(): Promise<void> {
       second.disconnect(),
       spectator.disconnect()
     ]);
-    await testServer.stop();
+    await server.stop();
   }
 }
 

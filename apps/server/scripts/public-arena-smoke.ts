@@ -1,6 +1,12 @@
 import type { MapSchema } from '@colyseus/schema';
 import { Client, type Room } from 'colyseus.js';
 import {
+  IdentityGuestIntent,
+  type GuestIdentityCreateSuccess,
+  type IdentityHttpErrorResponse,
+  type WorldBattleRoomDiscoverySuccess
+} from '@burningspace/shared';
+import {
   ProfileClientMessages,
   ProfileServerMessages,
   type ProfileAcceptedMessage
@@ -142,27 +148,64 @@ function movementInput(sequence: number, right: boolean): PlayerInputMessage {
   };
 }
 
-async function assertHostileOriginRejected(
+/**
+ * Proves hostile Origins are rejected by the Origin policy itself, at the
+ * very first boundary a client would touch (POST /identity/guest) --
+ * before any credential exists. A missing/invalid credential is a
+ * different, weaker failure mode; this must fail specifically because of
+ * Origin, so it asserts the exact 403 the network boundary returns and
+ * that no guest identity was ever created.
+ */
+async function assertHostileOriginRejected(serverOrigin: string, hostileOrigin: string): Promise<void> {
+  const response = await fetch(`${serverOrigin}/identity/guest`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      Origin: hostileOrigin
+    },
+    body: JSON.stringify({ intent: IdentityGuestIntent })
+  });
+
+  if (response.status !== 403) {
+    throw new Error(`Hostile Origin POST /identity/guest returned HTTP ${response.status}, expected 403.`);
+  }
+}
+
+async function createGuestIdentity(
   serverOrigin: string,
-  hostileOrigin: string
-): Promise<void> {
-  const client = new Client(serverOrigin, { headers: { Origin: hostileOrigin } });
-  let room: Room<BattleStateSchema> | undefined;
-  let rejected = false;
+  origin: string
+): Promise<{ playerId: string; credential: string }> {
+  const response = await fetch(`${serverOrigin}/identity/guest`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      Origin: origin
+    },
+    body: JSON.stringify({ intent: IdentityGuestIntent })
+  });
 
-  try {
-    room = await client.joinOrCreate<BattleStateSchema>('battle');
-  } catch {
-    rejected = true;
-  } finally {
-    if (room?.connection?.isOpen) {
-      await room.leave(true);
-    }
+  if (!response.ok) {
+    const body = (await response.json().catch(() => undefined)) as IdentityHttpErrorResponse | undefined;
+    throw new Error(`POST /identity/guest failed with HTTP ${response.status}${body ? ` (${body.error})` : ''}.`);
   }
 
-  if (!rejected) {
-    throw new Error('Hostile Origin unexpectedly joined battle.');
+  const body = (await response.json()) as GuestIdentityCreateSuccess;
+  return { playerId: body.playerId, credential: body.credential };
+}
+
+async function discoverCanonicalBattleRoom(serverOrigin: string, origin: string): Promise<string> {
+  const response = await fetch(`${serverOrigin}/world/battle-room`, {
+    method: 'GET',
+    headers: { Origin: origin }
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => undefined)) as IdentityHttpErrorResponse | undefined;
+    throw new Error(`GET /world/battle-room failed with HTTP ${response.status}${body ? ` (${body.error})` : ''}.`);
   }
+
+  const body = (await response.json()) as WorldBattleRoomDiscoverySuccess;
+  return body.roomId;
 }
 
 async function runSmoke(environment: SmokeEnvironment): Promise<void> {
@@ -189,11 +232,15 @@ async function runSmoke(environment: SmokeEnvironment): Promise<void> {
     await assertHostileOriginRejected(serverOrigin, hostileOrigin);
   }
 
+  // Never log the credential -- only that it was obtained.
+  const { credential } = await createGuestIdentity(serverOrigin, origin);
+  const roomId = await discoverCanonicalBattleRoom(serverOrigin, origin);
+
   const client = new Client(serverOrigin, { headers: { Origin: origin } });
   let room: Room<BattleStateSchema> | undefined;
 
   try {
-    room = await client.joinOrCreate<BattleStateSchema>('battle');
+    room = await client.joinById<BattleStateSchema>(roomId, { credential });
     const acceptedProfiles: ProfileAcceptedMessage[] = [];
     room.onMessage<ProfileAcceptedMessage>(
       ProfileServerMessages.PROFILE_ACCEPTED,
@@ -237,7 +284,7 @@ async function runSmoke(environment: SmokeEnvironment): Promise<void> {
     room.send(ClientMessages.PLAYER_INPUT, movementInput(9, false));
     await waitFor(() => {
       const state = room?.state;
-      const ship = state?.ships?.get(room.sessionId);
+      const ship = room && state?.ships?.get(room.sessionId);
       return Boolean(
         ship &&
         ship.lastProcessedInput >= 8 &&

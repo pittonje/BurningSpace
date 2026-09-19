@@ -1,0 +1,1265 @@
+# PERSIST-002 — Durable World & Identity Foundation
+
+Owner: Product Architect
+Risk: HIGH — authentication / persistence / runtime authority
+Base: `98bda8f5bed41112f5687eb4ef2fd52a0c82950a` (`origin/main`, merge commit of PR #85)
+Branch: `feat/persist-002-durable-world-identity-foundation`
+
+## Authority
+
+PERSIST-001 is MERGED / CLOSED. Its accepted architecture and
+[`BS-ARCH-008`](../decisions/BS-ARCH-008.md) through
+[`BS-ARCH-011`](../decisions/BS-ARCH-011.md) are the governing authority for
+this task. This task does not reopen or reinterpret PERSIST-001 decisions.
+
+- Task: [PERSIST-001 — Persistent World & Durable Identity Architecture](persist-001-persistence-identity-architecture.md)
+- Architecture: [Persistent World and Durable Identity Architecture](../architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md)
+- Review: [PERSIST-001 Architecture / Security Review](../reviews/persist-001-architecture-security-review.md) — APPROVE, 0 BLOCKER / 0 HIGH / 0 MEDIUM
+- Merge: PR #85, merge commit `98bda8f5bed41112f5687eb4ef2fd52a0c82950a`
+
+## Scope
+
+PERSIST-002 implements:
+
+- PostgreSQL integration;
+- versioned schema/migrations;
+- migration/status/bootstrap tools;
+- durable guest identity;
+- recovery credential;
+- world membership/faction persistence;
+- gameplay leases;
+- writer fencing;
+- singleton canonical world lifecycle;
+- readiness integration;
+- Level 1 reconnect ownership validation;
+- Level 2 durable recovery;
+- minimum client credential storage/error UX;
+- real PostgreSQL integration tests;
+- backup/restore evidence;
+- repository-only staging PostgreSQL definition.
+
+## Explicit non-goals
+
+- sectors;
+- outposts;
+- turrets;
+- economy;
+- mining;
+- logistics;
+- portals;
+- persistent projectiles;
+- durable combat health;
+- durable ship transform;
+- broad account/auth system;
+- email/password/OAuth;
+- horizontal server scaling;
+- production HA.
+
+## Implementation phases
+
+The approved seven-packet sequence:
+
+1. **Packet 1** — authority + reconciliation (this packet).
+2. **Packet 2** — PostgreSQL dependency, lockfile, migration 001, migration
+   runner/status, real-PG test DB.
+3. **Packet 3** — race-safe world bootstrap, writer fencing, monotonic local
+   deadline, readiness.
+4. **Packet 4** — guest credential + HTTP identity/discovery endpoints.
+5. **Packet 5** — BattleRoom identity wiring, static-safe DI, fresh-auth rate
+   limiting, Level 1 reconnect, client identity/discovery flow, existing test
+   migration.
+6. **Packet 6** — durable membership/faction + gameplay leases + full
+   persistence test matrix.
+7. **Packet 7** — DB-required container CI, backup/restore proof,
+   repository-only staging DB definition.
+
+## Execution directives
+
+1. No push and no PR between Packets 1–6. All seven implementation packets
+   are executed locally as sequential commits. First push/PR is allowed only
+   after Packet 7 and a complete local validation pass. This avoids knowingly
+   publishing intermediate heads whose staging-container CI cannot yet pass
+   after DB-required startup is introduced.
+
+2. Canonical server boot order for later implementation:
+
+   ```text
+   configuration
+   → PostgreSQL connectivity
+   → migration/schema compatibility
+   → canonical world lookup
+   → writer claim / stale operational reconciliation
+   → install production room persistence dependencies
+   → register production room handler
+   → create exactly one canonical BattleRoom
+   → publish current roomId for discovery
+   → mark RuntimeLifecycle ready
+   ```
+
+   Never create the canonical room before the room handler is registered.
+
+3. Backup/restore proof: acceptance backup will use a genuinely
+   quiesced/stopped writer. Additionally, a separate real-PostgreSQL recovery
+   test must prove that restored or seeded stale active/recovering
+   operational leases from an obsolete writer epoch cannot reactivate after a
+   new boot.
+
+## Review routing
+
+Required final implementation reviews:
+
+- Architecture
+- Network
+- Security
+- QA
+
+Gameplay: Recommended only; this implementation enforces accepted
+faction/session authority rather than changing an accepted gameplay rule.
+
+Visual: Not applicable for the planned minimal reuse of existing
+status/error surfaces. If implementation later materially changes
+layout/presentation, reconsider this.
+
+Heavy independent reviews should use Claude sessions, not Codex. Mandatory
+governed PR checks remain required. Human merge only.
+
+## Deployment boundary
+
+PERSIST-002 implementation does NOT authorize:
+
+- Contabo/VPS access;
+- staging DB creation;
+- deployment;
+- image publication;
+- container replacement;
+- Caddy changes;
+- DNS changes;
+- TLS changes;
+- production launch.
+
+`deploy/docker-compose.staging.db.yml`, when eventually authored in Packet 7,
+is repository preparation only. Actual staging rollout is a separate future
+bounded operation.
+
+## Acceptance contract
+
+The PERSIST-001 19-step foundation proof. At minimum:
+
+1. start PostgreSQL;
+2. migrate empty DB;
+3. explicit world bootstrap;
+4. server ready only after persistence recovery;
+5. create durable guest identity;
+6. assign faction;
+7. verify player/world UUID + faction persisted;
+8. disconnect;
+9. restart application while DB survives, including crash scenario;
+10. reconnect with retained credential;
+11. same durable player UUID;
+12. same faction/world UUID;
+13. new transient sessionId/process identity;
+14. concurrent duplicate gameplay ownership rejected;
+15. stale ownership recoverable within bounded time;
+16. invalid/revoked credential and forged UUID cannot claim identity;
+17. create backup;
+18. restore to fresh isolated DB;
+19. prove identity/world/faction/revision/revocation survive and stale
+    sessions do not reactivate.
+
+Do not claim battle-state durability.
+
+## Status
+
+**IMPLEMENTATION PUSHED AS PR #86 (OPEN). CORE PR CHECKS: SUCCESS AT
+IMPLEMENTATION CHECKPOINT `0dba3e74562b3d0e395a5cad2a29732512e68515`, AGAIN
+AT QA-RECOVERY-001 HEAD `f146a3f2480525f13ae6691bd1fa75cb96927a8f`, AND
+AGAIN AT QA-RECOVERY-002 HEAD `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`,
+WHERE GOVERNED CLAUDE QA ALSO RAN AND RETURNED "APPROVED WITH
+SUGGESTIONS". AN INDEPENDENT ARCHITECTURE REVIEW OF THAT HEAD THEN RAISED
+PERSIST002-C-01 (MEDIUM); PRODUCT ARCHITECT DISPOSITION WAS
+REQUEST_CHANGES. ARCH-FIX1 IMPLEMENTED THE RUNTIME FIX, INDEPENDENTLY
+**CLOSED** AT `cc87ab0c679acbce5c16f866f84780c1804c4e31`. THAT SAME DELTA
+REVIEW FOUND TWO PROBLEMS IN ARCH-FIX1's OWN TEST EVIDENCE
+(REVIEW-C01-A: A RESOURCE-LEAK IN THE TEARDOWN-WINDOW SCENARIO'S CLEANUP;
+REVIEW-C01-B: A NON-DISCRIMINATING MISSING-CAPABILITY REGRESSION), SO
+ARCH-FIX1's OVERALL DELTA DISPOSITION REMAINED REQUEST_CHANGES.
+ARCH-FIX2 CORRECTED BOTH WITH ITS OWN NEGATIVE-CONTROL EVIDENCE.
+INDEPENDENT REVIEW OF ARCH-FIX2 THEN CLOSED REVIEW-C01-B AND CONFIRMED
+A'S SUCCESSFUL-PATH CLEANUP, BUT FOUND ITS EARLY-ASSERTION-FAILURE
+CLEANUP PATH STILL DEFECTIVE. ARCH-FIX3 (BELOW) MOVES ALL CLEANUP
+RESPONSIBILITY INTO THE HARNESS'S GUARANTEED `stop()` PATH, WITH A
+PERMANENT REGRESSION AND A SCRATCH FAILURE-PROBE REPRODUCING AND THEN
+RESOLVING THE CONFIRMED DEFECT. IT DOES NOT REOPEN THE ALREADY-CLOSED
+RUNTIME FIX OR REVIEW-C01-B. AN INDEPENDENT NETWORK REVIEW OF THE
+ARCH-FIX3 HEAD THEN RAISED PERSIST002-NET-01 (HIGH): PUBLIC
+CREATE/JOINORCREATE COULD SPAWN A PARALLEL BATTLEROOM AGAINST THE SAME
+DURABLE WORLD. NET-FIX1 (BELOW) RESTRICTS PUBLIC MATCHMAKING TO EXACTLY
+JOINBYID/RECONNECT. PERSIST002-NET-02 (MEDIUM) REMAINS OPEN,
+DOCUMENTATION-ONLY IN THIS FIX. AN INDEPENDENT PERSISTENCE REVIEW OF THE
+NET-FIX1 HEAD THEN RAISED PERSIST002-PERS-01: STALE-LEASE RECONCILIATION IN
+`claimWorldWriter()` EVALUATED `clock_timestamp()` TWICE, INDEPENDENTLY, FOR
+THE SAME RELEASED ROW'S `updated_at`/`expires_at`. PERS-FIX1 MADE ONE
+DB-TIME SAMPLE SUPPLY BOTH COLUMNS. AN INDEPENDENT SECURITY REVIEW OF THE
+PERS-FIX1 HEAD (SUPPLIED REPORT HASH
+`97ef06b569bb05c5f5ce44d6e37bf25d98cdecdb169c0936ae1e1a5de2cafce0`, TREATED
+AS SUPPLIED PROVENANCE, NOT INDEPENDENTLY VERIFIED BY THIS TASK) THEN
+CONFIRMED THREE FINDINGS: **PERSIST002-SEC-01 (MEDIUM)** — THE RUNTIME
+COULD SELECT `MIGRATION_DATABASE_URL` (ELEVATED MIGRATOR CREDENTIALS) FOR
+ITS OWN CONNECTIONS; **PERSIST002-SEC-02 (LOW)** — A REJECTED (INVALID/
+REVOKED/MISMATCHED) CREDENTIAL COULD STILL MUTATE `display_name`;
+**PERSIST002-SEC-03 (LOW)** — `pg_dump`/`pg_restore`/`psql` INVOCATIONS
+PLACED THE RAW CONNECTION PASSWORD IN DOCKER/TOOL ARGV. SEC-FIX1 CORRECTED
+THE USERINFO-PASSWORD PATH FOR ALL THREE. AN INDEPENDENT SECURITY DELTA
+REVIEW OF THE SEC-FIX1 HEAD THEN **CLOSED PERSIST002-SEC-01 AND
+PERSIST002-SEC-02**; PERSIST002-SEC-03 REMAINED LOW/OPEN BECAUSE A
+`password`/`sslpassword` QUERY PARAMETER STILL REACHED DOCKER/TOOL ARGV
+UNCHANGED. SEC-FIX2 (BELOW) CLOSES THAT RESIDUAL PATH BY REJECTING SUCH A
+CONNECTION URI OUTRIGHT, BEFORE ANY SPAWN. **CURRENT DISPOSITION: AN
+INDEPENDENT DELTA VERIFICATION HAS SINCE CLOSED PERSIST002-SEC-03 AT
+`629f165d9a259df2fb245cefce930d56270c1419`, AND A SEPARATE INDEPENDENT
+FINAL FUNCTIONAL QA REVIEW RETURNED APPROVE AT THAT SAME CHECKPOINT
+(ACCEPTED BY THE PRODUCT ARCHITECT). C-01, REVIEW-C01-A, REVIEW-C01-B,
+PERSIST002-NET-01, PERSIST002-PERS-01, PERSIST002-SEC-01, PERSIST002-SEC-02
+AND PERSIST002-SEC-03 ARE ALL CLOSED; NONE IS PENDING REPEAT INDEPENDENT
+REVIEW, AND NO SEC-03 OR FUNCTIONAL-QA REVIEW MUST START AGAIN FOR THE
+DIAGNOSTIC-ONLY QA-RECOVERY-003 PATCH.** THE SECTIONS BELOW ARE THE
+HISTORICAL RECORD OF HOW EACH WAS FIXED AND REVIEWED. **REMAINING:
+EXACT-NEW-HEAD CORE AND GOVERNED-QA OUTCOMES FOR THE QA-RECOVERY-003
+COMMIT, THE REMAINING EVIDENCE RECONCILIATION (QA-02 REVIEW-ARTIFACT
+ARCHIVAL, QA-03), THE FINAL PRODUCT ARCHITECT MERGE DECISION, AND HUMAN
+MERGE.**
+
+All seven implementation packets plus four bounded post-implementation
+corrections (FIX1–FIX4) are pushed as local sequential commits on
+`feat/persist-002-durable-world-identity-foundation`
+([PR #86](https://github.com/pittonje/BurningSpace/pull/86), OPEN, not
+merged, no auto-merge). Nothing merged, no staging deployment, no
+VPS/Contabo contact, no image publication.
+
+Local acceptance evidence gathered (Packet 7):
+
+- Full real-PostgreSQL test suite (48 files / 446 tests) green, 0 skipped,
+  0 failures, run against the real Packet-2 test database.
+- `apps/server/test/persistence/backupRestore.test.ts`: a real quiesced
+  `pg_dump`/`pg_restore` backup-and-restore cycle against real Docker
+  PostgreSQL 17, including durable identity/faction/credential-revocation
+  recovery, stale-writer-epoch lease non-reactivation after restore, and a
+  negative corrupted-dump SHA-256 integrity test — both tests pass, 0
+  skipped.
+- `apps/server/scripts/db-privilege-check.ts`: transactional (rollback-safe)
+  proof that `burningspace_runtime`/`burningspace_migrator`/
+  `burningspace_backup` each have exactly their intended privileges and no
+  more, run against the same roles the CI server container uses.
+- A CI-only ephemeral integration Compose stack
+  (`deploy/docker-compose.staging.integration.yml`) locally validated
+  end-to-end: hardening assertions, real migration + grants + privilege
+  check, the real production server booting against a real restricted
+  `burningspace_runtime` database connection, the updated durable-identity
+  `public-arena-smoke.ts` and `external-staging-smoke.ts`, and a clean
+  graceful shutdown — with full container/network cleanup afterward.
+- A repository-only, never-applied real-staging PostgreSQL definition
+  (`deploy/docker-compose.staging.db.yml` +
+  `deploy/staging.db.env.example`) and its future operator sequence,
+  documented in
+  [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).
+
+**Packet 7 FIX1 (bounded post-Packet-7 correction):** Product Architect
+review of Packet 7 raised one blocker — the production
+`deploy/server.Dockerfile` runtime image did not package
+`apps/server/db/migrations`, which every server boot needs for its
+fail-closed schema-compatibility check, so an immutable image-only staging
+rollout would fail to boot. FIX1 corrected this by adding the single
+required `COPY` line to `deploy/server.Dockerfile`'s runtime stage, removed
+the CI-only bind-mount workaround, added an explicit CI packaging assertion
+against the built image, and re-validated the entire local acceptance
+evidence set (CI integration stack, backup/restore, full real-PostgreSQL
+test suite, typecheck/build) end-to-end with the corrected image. Full
+detail in `docs/ops/persist-002-staging-db-integration-plan.md`.
+
+**FIX2 (`b97f4eb`):** made the persistence CI harness deterministic —
+replaced a fixed 8-tick client-test wait with condition polling on the
+actual `joinById` call, and gave native Linux CI a working path to the
+loopback-only-published test database (`--network host` for the ephemeral
+pg_dump/pg_restore/psql tool containers on Linux only; the existing
+`host.docker.internal` path on Windows/Mac Docker Desktop is unchanged).
+
+**FIX3 (`793aa6c`):** on native Linux CI, `pg_dump`'s bind-mounted output
+file was created container-root-owned, so a later host-side rewrite of
+that same file (the backup/restore test's negative corruption case) failed
+with `EACCES`. Fixed by running only that one container invocation as the
+invoking host UID:GID on Linux; `pg_restore`/`psql` (read-only consumers of
+host-mounted files) and the Windows/Mac path are unchanged.
+
+**FIX4 (`0dba3e7`):** the standalone Network client callback diagnostic
+(`apps/client/scripts/network-client-callback-check.ts`) predated durable
+identity and used its own bespoke test server with no `/identity/guest` or
+discovery endpoints, so it could never satisfy the current `NetworkClient`
+connect flow. Migrated it onto the real
+`startProductionBattleServer({ battleRoomClassOverride: TestBattleRoom })`
+composition (real isolated PostgreSQL, real identity/discovery, the real
+canonical room, diagnostic-only ship-state controls), with isolated
+per-client in-memory identity storage for all four real guest identities
+it creates. The CI test-database teardown step was moved to run after this
+diagnostic instead of before it.
+
+**Core / Claude QA evidence at implementation checkpoint
+`0dba3e74562b3d0e395a5cad2a29732512e68515`:** Core Pull Request Checks —
+**SUCCESS** (run `34948430842`, job `104313315933`, attempt 1), all steps
+including Caddy edge contract validation and local staging-container
+integration. This SUCCESS is bound specifically to that checkpoint, not
+to any later commit. Claude QA automation at that same checkpoint (run
+`34948430896`, job `104313316185`, attempt 1) did **not** produce a
+validated review: the diagnostic sanitizer returned
+`execution_file_invalid` for the reviewer's execution transcript (the
+precise internal subreason for this historical run is not established,
+since its execution file was not captured, and is not claimed to be known
+here), and independently the review validator rejected the reviewer's
+structured output for an oversized `important_suggestions[0]` (>500
+characters); the publisher posted a sanitized failure comment (ID
+`5677380407`) before its own next step failed. This is an automation gap,
+not a QA verdict on the implementation in either direction.
+
+**QA-RECOVERY-001:** a bounded patch adds fixed, allowlisted
+execution-file-invalid subreason codes to the sanitizer for future-run
+diagnosability (it does not retroactively establish the unestablished
+historical subreason above), and adds conservative generation-guidance
+targets to the QA reviewer prompt (well under the existing hard
+500/20/100/2000 limits, which are unchanged) to reduce the chance of a
+recurrence of the oversized-item failure. It does not change persistence,
+authentication, or gameplay behavior. Product Architect inspected the
+technical bytes (three files, blob hashes verified unchanged before
+commit) and the documentation correction, and approved exactly one
+bounded commit/push. That commit was made on top of implementation
+checkpoint `0dba3e74562b3d0e395a5cad2a29732512e68515`
+(`f146a3f2480525f13ae6691bd1fa75cb96927a8f`) and pushed to PR #86.
+
+**Observed at `f146a3f...`:** Core Pull Request Checks — **SUCCESS** (run
+`35093811907`, job `104786149103`, attempt 1), including all later
+diagnostics/Caddy/staging-container-integration checks. Claude QA Review
+Pilot (run `35093811913`, job `104786148454`, attempt 1) — the reviewer
+**did not start**: the Action's own log reports a workflow-content trust
+mismatch against the default-branch version of
+`.github/workflows/claude-qa-review-pilot.yml` and skips before invoking
+the reviewer (not retryable by re-running the same head). The empty
+`execution_file` and empty `structured_output` seen at this head were
+downstream consequences of that skip, not a reviewer or sanitizer/
+validator outcome.
+
+**QA-RECOVERY-002:** restores `.github/workflows/claude-qa-review-pilot.yml`
+to the existing trusted default-branch bytes (blob
+`89ccd3928ee452ebb23ecb632a7d93b6a3d76ddb`; independently confirmed equal
+on the default branch, in the known prior commit
+`0dba3e74562b3d0e395a5cad2a29732512e68515`, and in the restored working
+tree before commit). This removes the PR's workflow-content difference
+without bypassing or weakening the Action's trust validation, and changes
+no runtime, permission, tool-policy, or Action-pin behavior. The
+generation-guidance enhancement QA-RECOVERY-001 added is thereby
+**deferred, not active** on this branch. Following a pre-commit STOP
+(restoring the workflow left three audit assertions checking for that
+now-removed prompt text with no way to pass without touching the frozen
+test file), Product Architect explicitly authorized removing exactly
+those three `check(...)` calls in
+`.github/scripts/test-claude-qa-audit.py`; no other test, limit, fixture,
+or expected exit code in that file changed, and the sanitizer
+(`sanitize-claude-diagnostic.py`) remains byte-identical. Safe, allowlisted
+`execution_file_invalid` subreason reporting in the sanitizer remains
+implemented and unaffected; the historical subreason for the original
+`0dba3e7...` QA run's `execution_file_invalid` result remains unknown.
+
+At `097cb92804ede1449f3fc1dca1a8a063f9aa3cef` (QA-RECOVERY-002 head): Core
+Pull Request Checks — **SUCCESS** (run `35193478755`), and the governed
+Claude QA reviewer ran and returned "Approved with suggestions" (run
+`35193478806`). An independent Architecture review of that head then
+raised one finding, addressed by ARCH-FIX1 below.
+
+**ARCH-FIX1 — PERSIST002-C-01 (MEDIUM), simulation not fenced on process
+authority loss:** the independent Architecture review found that
+`BattleRoom.updateSimulation()` (respawn, ship movement, firing,
+projectile movement/collision/damage, and simulation-origin combat
+broadcasts) ran without checking current process/world authority.
+Rejecting new input, or having started asynchronous graceful shutdown,
+does not by itself fence that simulation path — the reviewer did not
+claim simulation was observed to continue for the full shutdown timeout,
+only that the guard was missing. Product Architect disposition:
+**REQUEST_CHANGES** (implement a fix; do not accept as residual risk).
+The reviewer's original verdict, including its own stated limitation that
+it did not personally run the real-PostgreSQL test suites, is preserved
+above and is not altered by this fix.
+
+Implementation (`apps/server/src/index.ts`,
+`apps/server/src/rooms/BattleRoom.ts`):
+
+- `index.ts` now composes the `writer` capability handed to
+  `createProductionRoomDependencies()` from BOTH signals that can declare
+  process authority lost — `persistenceRuntime.writer.isControlSafe()`
+  (the writer's own local heartbeat/deadline check) AND
+  `lifecycle.state === 'ready'` (which the separate schema-maintenance-
+  connection authority-loss path, and voluntary graceful shutdown, both
+  also affect via the existing `handleAuthorityLost()`/`markFailed()`
+  path) — instead of passing the writer object through unchanged. No new
+  capability shape, no Pool/URL/database internals exposed to the room,
+  no change to writer claim/renewal/expiry algorithms, no change to boot
+  order.
+- `BattleRoom.ts` adds one private, room-local, synchronous authority
+  check (`isProcessAuthoritySafe()`) consulting only the above composed
+  signal via the existing `getActiveProductionRoomDependencies()`
+  accessor. It fences, at their single entry points: the entire
+  simulation tick (`updateSimulation()` — no respawn, movement, firing,
+  projectile update/collision/damage, or new combat broadcast from a
+  rejected tick); player input application (`handlePlayerInput()`); and
+  the async `SET_PROFILE` completion boundary (a durable transaction that
+  finishes after authority is lost releases any lease it just acquired
+  and returns, without spawning/updating a ship or sending
+  `PROFILE_ACCEPTED` — the already-committed durable faction/membership
+  is never rolled back, matching the existing generation-mismatch
+  branch it sits beside). The check is terminal per room instance once
+  authority has genuinely been observed lost (a two-flag latch:
+  `hasObservedAuthoritySafe` only becomes true on a genuine safe
+  observation, so a room created before the process reaches `'ready'`
+  during normal startup is never mistakenly disabled; once safe has been
+  observed, a later unsafe observation latches permanently, so a
+  subsequent superficially-safe value can never resume the room). No new
+  same-process recovery path; the existing bounded shutdown remains
+  solely responsible for teardown. Ordinary per-player disconnect
+  semantics are unchanged: this is a process/world-authority fence, not a
+  per-player control gate, so one player's lost lease or reconnect grace
+  never pauses the rest of the world while process authority stays safe.
+
+New regression file
+`apps/server/test/persistence/simulationAuthorityGate.test.ts` (8
+scenarios, real PostgreSQL, exercising the real `BattleRoom` simulation
+path via a real `startProductionServer()` composition with an injected
+writer clock, not only a boolean helper): a safe-authority positive
+control; authority lost immediately before a tick with a primed
+moving/firing ship, a live in-flight projectile aimed at another ship,
+and a killed ship whose respawn deadline is crossed only after the
+freeze (proving `tryRespawnShip` never runs once frozen); the local
+monotonic deadline alone (no lifecycle transition, no heartbeat callback)
+freezing the room; the asynchronous-teardown window (`lifecycle.markFailed()`
+called directly, mirroring `handleAuthorityLost()`'s own synchronous
+`markFailed()` step, deliberately without also triggering its coupled
+teardown — a real trigger disposes the room almost immediately regardless
+of this fence, which would prove nothing about the fence specifically);
+fail-closed when production room dependencies have actually been
+uninstalled (via real teardown); the terminal latch surviving a clock
+rewound back to an apparently-safe value; a delayed `SET_PROFILE`
+completion (gated via the existing `gameplayAuthorityTestHooks` seam)
+losing authority mid-flight; and ordinary per-player disconnect not
+freezing the rest of the world while authority stays safe. A negative
+control was run manually against this task's starting (pre-fix)
+`BattleRoom.ts`: 5 of the 8 scenarios failed as expected, confirming the
+suite actually detects the defect; the working tree was restored to the
+implemented fix afterward (this mutation was never committed).
+
+This implementation is by its author (the same agent that authored the
+fix); it is not independently verified merely because a fix now exists.
+
+**Independent delta review of PERSIST002-C-01 (the runtime fix in
+`index.ts`/`BattleRoom.ts` itself): CLOSED**, at
+`cc87ab0c679acbce5c16f866f84780c1804c4e31`. The production fix is not
+reopened or reinterpreted by ARCH-FIX2 below.
+
+**Overall ARCH-FIX1 delta disposition: REQUEST_CHANGES**, because the same
+review found two problems in the accompanying test evidence, not in the
+production fix:
+
+- **REVIEW-C01-B:** the "fail-closed on a missing authority capability"
+  regression ran only after ordinary cleanup had already removed the ship,
+  caught any exception, and asserted nothing when none was thrown — so it
+  passed identically whether or not the production fence existed, and was
+  not discriminating.
+- **REVIEW-C01-A:** the "asynchronous teardown window" scenario's
+  cleanup used a `skipDatabaseDrop` escape hatch that permanently leaked
+  the process-private HTTP identity pool's connection and left its
+  disposable database undropped for the ephemeral test-Postgres
+  container's own lifecycle to eventually reclaim, instead of the test
+  itself proving those resources closed.
+
+**ARCH-FIX2 (commit `test(persist-002): strengthen authority-fence proof
+and clean up its harness`)** corrects both, test-only, in
+`apps/server/test/persistence/simulationAuthorityGate.test.ts`:
+
+- **REVIEW-C01-B fix:** the missing-capability scenario now keeps a real,
+  alive, moving+firing ship in the room throughout (never disposed or
+  emptied first), establishes a healthy positive control (the same input
+  genuinely advances position and creates a real projectile while the
+  capability is present), then makes only
+  `getActiveProductionRoomDependencies()` return `undefined` for the
+  single `updateSimulation()` call under test, via a narrowly scoped
+  `vi.spyOn` restored synchronously immediately after that one call. It
+  asserts: no throw; the primed ship's position/velocity do not advance;
+  no new projectile appears; and (last, confirming the missing-authority
+  path was actually exercised rather than merely that nothing happened to
+  throw) the spied lookup was reached.
+  **Negative-control evidence:** run in a separate, disposable
+  `git worktree` checked out at this task's pre-runtime-fix commit
+  (`097cb92804ede1449f3fc1dca1a8a063f9aa3cef`, i.e. before
+  PERSIST002-C-01's own fix — `BattleRoom.ts` there has no
+  `isProcessAuthoritySafe()` fence and never calls
+  `getActiveProductionRoomDependencies()` from `updateSimulation()` at
+  all) with only this corrected test file copied in; nothing in the
+  implementation worktree was mutated for this. The corrected scenario
+  **failed there exactly at the intended assertion** — the primed ship's
+  `x` position had genuinely advanced (a real ~11-unit move) — not via an
+  unrelated exception, a broken fixture, or a failed server boot. The
+  same scenario against the ARCH-FIX1+ARCH-FIX2 candidate **passes**.
+- **REVIEW-C01-A fix:** `skipDatabaseDrop` is removed. The scenario still
+  fences its freeze assertions with `lifecycle.markFailed()` called
+  directly (deliberately not yet coupled to teardown, so the freeze is
+  proven to come from the fence and not from a real trigger's near-
+  immediate room disposal) — but, strictly after those freeze assertions,
+  it now advances the injected writer clock and calls the writer's own
+  `performHeartbeat()` (the exact method production's heartbeat timer
+  would have called), driving the real `handleAuthorityLost()` →
+  `performTeardown()` path, and confirms via `writer.state === 'failed'`
+  that this actually took the intended local-safety-deadline failure
+  route. It then waits boundedly (not `performHeartbeat()`'s own return,
+  which proves nothing about the async teardown) for each independently
+  observable effect: the canonical room disposed
+  (`matchMaker.getLocalRoomById`); the HTTP listener refusing new
+  connections; `getActiveProductionRoomDependencies()` and
+  `getActiveNetworkBoundaryConfig()` both back at their pre-boot
+  baselines; and, via a separate admin observer connection to a different
+  database (never the disposable one itself, so it can never appear in
+  its own count), zero remaining `pg_stat_activity` rows for the
+  disposable database. It then drops that database with a plain
+  `DROP DATABASE` (no `FORCE`, no `pg_terminate_backend`) — which only
+  succeeds because nothing is still attached — and confirms it is gone
+  from `pg_database`. This is real evidence of closure, not an assumption.
+- **Also corrected, narrower in scope:** the delayed-`SET_PROFILE`
+  scenario's fixed `delay(300)` is replaced with a bounded wait on the
+  room's own real per-session profile-operation tail
+  (`awaitProfileTail`, reflected via the same test-only room-access seam
+  already used elsewhere in this file) — an actual completion signal, not
+  a guessed sleep duration. All of that scenario's existing assertions
+  (no spawn, no `PROFILE_ACCEPTED`, durable membership/lease evidence)
+  are unchanged.
+- **Documentation correction (no test code changed for this item):** the
+  "ordinary per-player disconnect" scenario proves exactly one thing —
+  a **consented** disconnect of one client does not globally pause
+  another client's ship. It is not evidence for unconsented-disconnect
+  reconnect grace or disconnected-ship inertia (both already independently
+  covered by the pre-existing
+  `apps/server/test/productionReconnectLifecycle.test.ts`, specifically
+  "preserves one authoritative owner and neutralizes stale input across a
+  valid reconnect": an unconsented `leave(false)`, ownership retained
+  through the grace window, and the disconnected ship's velocity
+  decaying rather than being instantly frozen). **Projectile continuation
+  specifically during a disconnect remains an unproved existing gap** —
+  the reconnect-lifecycle test only asserts the disconnected player's own
+  projectile count does not increase, not that another player's
+  in-flight projectile continues its path while someone is disconnected.
+  No new projectile-subsystem test is added here for this.
+
+Every ARCH-FIX2 run recorded above used the repository's normal
+`deploy-postgres-1` disposable test-Postgres container (pre-existing, not
+started or stopped by this task) and this task's own disposable
+`bs_test_*` databases (each created and dropped by the run that created
+it). Two `npm test` attempts hit the already-documented, pre-existing
+Vitest/tinypool `ERR_IPC_CHANNEL_CLOSED` worker-crash flake; a third
+attempt completed cleanly. Those two crashed attempts left exactly 3
+orphaned `bs_test_*` databases (named individually, not identified by
+wildcard), which were confirmed to have zero active connections and then
+dropped by their exact names; the 19 `bs_test_*` databases already
+present before this task began were left untouched.
+
+**Correction (ARCH-FIX3):** the line above originally called those two
+crashes "unrelated to any assertion in this file." An independent
+reviewer reproduced the underlying cause: the asynchronous-teardown-
+window scenario drove its explicit teardown-triggering code only after
+its freeze assertions, in the test body itself (REVIEW-C01-A); an
+assertion thrown before that point left the process-private HTTP identity
+pool, and other resources, still connected when the harness's plain
+`database.drop()` then force-terminated them, producing exactly this
+class of unhandled pg/worker error. This is a harness defect, now fixed
+below — it is **not** established that every historical
+`ERR_IPC_CHANNEL_CLOSED` occurrence in this project shared this same
+cause, and this fix does not claim to eliminate every possible cause of
+that flake; only this specific, now-reproduced-and-fixed path is
+attributed here.
+
+**ARCH-FIX3 — REVIEW-C01-A, remaining early-failure cleanup gap:**
+independent review disposition: PERSIST002-C-01 and REVIEW-C01-B remain
+independently **CLOSED**; A's successful-path cleanup was already proved,
+but its early-assertion-failure path could still leak resources (as
+above) and obscure the original test failure behind a secondary
+pg/worker error. ARCH-FIX3 moves all cleanup responsibility into
+`bootAuthorityTestServer()`'s `stop()` (shared, idempotent, state-aware:
+normal starting/ready, synthetic-failed-with-owning-writer, teardown-
+already-initiated, and already-stopped are all handled by the one
+implementation), called unconditionally from every scenario's
+afterEach/finally regardless of where or whether the test body itself
+threw. A new permanent regression
+("guaranteed cleanup after an early test failure") boots a real server,
+creates genuine authenticated activity, marks the lifecycle failed,
+throws a unique synthetic marker before any explicit teardown-triggering
+code, then exercises the exact same shared `stop()` path and
+independently re-verifies the resource baselines, zero application
+connections, and database removal, while confirming the original marker
+survived. A scratch, disposable-worktree probe (not committed) injected
+the identical early failure into the actual teardown-window test and ran
+it with the default `forks` pool: against the pre-ARCH-FIX3 harness it
+reproduced the same unhandled "terminating connection due to
+administrator command" / IPC crash observed above; against the
+ARCH-FIX3-corrected harness it instead failed cleanly on the injected
+marker alone, with cleanup still completing (database dropped, zero
+residual connections). This is by its own author and is **not**
+independently verified merely because it exists.
+
+No claim is made here that Core/QA for the ARCH-FIX3 head have already
+passed — see `docs/handoffs/CURRENT.md` for what is actually pending.
+**Independent verification of the remaining REVIEW-C01-A early-failure
+cleanup path remains outstanding.**
+
+Independent verification of ARCH-FIX3's early-failure cleanup evidence for
+REVIEW-C01-A remains outstanding, superseded in urgency by NET-FIX1 below.
+
+**NET-FIX1 — PERSIST002-NET-01 (HIGH), public matchmaking could create a
+parallel battle room against the same durable world:** an independent
+Network review, run against real PostgreSQL, reproduced that a valid guest
+credential calling public `create`/`joinOrCreate` on the `'battle'` room
+name creates an additional, independent `BattleRoom` instance backed by the
+same canonical durable world — repeated calls accumulate rooms, they
+persist after clients leave (`autoDispose=false` is unchanged), and a rogue
+room accepts `SET_PROFILE` and real gameplay. This is parallel
+room/simulation instances for the one singleton world, not multiple durable
+world UUIDs.
+
+Fix (`apps/server/src/security/networkBoundary.ts`): `installNetworkBoundary()`
+now also narrows the shared, process-level
+`matchMaker.controller.exposedMethods` (Colyseus 0.16.5's own supported
+public-method restriction — no hand-written URL filtering, no monkey-patched
+room creation) to exactly `['joinById', 'reconnect']`, using the same
+install/nested-ownership/idempotent-restore lifecycle already trusted for
+CORS header restoration, so `restore()` never re-permits `create`/
+`joinOrCreate`/`join` while any owning installation could still be serving
+public requests. The internal bootstrap creation of the one canonical room
+(`matchMaker.createRoom('battle', {})` in `index.ts`) is a distinct,
+lower-level call that `exposedMethods` never gates, so no temporary reopen
+was ever needed; `index.ts` required no changes. `controller.invokeMethod()`
+rejects an unexposed method (`MATCHMAKE_NO_HANDLER`, code 4210) before
+`matchMaker[method]()` — and therefore before `onAuth` — is ever called, so
+a rejected public `create`/`joinOrCreate`/`join` reserves no seat, creates no
+room, and grants no authority, with or without a credential. This project's
+transport (`@colyseus/ws-transport` + `@colyseus/core`'s own matchmake route)
+always answers HTTP 200 for `/matchmake/*`; only the JSON body's `code`
+field distinguishes success from rejection, so the new/adapted tests assert
+on that body/SDK error code, never on `response.ok` alone.
+
+Evidence, all against real PostgreSQL and the real production HTTP/WS
+composition (`apps/server/test/persistence/canonicalRoomLifecycle.test.ts`,
+extended existing test plus 6 new cases; `apps/server/test/
+productionNetworkBoundary.test.ts`, Origin-boundary assertions moved from
+`joinOrCreate` to `joinById` against the real canonical room ID with a
+credential obtained through the allowed-origin identity path, keeping a
+positive allowed-origin control and the exact `'onAuth failed'` rejection):
+free-capacity `create`/`joinOrCreate`/`join` all rejected (authenticated and
+unauthenticated, proving `onAuth` never runs for them) with zero room/
+lease/membership growth; the raw `/matchmake/create/battle` HTTP response
+inspected directly (status 200, body `code: 4210`); repeated sequential and
+bounded concurrent creation attempts all rejected with the real room-count
+inventory (`matchMaker.query({name: 'battle'})`) staying at exactly one
+room throughout and after a real client joins and leaves; an unknown room
+ID through the still-public `joinById` rejected with the distinct
+`MATCHMAKE_INVALID_ROOM_ID` (4212), not `MATCHMAKE_NO_HANDLER`, and creates
+no replacement room; ordinary `joinById` → `SET_PROFILE` admission still
+acquires exactly one real `active_session_leases` row whose `room_id`
+column is the actual canonical room ID. A full-room case, extended from the
+pre-existing test, additionally proves `create`/`joinOrCreate` stay
+rejected even while the canonical room has no free capacity. A disposable,
+detached scratch `git worktree` at this task's starting head
+(`4f02a00cc9e51d17d24fd80c3a0da6833daf2480`, i.e. the unmodified pre-fix
+`networkBoundary.ts`) with only the new regression tests copied in
+reproduced the defect directly — the representative case failed because
+`create()` returned successfully (no `MATCHMAKE_NO_HANDLER`) and a real
+second `battle` room actually existed in the inventory afterward, not
+because the fixture failed to boot; the same tests pass against the fixed
+candidate. The scratch worktree was removed afterward; the implementation
+worktree was never mutated for this control.
+
+Full real-PostgreSQL suite: 49 files / 461 tests (baseline 49/455 plus the
+6 new cases above), 0 skipped, 0 failures. Full-workspace `npm run
+typecheck` and `npm run build` (with
+`VITE_BURNINGSPACE_SERVER_URL=http://127.0.0.1:2567`) both clean. The
+standalone Network client callback diagnostic
+(`apps/client/scripts/network-client-callback-check.ts`, which already used
+discovery-then-`joinById`) and `apps/server/scripts/public-arena-smoke.ts`
+(also already `joinById`-based) both ran clean against, respectively, the
+real test-database composition and a disposable local production-mode
+integration server — never real staging. No pre-existing `bs_test_*`
+database or the `deploy-postgres-1` container was touched; the baseline of
+19 pre-existing disposable databases was unchanged after all runs,
+including the scratch negative-control run (cleaned via its own harness).
+
+**PERSIST002-NET-02 (MEDIUM) remains OPEN, documentation-only in this
+fix:** raw transport-peer attribution is unchanged; `X-Forwarded-For`/
+`X-Real-IP`/`Forwarded` remain untrusted; no quota or rate-limit change was
+made. Recorded in
+[`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md):
+behind a single effective transport peer, guest/fresh-auth budgets are
+shared — a deployment availability constraint, not an authentication
+bypass — and public persistence rollout is not authorized until Security/
+Ops accepts an explicit mitigation or bounded operating policy; a future
+trusted-proxy solution needs an explicit trust boundary and
+spoof-resistance tests, not arbitrary header trust. NET-02 is not marked
+fixed, waived, or accepted here, and no merge/deployment approval is implied
+by this fix.
+
+This implementation is by its own author and is **not** independently
+verified merely because it exists.
+
+**PERS-FIX1 — PERSIST002-PERS-01, two independent DB-clock evaluations in
+stale-lease reconciliation:** an independent Persistence review of the
+NET-FIX1 head (`c2777bbccfd8b69587379c1cac5ec1d7355b2451`) raised
+**PERSIST002-PERS-01**: `claimWorldWriter()`'s stale-lease reconciliation
+`UPDATE active_session_leases ... SET updated_at = clock_timestamp(),
+expires_at = clock_timestamp()` called the VOLATILE `clock_timestamp()`
+twice, independently evaluated; the two calls can return different values,
+which can violate migration 001's `active_session_leases_state_shape_check`
+(a `status = 'released'` row requires `expires_at <= updated_at`). This
+concerns the two independent DB-clock evaluations in stale-lease
+reconciliation — not any canonical-profile timeout.
+
+Fix (`apps/server/src/persistence/repositories/worldsRepository.ts`): the
+reconciliation statement now uses `WITH db_time AS (SELECT clock_timestamp()
+AS now) ... FROM db_time`, sampling the DB clock exactly once and reusing
+that one value for both `updated_at` and `expires_at`, the same idiom
+already used by `credentialsRepository.ts`'s `releaseLeasesForCredential()`
+and `sessionLeasesRepository.ts`'s `releaseGameplayLease()`/
+`markRecovering()`.
+
+Evidence, all against real PostgreSQL
+(`apps/server/test/persistence/writerFencing.test.ts`): the two existing
+takeover tests gained a PostgreSQL-level `expires_at = updated_at` equality
+assertion (evaluated inside the database, not a JS-side comparison of two
+separately fetched `Date`s) and a `worlds.state_revision`-unchanged
+assertion; a new isolation test proves a takeover reconciles only its own
+world's non-released, prior-epoch leases (an unrelated world's lease and an
+already-released same-world lease are byte-for-byte untouched, including
+`updated_at`); a new deterministic regression installs a schema-qualified,
+test-only VOLATILE clock function (`test_only.advancing_clock()`, backed by
+a real table insert so each call is provably distinct without depending on
+wall-clock timing, confined to the disposable test database) behind a
+narrow `Queryable`-forwarding probe that rewrites `clock_timestamp()` to the
+test clock inside only the one fingerprinted reconciliation statement,
+forwarding every other call unchanged — transaction control, predicates,
+assignments and the real constraint are all left intact. Against the fixed
+candidate: exactly one substituted-clock call (proving single evaluation
+under the installed PostgreSQL version, via the multiply-referenced CTE's
+automatic materialization), the claim succeeds, and the shape check holds.
+**Negative control:** the identical test file, copied unmodified into a
+disposable, detached scratch `git worktree` at the pre-fix head
+(`c2777bbccfd8b69587379c1cac5ec1d7355b2451`), failed the same deterministic
+test with the real PostgreSQL error `violates check constraint
+"active_session_leases_state_shape_check"`, thrown from the exact pre-fix
+statement — not a fixture or boot failure; the other three tests passed
+either way, confirming the deterministic test is the reliable, non-flaky
+detector. The scratch worktree was removed afterward; the implementation
+worktree was never mutated for this control.
+
+`writerFencing.test.ts` alone (`npx vitest run
+apps/server/test/persistence/writerFencing.test.ts`, from the worktree
+root): 4/4 pass. Full real-PostgreSQL suite (`npx vitest run`, from the
+worktree root): 49 files / 463 tests (baseline 49/461 plus the 2 new cases
+above), 0 skipped, 0 failed. Full-workspace `npm run typecheck` clean;
+`writerFencing.test.ts` sits outside every workspace's own
+`tsconfig.json`/`tsconfig.test.json` `include`, so it was additionally
+typechecked via a temporary, throwaway `apps/server/tsconfig.tmp-test-check.json`
+(extending the real server config, adding `test` to `include`), confirmed
+zero errors specific to this file, then deleted — not part of any commit.
+`npm run build`, with `VITE_BURNINGSPACE_SERVER_URL=http://127.0.0.1:2567`
+set only in the invoking process's environment (never written to a
+repository `.env` file, absent again afterward), completed clean.
+
+**Docker note:** mid-session, Docker Desktop's daemon became unresponsive
+(`docker ps`/`docker info` timing out) and needed a user-initiated restart;
+a second user-initiated restart was then needed because the first left
+containerd's own metadata store mounted read-only (`write .../meta.db:
+read-only file system`), which blocked creating *any* new container —
+including `backupRestore.test.ts`'s own ephemeral role-separated Postgres
+containers, which failed for that reason on the first full-suite attempt.
+Both restarts were performed by the user, not by this task. The
+pre-existing `deploy-postgres-1` container was `docker start`ed back up
+unchanged after each restart (never recreated, reconfigured, or had its
+data touched by this task); two ephemeral `bs_backup_test_*` containers left
+behind by the interrupted first `backupRestore.test.ts` attempt were removed
+(`docker rm`) once Docker was healthy, and a repeat run of that file then
+passed cleanly (2/2). A subsequent full-suite run after resolving the
+containerd issue was clean (49/463 above).
+
+**Resource accounting:** `docker inspect deploy-postgres-1` reports
+`Mounts: []` — it has no persistent volume; all of its data lives in the
+container's own writable layer, and the container itself was not recreated
+across either restart (`Created` unchanged from 2026-09-17). This document's
+NET-FIX1 section above records a baseline of 19 pre-existing `bs_test_*`
+databases as of the previous session; **that baseline is no longer
+current** — after the Docker Desktop incident, `deploy-postgres-1` now
+contains 4 total databases and zero matching `bs_test_*`/`bs_backup_test_*`.
+This is not attributable to this task's own test runs (which only ever
+create and drop their own uniquely-named disposable databases, confirmed
+zero left over after every run in this session) and most plausibly followed
+from the containerd-repair restart resetting the container's writable-layer
+contents; the exact mechanism was not directly observed and is not claimed
+with more certainty than that. No other task's resources were deleted by
+wildcard, or assumed unchanged without checking.
+
+This fix is by its own author and is **not** independently verified merely
+because it exists. Core and governed Claude QA for the resulting PERS-FIX1
+head have not yet been observed — this document does not claim those checks
+have passed.
+
+**SEC-FIX1 — PERSIST002-SEC-01 (MEDIUM)/SEC-02 (LOW)/SEC-03 (LOW):** an
+independent Security review of the PERS-FIX1 head (supplied report hash
+`97ef06b569bb05c5f5ce44d6e37bf25d98cdecdb169c0936ae1e1a5de2cafce0`,
+treated as supplied provenance, not independently re-verified here)
+confirmed three findings, all corrected in one bounded commit. Low
+severity is not treated as license to leave a confirmed defect
+unaddressed.
+
+**SEC-01 — runtime selected migration credentials:**
+`readMigrationStatusDatabaseUrl()` (MIGRATION_DATABASE_URL-preferring,
+correct for the read-only migration-status CLI command) was also being
+used by `bootPersistenceRuntime()` and `index.ts`'s identity/gameplay
+pool — the running application itself, not an operator tool. A new
+`readRuntimeDatabaseUrl()` (`apps/server/src/persistence/config.ts`) uses
+DATABASE_URL only, unconditionally, and never inspects
+MIGRATION_DATABASE_URL at all (so an invalid/unreachable one can never
+break an otherwise-valid runtime), used for every runtime-created
+connection: schema checking, the writer/maintenance connections
+(`persistenceRuntime.ts`), and the HTTP identity/gameplay pool
+(`index.ts`). `readMigrationDatabaseUrl()` (operator migration
+application) and `readMigrationStatusDatabaseUrl()` (the CLI status
+command) are both byte-for-byte unchanged — this narrows only the
+runtime's own selection, not either operator contract.
+
+Evidence: a new unit matrix
+(`apps/server/test/persistence/config.test.ts`, 15 cases) covers
+runtime-only, both-set (DATABASE_URL wins), migration-only (fails
+closed), missing, blank, a syntactically invalid DATABASE_URL (returned
+as-is — connection-attempt failure, not this selector's job), and an
+irrelevant invalid MIGRATION_DATABASE_URL (never inspected), plus pins
+down `readMigrationStatusDatabaseUrl()`'s and `readMigrationDatabaseUrl()`'s
+own unchanged behavior side by side so the two selectors are never
+confused. A new real-Docker, real role-separated-PostgreSQL regression
+(`apps/server/test/persistence/persistenceRuntimeBoot.test.ts`, +2 cases)
+boots the runtime with both DATABASE_URL (`burningspace_runtime`) and
+MIGRATION_DATABASE_URL (`burningspace_migrator`) set against the SAME
+database and proves, via `pg_stat_activity`, that every real connection —
+including a real query through a separate identity/gameplay `Pool` built
+the same way `index.ts` builds its own — used exactly `burningspace_runtime`,
+never `burningspace_migrator`; a representative forbidden DDL
+(`CREATE TABLE`) under that role fails with SQLSTATE `42501` (proving the
+role restriction is real, not merely assumed); and MIGRATION_DATABASE_URL
+alone (no DATABASE_URL) fails closed with `PersistenceConfigError` before
+any connection attempt. **Negative control:** both new tests, copied
+unmodified into a disposable scratch worktree at the PERS-FIX1 head
+(`cbc91039fee1b7bd5329553383080bea5ed40844`), failed exactly as expected —
+the role-separation test observed real `pg_stat_activity` rows as
+`burningspace_migrator`, and the fail-closed test observed a real
+`WorldNotFoundError` (i.e. it had silently proceeded using migrator
+credentials) instead of the expected upfront config error.
+`db-privilege-check.ts` (unchanged, out of scope) was additionally run
+against a fresh role-separated instance as a smoke check: 22/22 probes
+passed, confirming SEC-01 did not disturb the existing grants boundary.
+
+**SEC-02 — rejected credentials could mutate display_name:**
+`lockProfilePrefix()` (`apps/server/src/persistence/gameplayAuthority.ts`)
+called `playersRepository.updatePlayerDisplayName()` immediately after
+locking the player row, *before* `credentialsRepository.lockActiveCredentialForPlayer()`
+verified the credential/player association — and `withTransaction()`
+commits on any normal (non-throwing) return, so a `credential_invalid`
+result still durably persisted the attempted name. The mutation now runs
+only after the credential check succeeds, using the same existing
+transaction and world → player → credential lock order — no new
+preflight transaction, no TOCTOU gap, `withTransaction` unchanged.
+
+Evidence, all real PostgreSQL, genuine repository-level fixtures (never a
+fabricated row shape)
+(`apps/server/test/persistence/gameplayAuthorityProfileMutation.test.ts`,
+5 new cases): a revoked credential is rejected by both
+`applySpectatorProfile` and `applyPlayerProfile` with `display_name`
+verified unchanged afterward (and, for the player path, zero
+membership/lease rows created); a genuine cross-player credential/player
+mismatch is rejected without mutating *either* player's name; a valid
+credential positive control still updates the name via both profile
+paths (proving the reordering didn't break the accepted path); and a
+"connected spectator" case authenticates while valid, revokes, then
+submits a second profile update with the same (now-revoked) credential —
+rejected, with the durable name read back fresh from the database
+afterward still equal to the pre-revocation value, not the
+rejected-but-attempted one. **Negative control:** the same file, copied
+unmodified into the same PERS-FIX1-head scratch worktree, failed 4 of 5
+cases exactly as expected (`display_name` observed as the attempted,
+rejected nickname instead of the expected prior/null value); the valid-
+credential positive control passed on both versions, correctly
+non-discriminating.
+
+**SEC-03 — tool passwords present in argv:** `runPgDumpSnapshot`/
+`runPgRestore`/`runPsqlFile` (`apps/server/scripts/persistence-tooling.ts`)
+passed the full connection URL, including its password, as a `--dbname`
+argument to `docker run ... pg_dump|pg_restore|psql`, visible in host
+docker CLI argv, the container's own configured command/arguments, and
+the tool's own argv. A new `toPasswordFreeConnection()` strips the
+password from the URL (decoding it exactly once via `decodeURIComponent`,
+rejecting an invalid percent-encoding or an embedded control character —
+e.g. a percent-encoded newline or NUL — by throwing rather than injecting
+a broken or multi-line `.pgpass` entry) and returns a single, wildcarded
+(`*:*:*:*:<escaped password>`) libpq `.pgpass`-format line; TLS and other
+non-secret query parameters are preserved unchanged. A new, fixed
+(never-interpolated) shell wrapper reads that line from its own stdin
+into a file created (`mktemp`) inside the ephemeral tool container's own
+filesystem — never a host bind mount, so `chmod 600` always takes effect
+regardless of Windows bind-mount permission translation — exports
+`PGPASSFILE` (a path, never a secret) for the real tool invocation, and
+relies on the container's own `--rm` for guaranteed cleanup (the shell's
+own `trap ... EXIT` provides defense-in-depth on top of that). A URL with
+no password skips the wrapper entirely, unchanged from before.
+
+Evidence: a unit matrix directly exercising `toPasswordFreeConnection()`
+(exported for this purpose) covers a plain password, colon/backslash
+escaping, percent-encoded specials (decoded then escaped), preserved TLS
+query parameters, no-password passthrough, invalid percent-encoding, an
+embedded newline, and an embedded NUL byte — all failing safe via
+`PersistenceToolError` where required. A real-Docker, real
+role-separated-PostgreSQL test
+(`apps/server/test/persistence/persistenceToolingSecretTransport.test.ts`)
+wraps the genuine `node:child_process.spawn` (never replacing its
+behavior, only recording argv and stdin) around a full real
+`performQuiescedBackup` → `restoreAndVerify` cycle (exercising all three
+tool functions for real, against real synthetic UUID passwords) and
+proves every captured `docker run ... pg_dump|pg_restore|psql|sh`
+invocation's argv contains neither the raw nor the percent-encoded
+password, while at least one call's stdin genuinely carried it (a
+positive control against a vacuous pass); a second case forces a real
+tool failure (invalid SQL) and confirms the thrown `PersistenceToolError`
+message also never contains the password. **Negative control:** the same
+real-Docker test (trimmed to omit the new-export-only unit matrix, which
+cannot exist pre-fix), copied unmodified into the PERS-FIX1-head scratch
+worktree, failed both cases with the real password plainly visible in
+the captured argv (`--dbname postgres://burningspace_migrator:<real
+password>@host.docker.internal:<port>/burningspace`) — not a
+simulated or assumed leak.
+
+Full real-PostgreSQL suite (`npx vitest run`, from the worktree root):
+**52 files / 495 tests / 0 failed / 0 skipped** (baseline 49/463 plus the
+3 new files above: 15 + 5 + 10 = 30 cases, plus 2 more added directly
+into `persistenceRuntimeBoot.test.ts` = 32; 463 + 32 = 495). Full-workspace
+`npm run typecheck`, `npx tsc -p apps/server/scripts/tsconfig.persistence-tools.json --noEmit`,
+and `npx tsc -p apps/server/scripts/tsconfig.external-staging.json --noEmit`
+all clean; the three new test files were additionally typechecked via a
+temporary, throwaway `apps/server/tsconfig.tmp-test-check.json` (deleted,
+never committed) confirming zero errors specific to any of them or to any
+of the five changed production files. `npm run build`, with
+`VITE_BURNINGSPACE_SERVER_URL=http://127.0.0.1:2567` set only in the
+invoking process's environment (confirmed absent from the persistent
+shell both before and after, never written to a repository `.env` file),
+completed clean.
+
+**Resource accounting:** no Docker restart was needed this session;
+`deploy-postgres-1` remained healthy throughout and untouched (still 4
+total databases, 0 matching `bs_test_*`/`bs_backup_test_*`, unchanged from
+the PERS-FIX1 session's finding). Every disposable role-separated
+container and database this session created (via `startRoleSeparatedPostgres()`
+and the plain-admin disposable-database harness) was removed by its own
+test's cleanup; a final inventory (`docker ps -a`, a `bs_test_*`/
+`bs_backup_test_*` database query) confirmed zero residue. Both scratch
+negative-control `git worktree`s were removed immediately after use; the
+implementation worktree itself was never mutated for either control. No
+other task's resources were deleted by wildcard or assumed unchanged
+without checking.
+
+This fix is by its own author and is **not** independently verified
+merely because it exists. Core and governed Claude QA for the resulting
+SEC-FIX1 head have not yet been observed — this document does not claim
+those checks have passed. The corrections fit the Product-Architect-
+authorized SEC-FIX1 direction; this is **not** independent SEC-01/02/03
+closure or merge approval, and it does not reopen or reinterpret the
+already-closed C-01 runtime fix, REVIEW-C01-B, NET-01, or PERS-01
+dispositions above.
+
+**Status reconciliation (2026-09-18):** an independent Security delta
+review of the SEC-FIX1 head (`de424972826bc6f8424658530958ed56de0a87f8`)
+**closed PERSIST002-SEC-01 and PERSIST002-SEC-02**. **PERSIST002-SEC-03
+remained LOW/OPEN**: SEC-FIX1 only stripped a *userinfo* password, and a
+`password`/`sslpassword` connection-string *query parameter* still
+reached Docker/pg-tool argv unchanged. Per the same reconciliation, C-01
+(the ARCH-FIX1 runtime fix), REVIEW-C01-A, REVIEW-C01-B,
+PERSIST002-NET-01, and PERSIST002-PERS-01 are **all previously closed**
+and are **not** pending repeat independent review; the ARCH-FIX1–3,
+NET-FIX1, and PERS-FIX1 sections above are preserved unchanged as the
+historical record of how each was fixed and reviewed, not as open items.
+
+**SEC-FIX2 — PERSIST002-SEC-03 residual, secret-bearing query
+parameters:** SEC-FIX1's `toPasswordFreeConnection()` only stripped a
+*userinfo* password from the connection URI before it reached
+`docker run ... pg_dump|pg_restore|psql`'s `--dbname` argument; a
+`password=...` or `sslpassword=...` *query* parameter rode straight
+through inside `dbUrl`, unprotected — the same argv-exposure class,
+left open for this one path.
+
+Product Architect decision, implemented in
+`apps/server/scripts/persistence-tooling.ts`: for all three operator
+wrappers (`runPgDumpSnapshot`/`runPgRestore`/`runPsqlFile`), a connection
+URI containing any query parameter **named** `password` or `sslpassword`
+(case-insensitive; checked before decoding so a percent-encoded name is
+still caught; rejected even with an empty value, a repeated key, or a
+userinfo password also present) is rejected outright, **before**
+spawning Docker or any PostgreSQL tool — no password-precedence rule, no
+silent discard. The new `rejectSecretBearingQueryParameters()` runs as
+the first step inside the shared `runPgTool()`, before
+`resolveContainerDatabaseAccess()`'s own platform-specific URL
+transformation could throw an unsafe raw parse error, and before
+`toPasswordFreeConnection()`'s empty-userinfo-password early return could
+let a query-string secret through untouched. It parses the raw,
+still-percent-encoded query string by hand (never the lenient
+`URLSearchParams`) so malformed/ambiguous percent-encoding in a parameter
+*name* fails safe (rejected) rather than risking a permissive decode
+dodging the name check; only parameter names are inspected or decoded,
+values are never read, and the connection string is never mutated or
+reserialized, so every other accepted setting (`sslmode`,
+`connect_timeout`, `application_name`, etc.) keeps its exact existing
+semantics. `sslpassword` (a TLS private-key passphrase) is deliberately
+**not** supported by the `.pgpass`/stdin channel, which exists only for
+the ordinary database login password; encrypted-key or service-file
+support is explicitly out of scope here. The accepted secret channel
+itself — stdin-to-private-container-file wrapper, `.pgpass`
+escaping/permissions, the fixed shell script and quoted `"$@"`,
+invocation-scoped cleanup, the pinned image, Linux host networking and
+dump UID/GID, Docker Desktop host resolution, snapshot lifetime and
+restore verification — is entirely **unchanged**.
+
+Evidence, extending
+`apps/server/test/persistence/persistenceToolingSecretTransport.test.ts`
+(+21 cases): a 15-case unit matrix for
+`rejectSecretBearingQueryParameters()` covering query-only
+`password`/`sslpassword`, each combined with a userinfo password, both
+keys together, a repeated key, an empty value, a bare key with no `=`, a
+percent-encoded name, mixed case, malformed percent-encoding, a totally
+malformed URI, an ordinary value merely containing the word "password",
+no query at all, and ordinary settings passing through unchanged; a real
+`runPsqlFile` call with `application_name=password-check` still
+succeeding (proving only names, never values, are inspected); 5 cases
+calling the three actual exported wrappers directly with forbidden
+inputs, each asserting a safe `PersistenceToolError` rejection **and**
+zero net new real `node:child_process.spawn` calls (the count is
+snapshotted immediately around the call so unrelated fixture setup
+cannot satisfy the assertion), plus a check that the thrown error's own
+message and enumerable properties never contain the rejected sentinel,
+plain or encoded. **Negative control:** the three wrapper-level tests,
+copied unmodified into a disposable scratch `git worktree` at the
+SEC-FIX1 head (`de424972826bc6f8424658530958ed56de0a87f8`) without
+touching its pre-fix `persistence-tooling.ts`, all failed exactly as
+expected — the spawn count went from 0 to 1 in every case, proving the
+pre-fix wrappers really did spawn a real `docker run` with the
+query-string secret still present rather than rejecting it upfront. The
+scratch worktree was removed after use; the implementation worktree was
+never mutated for this control.
+
+Full targeted suite: 31/31 pass. Existing `backupRestore.test.ts`
+end-to-end coverage: 2/2 pass, unchanged. Both operator-script
+typechecks and full-workspace `npm run typecheck` clean. `npm run build`,
+with `VITE_BURNINGSPACE_SERVER_URL=http://127.0.0.1:2567` scoped to that
+one process only (confirmed absent from the shell before and after),
+clean.
+
+**Unexpected failure, disclosed:** `npx vitest run` under this
+repository's default (forks) pool hit the same pre-existing,
+already-documented Vitest/tinypool `ERR_IPC_CHANNEL_CLOSED` worker crash
+on five consecutive attempts this session, each in a different,
+unrelated file (`level2DurableRecovery.test.ts`,
+`persistenceRuntimeBoot.test.ts`, `productionReconnectLifecycle.test.ts`,
+`guestIdentityEndpoint.test.ts`, and once more), none touched by this
+change; each attempt's exactly-named orphaned disposable database was
+confirmed to have zero connections and dropped by its exact name. A
+diagnostic-only `--pool=threads` run (explicitly not a substitute for the
+required default-pool configuration) completed cleanly at 52 files / 516
+tests, confirming no logic regression; a clean run under the actual
+required default (forks) configuration was not obtained despite five
+disclosed attempts, and is recorded here as an unexpected, pre-existing
+environmental limitation rather than retried further or forced by
+altering pool/timeout settings.
+
+*(Historical, as of SEC-FIX2 publication; superseded by the current
+disposition in the Status block above and the QA-RECOVERY-003 entry
+below.)* This fix was by its own author and was **not** independently
+verified merely because it existed; Core and governed Claude QA for the
+SEC-FIX2 head had not yet been observed at that time, and it was not
+independent SEC-03 closure or merge approval. Independent SEC-03
+closure was later recorded at `629f165...`.
+
+**PERSIST002-NET-02 (MEDIUM) remains OPEN and continues to explicitly
+BLOCK PUBLIC PERSISTENCE ROLLOUT** (unchanged from SEC-FIX1): its
+implementation may be separate from repository merge, but public
+persistence rollout still requires an implemented admission-budget
+mitigation, spoof-resistance and multi-client budget tests, explicit
+Security/Ops acceptance, and a separate Product Architect deployment
+authorization — see
+[`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).
+No quota, proxy-trust, or Caddy change was made.
+
+**Documentation-only scan correction** (commit
+`629f165d9a259df2fb245cefce930d56270c1419`, the reviewed pre-publication
+checkpoint for QA-RECOVERY-003): the SEC-FIX2 head's Core run failed "Scan Phase A files for high-signal
+secret material" because an illustrative
+`postgres://user:password@host/db` example added to
+`docs/ops/persist-002-staging-db-integration-plan.md` used a hostname
+the scanner does not allow; corrected to `127.0.0.1`. No SEC-FIX2
+technical byte changed.
+
+**QA-RECOVERY-003 (2026-09-19) — bounded QA-diagnostic capacity and run-ID
+display; technical patch PA-reviewed and approved for publication.**
+Three evidence sources are kept separate and must not be conflated:
+
+1. **Core Pull Request Checks** run `35387608566`, job `105738070748`,
+   attempt 1: **SUCCESS** at source head `629f165d9a259df2fb245cefce930d56270c1419`.
+   This supplies the test/build/typecheck/diagnostic/Caddy/container-
+   integration evidence for that checkpoint. None of it belongs to the
+   Claude QA run.
+2. **Claude QA Review Pilot** run `35387608535`, job `105738069692`,
+   attempt 1: overall **FAILURE at the diagnostic sanitizer**. The
+   owner-provided Step Summary confirms error category
+   `execution_file_invalid`, subreason `record_count_limit` (the
+   sanitizer's `MAX_RECORDS` was 200), and run ID shown as `unavailable`
+   (the run-ID field used `safe_int`'s general `10**9` default; a display
+   defect that did not cause `record_count_limit`). The reviewer's
+   structured-output validation and publication steps succeeded. The exact
+   historical record count is **unknown** and is not claimed; this
+   diagnosis is not attributed to any other historical QA failure.
+3. **Independent final functional QA:** a separate review returned
+   **APPROVE**, accepted by the Product Architect, at `629f165...`. It is
+   not a result of either workflow job above.
+
+Current dispositions at `629f165...`: PERSIST002-SEC-03 independently
+**CLOSED**; final independent functional QA **APPROVE**; C-01,
+REVIEW-C01-A, REVIEW-C01-B, PERSIST002-NET-01, PERSIST002-PERS-01,
+PERSIST002-SEC-01 and PERSIST002-SEC-02 remain closed. None of these
+reviews is repeated for this diagnostic-only patch. `629f165...` is the
+reviewed **pre-publication checkpoint**, not the permanent PR head; the
+mandatory automatic QA workflow status remained unsatisfied at that
+checkpoint because of the sanitizer failure above.
+
+The patch (`.github/scripts/sanitize-claude-diagnostic.py`,
+`.github/scripts/test-claude-qa-audit.py`) raises `MAX_RECORDS` 200 → 2000
+(an explicit bounded resource-budget decision, not a measured historical
+count and not a guarantee for future runs; `MAX_FILE_BYTES` 1,000,000,
+`MAX_DEPTH` 20, `MAX_FREEFORM_LENGTH` 500 and all UTF-8/duplicate-key/NUL/
+depth/secret checks unchanged; the whole accepted file is still parsed,
+and a file over 2000 records still fails closed with
+`execution_file_invalid`/`record_count_limit` and a nonzero exit), gives
+only the trusted run-ID field an explicit `2**63 - 1` bound (the general
+`safe_int` default and other fields untouched; zero/negative/out-of-range
+IDs stay "unavailable"), and adds a fixed-label stdout line with the
+already-allowlisted subreason (or "unavailable") — never exception text,
+transcript fragments, paths, session IDs or tokens.
+`.github/workflows/claude-qa-review-pilot.yml` is unchanged (blob
+`89ccd3928ee452ebb23ecb632a7d93b6a3d76ddb`); no classifier, routing,
+reviewer-prompt, agent, Action-pin, validator, renderer or publisher file
+is touched.
+
+Verification: the Product Architect personally ran the classifier suite
+(29/29, exit 0), the QA audit (89 PASS checks, exit 0) and independent
+synthetic CLI/AST probes (27/27) against the reviewed patch (SHA-256
+`aad35aa4ef0539e3b4eef1e42d2edf06e7a17622a20019457fdde5e17711fcc9`); the
+PA report SHA-256 `55a74e73599308458fb907fc9d62ec677702777d5bd0bc65e00c01b66bd29b03`
+is supplied provenance, not recomputed here. Approved Git blobs:
+sanitizer `0b4ff8193b7d198cc05924518bfa5214ad8f704b`, audit
+`af850e7fd907d831b584619713497802d79fcf77`. *(Historical preparation
+evidence:)* the patch was first prepared locally and uncommitted, with a
+synthetic negative control — the original sanitizer rejected a 201-record
+fixture with `record_count_limit` and showed run ID `35387608535` as
+unavailable, while the patched sanitizer accepted the fixture with genuine
+result extraction and displayed the exact ID; this reproduces the two
+diagnosed code paths and is not a replay of the unavailable historical
+transcript.
+
+**Publication state (at publication time; the exact-head outcomes are recorded in the SOURCE-TEXT-FIX1 entry):** committed and pushed as one commit on top of
+`629f165...`. Exact-new-head Core and governed Claude QA outcomes have
+**not yet been observed** and no success is anticipated here. Application
+tests are unchanged; the reviewed Core baseline is 52 files / 516 tests /
+zero skipped, so a Core result must show a completed test summary and any
+discrepancy must be reported, not inferred from a green step.
+
+Still open, unchanged: **QA-01** (test-completeness hardening, deferred
+separate work); **QA-02** (review-artifact archival) and **QA-03** (final
+evidence reconciliation); **PERSIST002-NET-02 (MEDIUM/OPEN)**, which
+blocks public persistence rollout; the final Product Architect merge
+approval and the human merge. Missing original review reports are not
+reconstructed and their hashes are not claimed as independently verified.
+
+**SOURCE-TEXT-FIX1 (2026-09-19) — visible escapes for embedded control characters.**
+
+**Exact-head outcomes at `f8a9ab48373101158ad4e6585f755303c68c4ba7`
+(QA-RECOVERY-003 as published):**
+
+- Core Pull Request Checks run `35418072318`: **SUCCESS**; the completed
+  application suite reported **52 files / 516 tests passed**.
+- Claude QA Review Pilot run `35418072316`, job `105830449356`, attempt 1:
+  the diagnostic sanitizer step **SUCCEEDED** (the QA-RECOVERY-003
+  capacity/run-ID correction worked on a real run). The overall workflow
+  nevertheless **FAILED** because the reviewer's own output was rejected by
+  the unchanged validator: `blockers[0]` exceeds the 500-character item
+  limit (failure comment `5738973423`). That output is unvalidated and is
+  **not** an accepted QA approval; the validator and the failed review were
+  not edited or weakened.
+
+**Separately verified source issue.** The unvalidated reviewer output
+pointed at raw control characters in two source files, and the Product
+Architect independently inspected the source. Byte-level inventory at
+`f8a9ab48...`: `apps/server/test/persistence/worldDiscoveryOrigin.test.ts`
+line 199 had one raw NUL (U+0000) immediately before `unreachable` in a
+`?? '...unreachable'` fallback string; `apps/server/scripts/public-arena-smoke.ts`
+line 49 had raw U+0000, U+001F and U+007F inside the Origin-validation
+regex character class. No other raw control bytes, non-ASCII bytes, CRLF or
+lone CR were present in either file. Because of the raw NUL, Git treated
+both files as binary against the PR base (numstat `-`/`-`, no textual
+diff).
+
+**Representation-only correction** (blobs before: `worldDiscoveryOrigin.test.ts`
+`77a39232f62c1e638186fdd71cbd99667836d011`, `public-arena-smoke.ts`
+`3e1be0b9abee5211359a2008fb235be8d6bf764f`): the NUL became the visible
+escape `\u0000` (the string still starts with a NUL followed by
+`unreachable`), and the class became `/[\u0000-\u001f\u007f]/u` (same
+matched set, same `u` flag). Nothing else changed: no reformatting, no
+line-ending or Unicode rewrite, no test/assertion/timeout/cleanup change,
+no Origin-policy, authentication, rate-limit or runtime change, and no
+`.gitattributes`/textconv override. Both files now contain no raw control
+bytes and compare against the PR base as text (numstat 261/0 and 66/19).
+
+**Equivalence evidence (temporary local probe, not committed):** the old
+and new fallback strings have identical length (12) and identical character
+codes; the old and new regexes agree for every ASCII code point 0..127 (the
+matched set is exactly U+0000..U+001F plus U+007F) and for 11 representative
+valid/invalid Origin strings; regex flags are identical (`u`). The
+`RegExp.source` text differs by design; behavior was compared.
+
+**Validation (local, loopback only):** `worldDiscoveryOrigin.test.ts`
+against real disposable PostgreSQL 6/6 passed, 0 skipped;
+`npx tsc -p apps/server/scripts/tsconfig.external-staging.json --noEmit`,
+`npx tsc -p apps/server/scripts/tsconfig.persistence-tools.json --noEmit`
+and `npm run typecheck` clean (a temporary tsconfig covering the two
+changed files reported only the pre-existing `process.send` typing error on
+an untouched line of the test's telemetry-filter block); `public-arena-smoke.ts`
+against an owned local production-mode server on a disposable database
+completed with the hostile-Origin check, and a smoke Origin containing
+U+0001 was rejected with the same "exact HTTP or HTTPS origin" error; the
+unchanged Phase A scanner passed over its 30 files; `git diff --check`
+clean. A full local rerun was not performed; the normal remote Core run
+remains required. The QA-RECOVERY-003 files are unchanged
+(`sanitize-claude-diagnostic.py` `0b4ff8193b7d198cc05924518bfa5214ad8f704b`,
+`test-claude-qa-audit.py` `af850e7fd907d831b584619713497802d79fcf77`, and
+the workflow `89ccd3928ee452ebb23ecb632a7d93b6a3d76ddb`).
+
+Exact-new-head automatic Core and governed QA outcomes for the
+correction commit are **not yet observed**. The earlier independent
+acceptances and closures stand; the binary-diff observation alone does not
+invalidate them or show that earlier reviewers did not read these files.
+Still open, unchanged: QA-01 (deferred test-completeness hardening), QA-02
+(original-review archival), QA-03 (final evidence reconciliation),
+PERSIST002-NET-02 (MEDIUM/OPEN, blocks public persistence rollout), the
+final PA merge approval and human merge.
+
+Next safe action: inspect the exact-new-head automatic Core and governed
+QA outcomes for the SOURCE-TEXT-FIX1 commit (Core must show a completed
+test summary), then complete the remaining evidence reconciliation
+(QA-02/QA-03) and the Product Architect merge decision. No closed review
+starts again.

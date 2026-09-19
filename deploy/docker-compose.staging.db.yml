@@ -1,0 +1,57 @@
+# PERSIST-002 Packet 7: repository-only definition for a FUTURE, separately
+# authorized real staging PostgreSQL rollout. This file is NEVER applied to
+# any real host by this packet and its presence in the repository is
+# preparation only, not deployment authorization -- see
+# docs/ops/persist-002-staging-db-integration-plan.md for the full operator
+# sequence and the blocking prerequisite this file's own comments describe.
+#
+# Unlike deploy/docker-compose.staging.integration.yml (CI-only, ephemeral,
+# tmpfs-backed), a real staging database must retain its data across
+# restarts: this definition uses a persistent named volume, never tmpfs and
+# never a host bind-mounted data directory.
+
+name: burningspace-staging
+
+services:
+  postgres:
+    image: postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+    environment:
+      POSTGRES_DB: ${BURNINGSPACE_DB_NAME:?set BURNINGSPACE_DB_NAME}
+      POSTGRES_USER: ${BURNINGSPACE_DB_ADMIN_USER:?set BURNINGSPACE_DB_ADMIN_USER}
+      POSTGRES_PASSWORD: ${BURNINGSPACE_DB_ADMIN_PASSWORD:?set BURNINGSPACE_DB_ADMIN_PASSWORD}
+      BURNINGSPACE_MIGRATOR_PASSWORD: ${BURNINGSPACE_DB_MIGRATOR_PASSWORD:?set BURNINGSPACE_DB_MIGRATOR_PASSWORD}
+      BURNINGSPACE_RUNTIME_PASSWORD: ${BURNINGSPACE_DB_RUNTIME_PASSWORD:?set BURNINGSPACE_DB_RUNTIME_PASSWORD}
+      BURNINGSPACE_BACKUP_PASSWORD: ${BURNINGSPACE_DB_BACKUP_PASSWORD:?set BURNINGSPACE_DB_BACKUP_PASSWORD}
+    volumes:
+      - ./postgres/init/001-burningspace-roles.sh:/docker-entrypoint-initdb.d/001-burningspace-roles.sh:ro
+      - burningspace-db-data:/var/lib/postgresql/data
+    networks:
+      - burningspace_db
+    cpus: "1.00"
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  server:
+    environment:
+      DATABASE_URL: ${BURNINGSPACE_DATABASE_URL:?set BURNINGSPACE_DATABASE_URL to the burningspace_runtime connection string}
+      BURNINGSPACE_WORLD_SLUG: ${BURNINGSPACE_WORLD_SLUG:-public-arena}
+    networks:
+      - burningspace_db
+
+networks:
+  burningspace_db:
+    driver: bridge
+    internal: true
+
+volumes:
+  burningspace-db-data:

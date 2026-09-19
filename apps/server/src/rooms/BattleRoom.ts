@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks';
-import { Client, Room, type AuthContext } from 'colyseus';
+import { Client, ClientState, ErrorCode, Protocol, Room, ServerError, type AuthContext } from 'colyseus';
 import {
   ProfileClientMessages,
   ProfileServerMessages,
@@ -36,6 +36,11 @@ import { ParticipantState } from '../schema/ParticipantState.js';
 import { ProjectileState } from '../schema/ProjectileState.js';
 import { ShipState } from '../schema/ShipState.js';
 import {
+  getActiveProductionRoomDependencies,
+  type DurableRoomAuth
+} from '../persistence/productionRoomDependencies.js';
+import type { ProfileTransactionResult } from '../persistence/gameplayAuthority.js';
+import {
   assertRequestOrigin,
   getActiveNetworkBoundaryConfig
 } from '../security/networkBoundary.js';
@@ -55,6 +60,8 @@ interface WeaponRuntimeState {
 }
 
 const PROFILE_RATE_LIMIT_NOTICE_INTERVAL_MS = 1000;
+const LEASE_HEARTBEAT_INTERVAL_MS = 5000;
+const GENERIC_PROFILE_RETRY_REASON = 'Unable to complete profile update. Please retry.';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -98,18 +105,47 @@ function validateProfile(message: unknown): ProfileValidationResult {
   };
 }
 
-export class BattleRoom extends Room<BattleState> {
+export class BattleRoom extends Room<BattleState, unknown, unknown, DurableRoomAuth> {
   static override async onAuth(
     _token: string,
-    _options: unknown,
+    options: unknown,
     context: AuthContext
-  ): Promise<boolean> {
+  ): Promise<DurableRoomAuth | false> {
     try {
       assertRequestOrigin(context);
-      return true;
     } catch {
       return false;
     }
+
+    const dependencies = getActiveProductionRoomDependencies();
+
+    if (!dependencies) {
+      throw new ServerError(ErrorCode.AUTH_FAILED, 'persistence_unavailable');
+    }
+
+    const peerKey = dependencies.getAuthPeerKey(context);
+    const limiterResult = dependencies.freshAuthLimiter.consume(peerKey);
+
+    if (!limiterResult.allowed) {
+      throw new ServerError(ErrorCode.AUTH_FAILED, 'auth_rate_limited');
+    }
+
+    if (!dependencies.isAuthoritySafe()) {
+      throw new ServerError(ErrorCode.AUTH_FAILED, 'persistence_unavailable');
+    }
+
+    // Only `credential` has any authority. playerId/credentialId/worldId/
+    // sessionId/shipId/faction from the client are never trusted here; a
+    // forged playerId alongside a valid credential is silently ignored --
+    // the DB lookup below resolves the actual credential owner.
+    const rawCredential = isRecord(options) ? options.credential : undefined;
+    const auth = await dependencies.authenticateCredential(rawCredential);
+
+    if (!auth || auth.worldId !== dependencies.worldId) {
+      throw new ServerError(ErrorCode.AUTH_FAILED, 'identity_rejected');
+    }
+
+    return auth;
   }
 
   maxClients = MAX_ROOM_CLIENTS;
@@ -129,12 +165,56 @@ export class BattleRoom extends Room<BattleState> {
   private readonly weapons = new Map<string, WeaponRuntimeState>();
   private readonly lastInputReceivedAt = new Map<string, number>();
   private readonly finalizedSessions = new Set<string>();
+  private readonly profileOperationTails = new Map<string, Promise<void>>();
+  private leaseHeartbeatInFlight = false;
   private nextProjectileId = 1;
 
+  // PERSIST002-C-01 (Architecture review, ARCH-FIX1): terminal, room-local
+  // process-authority fence. `hasObservedAuthoritySafe` becomes true only
+  // once this room has actually seen a genuinely safe tick (never during
+  // normal startup, before RuntimeLifecycle has marked the process ready --
+  // so a healthy room is never terminally disabled just because it was
+  // created before the process finished booting). Once safe has been
+  // observed, any later unsafe observation latches `processAuthorityLost`
+  // permanently: a subsequent superficially-safe value can never resume
+  // this room, matching the architecture's "no automatic same-process
+  // recovery" rule.
+  private hasObservedAuthoritySafe = false;
+  private processAuthorityLost = false;
+
+  /**
+   * Single cheap, synchronous, local authority check shared by the
+   * simulation tick, input application, and the async profile-completion
+   * boundary (docs/architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md:
+   * "Check before each simulation tick, input application and authoritative
+   * publication"). Never queries the database, awaits, or starts a timer.
+   */
+  private isProcessAuthoritySafe(): boolean {
+    if (this.processAuthorityLost) {
+      return false;
+    }
+
+    const safe = getActiveProductionRoomDependencies()?.isAuthoritySafe() ?? false;
+
+    if (safe) {
+      this.hasObservedAuthoritySafe = true;
+      return true;
+    }
+
+    if (this.hasObservedAuthoritySafe) {
+      this.processAuthorityLost = true;
+    }
+
+    return false;
+  }
+
   onCreate(): void {
+    // Exactly one canonical world room per process (BS-ARCH-011): it must
+    // survive zero connected clients rather than self-disposing.
+    this.autoDispose = false;
     this.setState(new BattleState());
     this.onMessage<unknown>(ProfileClientMessages.SET_PROFILE, (client, message) => {
-      this.handleSetProfile(client, message);
+      this.queueProfileOperation(client.sessionId, () => this.handleSetProfile(client, message));
     });
     this.onMessage<unknown>(ClientMessages.PLAYER_INPUT, (client, message) => {
       this.handlePlayerInput(client, message);
@@ -144,10 +224,27 @@ export class BattleRoom extends Room<BattleState> {
       this.updateSimulation(deltaTimeMs);
     }, NETWORK_TICK_INTERVAL_MS);
 
+    // Room-owned clock: cleared automatically on room disposal, unlike a
+    // raw setInterval. One bounded batch every 5s, never per-tick DB writes.
+    this.clock.setInterval(() => {
+      void this.runLeaseHeartbeat();
+    }, LEASE_HEARTBEAT_INTERVAL_MS);
+
     console.log(`[BattleRoom] created roomId=${this.roomId}`);
   }
 
-  onJoin(client: Client): void {
+  onJoin(client: Client, _options?: unknown, auth?: DurableRoomAuth): void {
+    const dependencies = getActiveProductionRoomDependencies();
+
+    if (!auth || !dependencies || auth.worldId !== dependencies.worldId) {
+      // onAuth already guarantees a structurally valid auth result for any
+      // real client; this is defense in depth only.
+      client.leave(Protocol.WS_CLOSE_CONSENTED);
+      return;
+    }
+
+    dependencies.sessionBindings.bindFreshSession(client.sessionId, auth);
+
     const participant = new ParticipantState();
     participant.sessionId = client.sessionId;
     participant.nickname = `Guest-${client.sessionId.slice(0, 4)}`;
@@ -163,26 +260,245 @@ export class BattleRoom extends Room<BattleState> {
   }
 
   async onLeave(client: Client, consented?: boolean): Promise<void> {
+    const sessionId = client.sessionId;
+    const dependencies = getActiveProductionRoomDependencies();
+
+    // Invalidate control/generation FIRST: any profile transaction already
+    // in flight for this session, once it settles below, must observe a
+    // stale generation and never re-open control or leave an orphan lease.
+    this.neutralizeInput(sessionId);
+    dependencies?.sessionBindings.setControlAllowed(sessionId, false);
+    dependencies?.sessionBindings.beginConnectionGeneration(sessionId);
+
+    // Wait for any in-flight SET_PROFILE transaction to fully settle
+    // (commit + its own compensation) before deciding what to do with the
+    // lease -- otherwise a profile transaction could commit a lease AFTER
+    // this method already concluded "no lease".
+    await this.awaitProfileTail(sessionId);
+
+    const binding = dependencies?.sessionBindings.get(sessionId);
+    const leaseId = binding?.leaseId;
+
     if (consented) {
-      this.finalizeSession(client.sessionId, true);
+      if (dependencies && binding && leaseId) {
+        await dependencies.releaseSessionLease({ playerId: binding.playerId, leaseId }).catch(() => undefined);
+      }
+      this.finalizeSession(sessionId, true);
       return;
     }
 
-    this.neutralizeInput(client.sessionId);
     this.sendRoomInfo();
 
+    if (!dependencies || !binding || !leaseId) {
+      // No gameplay lease held (dependencies unavailable, or a
+      // spectator-only session): Packet-5's credential-only transient
+      // reconnection behavior is unchanged.
+      try {
+        const reconnectedClient = await this.allowReconnection(
+          client,
+          this.networkBoundaryConfig.reconnectGraceSeconds
+        );
+        const controlReopened = await this.revalidateReconnectedSession(sessionId, dependencies);
+
+        if (controlReopened) {
+          this.sendRoomInfo();
+        } else {
+          reconnectedClient.leave(Protocol.WS_CLOSE_CONSENTED);
+        }
+      } catch (error) {
+        if (!this.isExpectedReconnectionRejection(error)) {
+          throw error;
+        }
+
+        this.finalizeSession(sessionId, false);
+      }
+      return;
+    }
+
+    const graceSeconds = this.networkBoundaryConfig.reconnectGraceSeconds;
+    const recoveringResult = await dependencies.markSessionRecovering({
+      playerId: binding.playerId,
+      credentialId: binding.credentialId,
+      leaseId,
+      graceSeconds
+    });
+
+    if (recoveringResult.outcome === 'not_found') {
+      // The exact active lease is absent/lost (already reclaimed/expired
+      // elsewhere): no gameplay control recovery can be offered.
+      dependencies.sessionBindings.clearLease(sessionId);
+    } else {
+      dependencies.sessionBindings.setLease(sessionId, leaseId, 'recovering');
+    }
+
     try {
-      await this.allowReconnection(
-        client,
-        this.networkBoundaryConfig.reconnectGraceSeconds
-      );
-      this.sendRoomInfo();
+      const reconnectedClient = await this.allowReconnection(client, graceSeconds);
+      const controlReopened = await this.revalidateReconnectedSession(sessionId, dependencies);
+
+      if (controlReopened) {
+        this.sendRoomInfo();
+      } else {
+        reconnectedClient.leave(Protocol.WS_CLOSE_CONSENTED);
+      }
     } catch (error) {
       if (!this.isExpectedReconnectionRejection(error)) {
         throw error;
       }
 
-      this.finalizeSession(client.sessionId, false);
+      // Unclean leave timeout: release the exact old leaseId. Filtering by
+      // exact lease_id means this can never touch a later successor lease.
+      await dependencies.releaseSessionLease({ playerId: binding.playerId, leaseId }).catch(() => undefined);
+      this.finalizeSession(sessionId, false);
+    }
+  }
+
+  /**
+   * Packet-5 credential + writer revalidation, extended by Packet 6 with
+   * exact lease-fenced resume: a session that held a gameplay lease may
+   * only regain control by resuming that SAME recovering lease (exact
+   * world/player/credential/server/writer-epoch/lease_id, unexpired
+   * reconnect_deadline); a spectator-only session (never held a lease)
+   * keeps Packet 5's credential-only gate unchanged. Protected throughout
+   * against a stale async completion via SessionBindingRegistry's
+   * connection generation.
+   */
+  private async revalidateReconnectedSession(
+    sessionId: string,
+    dependencies: ReturnType<typeof getActiveProductionRoomDependencies>
+  ): Promise<boolean> {
+    const binding = dependencies?.sessionBindings.get(sessionId);
+
+    if (!dependencies || !binding || binding.worldId !== dependencies.worldId) {
+      return false;
+    }
+
+    if (!dependencies.isAuthoritySafe()) {
+      return false;
+    }
+
+    const generation = dependencies.sessionBindings.beginConnectionGeneration(sessionId);
+
+    if (generation === undefined) {
+      return false;
+    }
+
+    const leaseId = binding.leaseId;
+    let stillActive: boolean;
+    let resumedLease = false;
+
+    if (leaseId) {
+      if (binding.leaseStatus !== 'recovering') {
+        // markSessionRecovering never found a matching active lease to
+        // transition (already reclaimed/expired/lost elsewhere): no lease
+        // to resume, and control must never be silently reopened.
+        stillActive = false;
+      } else {
+        const participant = this.state.participants.get(sessionId);
+        const resumeResult = await dependencies.resumeRecoveringSession({
+          playerId: binding.playerId,
+          credentialId: binding.credentialId,
+          leaseId,
+          graceSeconds: this.networkBoundaryConfig.reconnectGraceSeconds,
+          requireFaction: participant?.mode === 'player'
+        });
+        stillActive = resumeResult.outcome === 'resumed';
+        resumedLease = stillActive;
+      }
+    } else {
+      stillActive = await dependencies.revalidateCredential(binding.playerId, binding.credentialId);
+    }
+
+    if (!dependencies.sessionBindings.isCurrentGeneration(sessionId, generation)) {
+      // A newer connection attempt (or finalize) already superseded this
+      // one; never reopen control based on a stale completion. If we just
+      // resumed a lease under that stale generation, release it again.
+      if (resumedLease && leaseId) {
+        await dependencies.releaseSessionLease({ playerId: binding.playerId, leaseId }).catch(() => undefined);
+      }
+      return false;
+    }
+
+    if (!stillActive || !dependencies.isAuthoritySafe()) {
+      if (leaseId) {
+        await dependencies.releaseSessionLease({ playerId: binding.playerId, leaseId }).catch(() => undefined);
+        dependencies.sessionBindings.clearLease(sessionId);
+      }
+      return false;
+    }
+
+    if (leaseId) {
+      dependencies.sessionBindings.setLease(sessionId, leaseId, 'active');
+    }
+    dependencies.sessionBindings.setControlAllowed(sessionId, true);
+    return true;
+  }
+
+  /**
+   * One bounded batch every 5s (never per-tick DB writes). A prior batch
+   * still running suppresses this tick entirely rather than overlapping --
+   * one shared in-flight guard, not one timer/lock per player.
+   */
+  private async runLeaseHeartbeat(): Promise<void> {
+    if (this.leaseHeartbeatInFlight) {
+      return;
+    }
+
+    const dependencies = getActiveProductionRoomDependencies();
+
+    if (!dependencies) {
+      return;
+    }
+
+    const snapshot = dependencies.sessionBindings.snapshotActiveLeaseBindings();
+
+    if (snapshot.length === 0) {
+      return;
+    }
+
+    this.leaseHeartbeatInFlight = true;
+
+    try {
+      await Promise.all(
+        snapshot.map(async ({ sessionId, playerId, leaseId }) => {
+          const binding = dependencies.sessionBindings.get(sessionId);
+
+          // The binding may have moved on (new lease, cleared, removed)
+          // since the snapshot was taken; only ever renew the exact lease
+          // this snapshot entry named.
+          if (!binding || binding.leaseId !== leaseId || binding.leaseStatus !== 'active') {
+            return;
+          }
+
+          let renewed: boolean;
+          try {
+            renewed = await dependencies.renewGameplayLease({
+              playerId,
+              credentialId: binding.credentialId,
+              leaseId,
+              graceSeconds: this.networkBoundaryConfig.reconnectGraceSeconds
+            });
+          } catch (error) {
+            console.error(`[BattleRoom] lease heartbeat renewal failed sessionId=${sessionId}`, error);
+            renewed = false;
+          }
+
+          if (renewed) {
+            return;
+          }
+
+          // Fail closed for this session only: never continue memory-only
+          // gameplay authority, and never silently re-acquire a new lease
+          // from the heartbeat.
+          const currentBinding = dependencies.sessionBindings.get(sessionId);
+          if (currentBinding && currentBinding.leaseId === leaseId) {
+            dependencies.sessionBindings.setControlAllowed(sessionId, false);
+            dependencies.sessionBindings.clearLease(sessionId);
+            this.neutralizeInput(sessionId);
+          }
+        })
+      );
+    } finally {
+      this.leaseHeartbeatInFlight = false;
     }
   }
 
@@ -204,12 +520,17 @@ export class BattleRoom extends Room<BattleState> {
     );
   }
 
+  private isControlAllowed(sessionId: string): boolean {
+    return getActiveProductionRoomDependencies()?.sessionBindings.isControlAllowed(sessionId) ?? false;
+  }
+
   private finalizeSession(sessionId: string, consented: boolean): void {
     if (this.finalizedSessions.has(sessionId)) {
       return;
     }
 
     this.finalizedSessions.add(sessionId);
+    getActiveProductionRoomDependencies()?.sessionBindings.remove(sessionId);
     this.state.participants.delete(sessionId);
     this.removeShip(sessionId);
     this.inputs.delete(sessionId);
@@ -223,13 +544,45 @@ export class BattleRoom extends Room<BattleState> {
     console.log(`[BattleRoom] left sessionId=${sessionId} consented=${consented}`);
   }
 
-  private handleSetProfile(client: Client, message: unknown): void {
-    if (!this.profileMessageLimiter.consume(client.sessionId).allowed) {
+  /**
+   * Runs `operation` only after every previously queued operation for this
+   * exact transient session has settled -- a per-session Promise tail, not
+   * a global/per-player lock. DB world-row locking already provides the
+   * durable ordering guarantee across sessions; this only prevents two
+   * SET_PROFILE messages from the SAME session racing each other.
+   */
+  private queueProfileOperation(sessionId: string, operation: () => Promise<void>): void {
+    const previousTail = this.profileOperationTails.get(sessionId) ?? Promise.resolve();
+    const tail = previousTail.then(operation, operation).catch((error: unknown) => {
+      console.error(`[BattleRoom] profile operation failed sessionId=${sessionId}`, error);
+    });
+    this.profileOperationTails.set(sessionId, tail);
+  }
+
+  private async awaitProfileTail(sessionId: string): Promise<void> {
+    await (this.profileOperationTails.get(sessionId) ?? Promise.resolve());
+  }
+
+  private sendGenericProfileRejection(client: Client, reason: string = GENERIC_PROFILE_RETRY_REASON): void {
+    if (client.state !== ClientState.JOINED) {
+      return;
+    }
+    client.send(ProfileServerMessages.PROFILE_REJECTED, { reason } satisfies ProfileRejectedMessage);
+  }
+
+  private async handleSetProfile(client: Client, message: unknown): Promise<void> {
+    const sessionId = client.sessionId;
+
+    if (!this.isControlAllowed(sessionId)) {
+      return;
+    }
+
+    if (!this.profileMessageLimiter.consume(sessionId).allowed) {
       this.sendBoundedProfileRateLimitNotice(client);
       return;
     }
 
-    const participant = this.state.participants.get(client.sessionId);
+    const participant = this.state.participants.get(sessionId);
 
     if (!participant) {
       client.send(ProfileServerMessages.PROFILE_REJECTED, {
@@ -259,16 +612,109 @@ export class BattleRoom extends Room<BattleState> {
       return;
     }
 
-    participant.nickname = validation.profile.nickname;
-    participant.mode = validation.profile.mode;
-    participant.faction = requestedFaction;
-    participant.profileReady = true;
+    const dependencies = getActiveProductionRoomDependencies();
+    const binding = dependencies?.sessionBindings.get(sessionId);
 
-    if (validation.profile.mode === 'player' && validation.profile.faction) {
-      this.upsertShip(client.sessionId, validation.profile.nickname, validation.profile.faction);
+    if (!dependencies || !binding) {
+      this.sendGenericProfileRejection(client);
+      return;
+    }
+
+    // Captured BEFORE the durable transaction: onLeave increments this on
+    // invalidation, so a completion that arrives after this session was
+    // superseded is detected below and never mutates transient state.
+    const generation = binding.connectionGeneration;
+    const nickname = validation.profile.nickname;
+    const profileContext = {
+      playerId: binding.playerId,
+      credentialId: binding.credentialId,
+      transportSessionId: sessionId,
+      roomId: this.roomId,
+      nickname,
+      reconnectGraceSeconds: this.networkBoundaryConfig.reconnectGraceSeconds
+    };
+
+    let result: ProfileTransactionResult;
+
+    try {
+      result =
+        validation.profile.mode === 'player' && validation.profile.faction
+          ? await dependencies.applyPlayerProfile({ ...profileContext, faction: validation.profile.faction })
+          : await dependencies.applySpectatorProfile(profileContext);
+    } catch (error) {
+      // Unknown commit outcome: never assume rollback, never mutate
+      // transient state. A retry safely queries canonical durable state.
+      console.error(`[BattleRoom] profile transaction failed sessionId=${sessionId}`, error);
+      this.sendGenericProfileRejection(client);
+      return;
+    }
+
+    if (!dependencies.sessionBindings.isCurrentGeneration(sessionId, generation)) {
+      // A newer event (onLeave/reconnect) already superseded this
+      // completion. Compensate for any lease this stale commit acquired,
+      // but never touch transient participant/ship state.
+      if (result.kind === 'player_accepted') {
+        await dependencies.releaseSessionLease({ playerId: binding.playerId, leaseId: result.leaseId }).catch(() => undefined);
+      }
+      return;
+    }
+
+    // PERSIST002-C-01 (ARCH-FIX1): process authority may have been lost
+    // while this durable transaction was in flight. The durable commit
+    // itself already stands (faction/membership/revision are never rolled
+    // back here, same as the generation-mismatch branch above) -- only
+    // release the lease this stale completion may have just acquired, and
+    // never spawn/update a ship or acknowledge PROFILE_ACCEPTED based on
+    // authority that is no longer safe.
+    if (!this.isProcessAuthoritySafe()) {
+      if (result.kind === 'player_accepted') {
+        await dependencies.releaseSessionLease({ playerId: binding.playerId, leaseId: result.leaseId }).catch(() => undefined);
+      }
+      return;
+    }
+
+    if (
+      result.kind === 'writer_authority_lost' ||
+      result.kind === 'credential_invalid' ||
+      result.kind === 'faction_conflict' ||
+      result.kind === 'identity_in_use'
+    ) {
+      const reason =
+        result.kind === 'faction_conflict'
+          ? 'Your durable faction is already assigned and cannot be changed.'
+          : result.kind === 'identity_in_use'
+            ? 'This identity is already controlling a ship elsewhere.'
+            : GENERIC_PROFILE_RETRY_REASON;
+      this.sendGenericProfileRejection(client, reason);
+      return;
+    }
+
+    if (result.kind === 'player_accepted') {
+      try {
+        this.upsertShip(sessionId, nickname, result.faction);
+      } catch (error) {
+        // Spawn-failure compensation: the durable commit stands (faction/
+        // membership/revision are never rolled back), but release ONLY
+        // this exact new/current lease and report a bounded rejection.
+        console.error(`[BattleRoom] transient ship spawn failed sessionId=${sessionId}`, error);
+        dependencies.sessionBindings.clearLease(sessionId);
+        await dependencies.releaseSessionLease({ playerId: binding.playerId, leaseId: result.leaseId }).catch(() => undefined);
+        this.sendGenericProfileRejection(client);
+        return;
+      }
+
+      dependencies.sessionBindings.setLease(sessionId, result.leaseId, 'active');
+      participant.nickname = nickname;
+      participant.mode = 'player';
+      participant.faction = result.faction;
+      participant.profileReady = true;
     } else {
-      this.removeShip(client.sessionId);
-      this.inputs.delete(client.sessionId);
+      participant.nickname = nickname;
+      participant.mode = 'spectator';
+      participant.faction = '';
+      participant.profileReady = true;
+      this.removeShip(sessionId);
+      this.inputs.delete(sessionId);
     }
 
     client.send(ProfileServerMessages.PROFILE_ACCEPTED, {
@@ -282,7 +728,7 @@ export class BattleRoom extends Room<BattleState> {
     this.sendRoomInfo();
 
     console.log(
-      `[BattleRoom] profile sessionId=${client.sessionId} nickname=${participant.nickname} mode=${participant.mode}`
+      `[BattleRoom] profile sessionId=${sessionId} nickname=${participant.nickname} mode=${participant.mode}`
     );
   }
 
@@ -312,7 +758,13 @@ export class BattleRoom extends Room<BattleState> {
     } satisfies RoomInfoMessage);
   }
 
-  private upsertShip(sessionId: string, nickname: string, faction: Faction): void {
+  /**
+   * protected (not private) solely so a test-only subclass can override it
+   * to simulate a spawn failure after the durable profile transaction has
+   * already committed (see TestBattleRoom.ts / spawnFailure tests).
+   * Production semantics are unchanged.
+   */
+  protected upsertShip(sessionId: string, nickname: string, faction: Faction): void {
     const existingShip = this.state.ships.get(sessionId);
 
     if (existingShip && existingShip.faction === faction) {
@@ -366,6 +818,18 @@ export class BattleRoom extends Room<BattleState> {
   }
 
   private handlePlayerInput(client: Client, message: unknown): void {
+    // PERSIST002-C-01 (ARCH-FIX1): input arriving while process authority is
+    // unsafe (or after it has been observed lost) must never be accepted
+    // into the runtime input map, independent of this player's own
+    // per-session controlAllowed flag.
+    if (!this.isProcessAuthoritySafe()) {
+      return;
+    }
+
+    if (!this.isControlAllowed(client.sessionId)) {
+      return;
+    }
+
     if (!this.playerInputLimiter.consume(client.sessionId).allowed) {
       return;
     }
@@ -401,6 +865,14 @@ export class BattleRoom extends Room<BattleState> {
   }
 
   private updateSimulation(deltaTimeMs: number): void {
+    // PERSIST002-C-01 (ARCH-FIX1): fence the entire tick at its single
+    // entry point. No respawn, movement/rotation, firing, projectile
+    // movement/collision/damage, or simulation-origin combat broadcast may
+    // occur from a tick observed while process authority is unsafe.
+    if (!this.isProcessAuthoritySafe()) {
+      return;
+    }
+
     const runtimeNow = performance.now();
     const wallNow = Date.now();
     const deltaSeconds = Math.min(deltaTimeMs / 1000, 0.1);

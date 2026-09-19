@@ -1,0 +1,261 @@
+import { randomUUID } from 'node:crypto';
+import { Client } from 'pg';
+import { afterEach, describe, expect, test } from 'vitest';
+import { redactDatabaseUrl } from '../../src/persistence/config.js';
+import { runMigrations } from '../../src/persistence/migrationRunner.js';
+import { bootstrapWorld } from '../../src/persistence/repositories/worldsRepository.js';
+import { startProductionServer, type ProductionServerHandle } from '../../src/index.js';
+
+const PM2_TELEMETRY_FILTER_MARKER = Symbol.for('burningspace.test.pm2-telemetry-worker-filter');
+
+function installPm2TelemetryFilterForWorkerIpc(): void {
+  const workerSend = process.send;
+  if (!workerSend || Reflect.get(workerSend, PM2_TELEMETRY_FILTER_MARKER) === true) {
+    return;
+  }
+  const filteredSend = ((message: unknown, ...args: unknown[]): boolean => {
+    if (
+      typeof message === 'object' &&
+      message !== null &&
+      'type' in message &&
+      typeof message.type === 'string' &&
+      message.type.startsWith('axm:')
+    ) {
+      return true;
+    }
+    return Reflect.apply(workerSend, process, [message, ...args]) as boolean;
+  }) as typeof process.send;
+  Reflect.defineProperty(filteredSend, PM2_TELEMETRY_FILTER_MARKER, { value: true });
+  process.send = filteredSend;
+}
+
+installPm2TelemetryFilterForWorkerIpc();
+
+const ADMIN_DATABASE_URL =
+  process.env.BURNINGSPACE_TEST_DATABASE_URL ??
+  'postgres://burningspace_test_admin:burningspace_test_password@127.0.0.1:55432/burningspace_test';
+const ALLOWED_ORIGIN = 'https://arena.example.com';
+const HOSTILE_ORIGIN = 'https://hostile.example.net';
+
+async function isDatabaseReachable(): Promise<boolean> {
+  const client = new Client({ connectionString: ADMIN_DATABASE_URL, connectionTimeoutMillis: 2000 });
+  try {
+    await client.connect();
+    await client.end();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const databaseAvailable = await isDatabaseReachable();
+
+if (!databaseAvailable) {
+  console.warn(
+    '[worldDiscoveryOrigin.test.ts] Skipping real-PostgreSQL/HTTP tests: ' +
+      `no reachable database at ${redactDatabaseUrl(ADMIN_DATABASE_URL)}. ` +
+      'Start deploy/docker-compose.test.db.yml to run them.'
+  );
+}
+
+const disposableDatabaseNames: string[] = [];
+const runningServers: ProductionServerHandle[] = [];
+
+async function createBootstrappedDatabase(): Promise<{ databaseUrl: string; databaseName: string }> {
+  const databaseName = `bs_test_${randomUUID().replace(/-/g, '')}`;
+  const admin = new Client({ connectionString: ADMIN_DATABASE_URL });
+  await admin.connect();
+  try {
+    await admin.query(`CREATE DATABASE ${databaseName}`);
+  } finally {
+    await admin.end();
+  }
+  disposableDatabaseNames.push(databaseName);
+  const url = new URL(ADMIN_DATABASE_URL);
+  url.pathname = `/${databaseName}`;
+  const databaseUrl = url.toString();
+  await runMigrations(databaseUrl);
+
+  const setupClient = new Client({ connectionString: databaseUrl });
+  await setupClient.connect();
+  try {
+    await bootstrapWorld(setupClient, 'public-arena');
+  } finally {
+    await setupClient.end();
+  }
+
+  return { databaseUrl, databaseName };
+}
+
+async function dropDatabase(databaseName: string): Promise<void> {
+  const admin = new Client({ connectionString: ADMIN_DATABASE_URL });
+  await admin.connect();
+  try {
+    await admin.query(
+      'SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()',
+      [databaseName]
+    );
+    await admin.query(`DROP DATABASE IF EXISTS ${databaseName}`);
+  } finally {
+    await admin.end();
+    const index = disposableDatabaseNames.indexOf(databaseName);
+    if (index >= 0) {
+      disposableDatabaseNames.splice(index, 1);
+    }
+  }
+}
+
+interface TestServer {
+  readonly server: ProductionServerHandle;
+  readonly databaseUrl: string;
+  readonly databaseName: string;
+}
+
+async function bootTestServer(): Promise<TestServer> {
+  const { databaseUrl, databaseName } = await createBootstrappedDatabase();
+
+  const server = await startProductionServer({
+    environment: {
+      NODE_ENV: 'production',
+      BURNINGSPACE_ALLOWED_ORIGINS: ALLOWED_ORIGIN,
+      BURNINGSPACE_RECONNECT_GRACE_SECONDS: '10',
+      BURNINGSPACE_SHUTDOWN_TIMEOUT_SECONDS: '2',
+      DATABASE_URL: databaseUrl
+    },
+    port: 0,
+    hostname: '127.0.0.1',
+    registerSignalHandlers: false,
+    exitOnAuthorityLoss: false
+  });
+  runningServers.push(server);
+
+  return { server, databaseUrl, databaseName };
+}
+
+async function teardown(instance: TestServer): Promise<void> {
+  await instance.server.shutdown('SIGTERM').catch(() => undefined);
+  const index = runningServers.indexOf(instance.server);
+  if (index >= 0) {
+    runningServers.splice(index, 1);
+  }
+  await dropDatabase(instance.databaseName);
+}
+
+afterEach(async () => {
+  await Promise.allSettled(runningServers.splice(0).map((server) => server.shutdown('SIGTERM')));
+});
+
+describe.skipIf(!databaseAvailable)('GET /world/battle-room (real PostgreSQL + real HTTP)', () => {
+  test('an allowed Origin receives 200, correct CORS/no-store, and the canonical roomId', async () => {
+    const instance = await bootTestServer();
+    try {
+      const response = await fetch(`${instance.server.url}/world/battle-room`, {
+        headers: { Origin: ALLOWED_ORIGIN }
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('access-control-allow-origin')).toBe(ALLOWED_ORIGIN);
+      expect(response.headers.get('vary')).toContain('Origin');
+      expect(response.headers.get('cache-control')).toBe('no-store');
+
+      const body = (await response.json()) as { ok: boolean; roomId: string };
+      expect(body.ok).toBe(true);
+      expect(body.roomId).toBe(instance.server.persistence.getCanonicalRoomId());
+    } finally {
+      await teardown(instance);
+    }
+  });
+
+  test('repeated discovery calls return the identical roomId for the process lifetime, and no second room is created', async () => {
+    const instance = await bootTestServer();
+    try {
+      const first = await fetch(`${instance.server.url}/world/battle-room`, { headers: { Origin: ALLOWED_ORIGIN } });
+      const firstBody = (await first.json()) as { roomId: string };
+
+      const second = await fetch(`${instance.server.url}/world/battle-room`, { headers: { Origin: ALLOWED_ORIGIN } });
+      const secondBody = (await second.json()) as { roomId: string };
+
+      const third = await fetch(`${instance.server.url}/world/battle-room`, { headers: { Origin: ALLOWED_ORIGIN } });
+      const thirdBody = (await third.json()) as { roomId: string };
+
+      expect(firstBody.roomId).toBe(secondBody.roomId);
+      expect(secondBody.roomId).toBe(thirdBody.roomId);
+      expect(firstBody.roomId).toBe(instance.server.persistence.getCanonicalRoomId());
+    } finally {
+      await teardown(instance);
+    }
+  });
+
+  test('a hostile Origin is rejected 403 with no CORS header and no roomId leaked', async () => {
+    const instance = await bootTestServer();
+    try {
+      const response = await fetch(`${instance.server.url}/world/battle-room`, {
+        headers: { Origin: HOSTILE_ORIGIN }
+      });
+
+      expect(response.status).toBe(403);
+      expect(response.headers.get('access-control-allow-origin')).toBeNull();
+      const bodyText = await response.text();
+      expect(bodyText).not.toContain(instance.server.persistence.getCanonicalRoomId() ?? '\u0000unreachable');
+    } finally {
+      await teardown(instance);
+    }
+  });
+
+  test('missing Origin in local development follows the existing allow-missing-origin policy', async () => {
+    const { databaseUrl, databaseName } = await createBootstrappedDatabase();
+    try {
+      const server = await startProductionServer({
+        environment: {
+          BURNINGSPACE_RECONNECT_GRACE_SECONDS: '10',
+          BURNINGSPACE_SHUTDOWN_TIMEOUT_SECONDS: '2',
+          DATABASE_URL: databaseUrl
+        },
+        port: 0,
+        hostname: '127.0.0.1',
+        registerSignalHandlers: false,
+        exitOnAuthorityLoss: false
+      });
+      runningServers.push(server);
+
+      const response = await fetch(`${server.url}/world/battle-room`);
+      expect(response.status).toBe(200);
+      expect(response.headers.get('access-control-allow-origin')).toBeNull();
+      const body = (await response.json()) as { ok: boolean; roomId: string };
+      expect(body.ok).toBe(true);
+      expect(body.roomId).toBe(server.persistence.getCanonicalRoomId());
+
+      await server.shutdown('SIGTERM');
+      runningServers.splice(runningServers.indexOf(server), 1);
+    } finally {
+      await dropDatabase(databaseName);
+    }
+  });
+
+  test('missing Origin in production follows the existing exact-allowlist policy (denied)', async () => {
+    const instance = await bootTestServer();
+    try {
+      const response = await fetch(`${instance.server.url}/world/battle-room`);
+      expect(response.status).toBe(403);
+      expect(response.headers.get('access-control-allow-origin')).toBeNull();
+    } finally {
+      await teardown(instance);
+    }
+  });
+
+  test('writer authority no longer safe returns 503 world_unavailable', async () => {
+    const instance = await bootTestServer();
+    try {
+      await instance.server.persistence.writer.release();
+
+      const response = await fetch(`${instance.server.url}/world/battle-room`, {
+        headers: { Origin: ALLOWED_ORIGIN }
+      });
+      expect(response.status).toBe(503);
+      const body = await response.json();
+      expect(body).toEqual({ ok: false, error: 'world_unavailable' });
+    } finally {
+      await teardown(instance);
+    }
+  });
+});

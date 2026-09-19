@@ -51,8 +51,10 @@ This file is non-canonical navigation. Individual decision files are authoritati
 39 accepted records: 18 BS-MECH, 5 GAME-001, 11 BS-ARCH, 4 BS-PROC, 1 CI.
 BS-ARCH-008-011 were selected under explicitly delegated PA authority in
 [PERSIST-001](../tasks/persist-001-persistence-identity-architecture.md).
-Independent Architecture/Security review and final task acceptance remain pending;
-PERSIST-002 implementation is not authorized by this index.
+Independent Architecture/Security review APPROVED and Product Architect task
+acceptance is complete; PERSIST-001 is MERGED / CLOSED via PR #85. PERSIST-002
+is open as a separate bounded implementation task and is not itself authorized
+by this index.
 
 ## Historical DOCARCH-002D status
 

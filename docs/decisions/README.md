@@ -8,8 +8,9 @@ This registry will contain BurningSpace architecture, design, mechanics, process
 
 PERSIST-001 records four new accepted architecture decisions under explicit
 human-delegated Product Architect authority. Current count: 39 accepted records
-(11 architecture). Independent Architecture/Security review and final PA task
-acceptance remain pending; no persistence runtime or PERSIST-002 is authorized.
+(11 architecture). Independent Architecture/Security review APPROVED and final
+PA task acceptance is complete; PERSIST-001 is MERGED / CLOSED. PERSIST-002 is
+open as a separate bounded implementation task.
 Earlier DOCARCH-002 reconciliation is historical; its baseline was 35.
 
 [`DECISION_INDEX.md`](DECISION_INDEX.md) remains the canonical decision-navigation

@@ -3,6 +3,7 @@ import { connect as connectTcp, type Socket } from 'node:net';
 import { connect as connectTls, type TLSSocket } from 'node:tls';
 import type { MapSchema } from '@colyseus/schema';
 import { Client, Room, type ClientOptions } from 'colyseus.js';
+import { IdentityGuestIntent } from '@burningspace/shared';
 import {
   ProfileClientMessages,
   ProfileServerMessages,
@@ -17,6 +18,15 @@ interface SmokeEnvironment {
   BURNINGSPACE_EXTERNAL_SMOKE_HOSTILE_ORIGIN?: string;
   BURNINGSPACE_EXTERNAL_SMOKE_ALLOW_LOOPBACK_HTTP?: string;
   BURNINGSPACE_EXTERNAL_SMOKE_TIMEOUT_MS?: string;
+  /**
+   * Operator-provided retained durable-identity credential for real
+   * external staging execution, so a smoke run against a real database
+   * does not create an unbounded number of durable guest rows over time.
+   * Self-test and ephemeral/local-loopback runs omit this and fall back to
+   * creating a synthetic guest identity through the public boundary. Never
+   * logged, echoed, or included in any error message.
+   */
+  BURNINGSPACE_SMOKE_CREDENTIAL?: string;
 }
 
 interface ParticipantSchema { profileReady: boolean; }
@@ -104,9 +114,9 @@ function requireTransportSafety(client: URL, server: URL, allowLoopbackHttp: boo
   }
 }
 
-async function boundedFetch(url: URL, timeoutMs: number): Promise<Response> {
+async function boundedFetch(url: URL, timeoutMs: number, init?: RequestInit): Promise<Response> {
   try {
-    return await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(timeoutMs) });
+    return await fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(timeoutMs) });
   } catch {
     fail('HTTP_NETWORK', 'A required HTTP request failed before a valid bounded response was received.');
   }
@@ -207,21 +217,57 @@ async function checkJsonEndpoint(serverOrigin: URL, path: '/health' | '/ready', 
   }
 }
 
+/**
+ * Proves a hostile Origin is rejected by the Origin policy itself, at the
+ * public identity boundary a real browser client would touch first --
+ * before any credential exists and before matchmaking is ever attempted.
+ * This must fail specifically because of Origin (bounded HTTP 403), not
+ * merely because of a missing/invalid credential.
+ */
 async function checkHostileMatchmaking(serverOrigin: URL, hostileOrigin: string, timeoutMs: number): Promise<void> {
-  const client = new QuietSmokeClient(serverOrigin.origin, { headers: { Origin: hostileOrigin } });
-  let room: Room<BattleStateSchema> | undefined;
-  try {
-    room = await boundedRoomOperation(
-      client,
-      client.joinOrCreate<BattleStateSchema>('battle'),
-      timeoutMs,
-      'HOSTILE_MATCHMAKING_TIMEOUT',
-      'Hostile matchmaking did not return a bounded rejection.'
-    );
+  const response = await boundedFetch(new URL('/identity/guest', serverOrigin), timeoutMs, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Origin: hostileOrigin },
+    body: JSON.stringify({ intent: IdentityGuestIntent })
+  });
+  await response.body?.cancel();
+  if (response.status !== 403) {
+    fail('HOSTILE_MATCHMAKING', 'Hostile Origin POST /identity/guest did not receive the expected HTTP 403 rejection.');
   }
-  catch (error) { if (error instanceof SmokeError) throw error; return; }
-  finally { if (room?.connection.isOpen) await room.leave(true).catch(() => undefined); }
-  fail('HOSTILE_MATCHMAKING', 'Hostile Origin unexpectedly passed matchmaking.');
+}
+
+async function createGuestIdentity(
+  serverOrigin: URL,
+  origin: string,
+  timeoutMs: number
+): Promise<{ playerId: string; credential: string }> {
+  const response = await boundedFetch(new URL('/identity/guest', serverOrigin), timeoutMs, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Origin: origin },
+    body: JSON.stringify({ intent: IdentityGuestIntent })
+  });
+  if (response.status !== 201) fail('IDENTITY_CREATE', 'POST /identity/guest did not return HTTP 201.');
+  let body: { ok?: boolean; playerId?: string; credential?: string };
+  try { body = JSON.parse(await boundedText(response)) as typeof body; }
+  catch { fail('IDENTITY_CREATE', 'POST /identity/guest returned invalid JSON.'); }
+  if (body.ok !== true || typeof body.playerId !== 'string' || typeof body.credential !== 'string') {
+    fail('IDENTITY_CREATE', 'POST /identity/guest returned an unexpected bounded shape.');
+  }
+  return { playerId: body.playerId, credential: body.credential };
+}
+
+async function discoverCanonicalBattleRoom(serverOrigin: URL, origin: string, timeoutMs: number): Promise<string> {
+  const response = await boundedFetch(new URL('/world/battle-room', serverOrigin), timeoutMs, {
+    headers: { Origin: origin }
+  });
+  if (response.status !== 200) fail('WORLD_DISCOVERY', 'GET /world/battle-room did not return HTTP 200.');
+  let body: { ok?: boolean; roomId?: string };
+  try { body = JSON.parse(await boundedText(response)) as typeof body; }
+  catch { fail('WORLD_DISCOVERY', 'GET /world/battle-room returned invalid JSON.'); }
+  if (body.ok !== true || typeof body.roomId !== 'string') {
+    fail('WORLD_DISCOVERY', 'GET /world/battle-room returned an unexpected bounded shape.');
+  }
+  return body.roomId;
 }
 
 function rawHostileWebSocketProbe(serverOrigin: URL, hostileOrigin: string, timeoutMs: number): Promise<void> {
@@ -293,17 +339,61 @@ function ownerCount(room: Room<BattleStateSchema>, sessionId: string): number {
   return Array.from(room.state.ships.values()).filter((ship) => ship.ownerSessionId === sessionId).length;
 }
 
-async function checkGameplayAndReconnect(serverOrigin: URL, allowedOrigin: string, timeoutMs: number): Promise<void> {
+/**
+ * Real reconnect() immediately after an unconsented leave can transiently
+ * race the server's own reconnection-window registration (the same "did
+ * you miss .allowReconnection()?" window this codebase's other real
+ * reconnect tests already retry through -- see
+ * productionReconnectLifecycle.test.ts's reconnectWhenReady). That race is
+ * more visible over a real Docker network hop than in-process, but it is
+ * not a rejection of the reconnect itself, so this retries within the
+ * overall bounded timeout rather than failing on the first transient miss.
+ */
+async function reconnectWithRetry(
+  client: QuietSmokeClient,
+  token: string,
+  timeoutMs: number
+): Promise<Room<BattleStateSchema>> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+  while (Date.now() < deadline) {
+    try {
+      return await boundedRoomOperation(
+        client,
+        client.reconnect<BattleStateSchema>(token),
+        Math.max(500, deadline - Date.now()),
+        'RECONNECT_TIMEOUT',
+        'The real reconnect call did not succeed within the bounded window.'
+      );
+    } catch (error) {
+      if (error instanceof SmokeError && error.code === 'RECONNECT_TIMEOUT') throw error;
+      lastError = error;
+      await delay(50);
+    }
+  }
+  throw lastError instanceof SmokeError
+    ? lastError
+    : new SmokeError('RECONNECT_TIMEOUT', 'The real reconnect call did not succeed within the bounded window.');
+}
+
+async function checkGameplayAndReconnect(
+  serverOrigin: URL,
+  allowedOrigin: string,
+  timeoutMs: number,
+  providedCredential: string | undefined
+): Promise<void> {
+  const credential = providedCredential ?? (await createGuestIdentity(serverOrigin, allowedOrigin, timeoutMs)).credential;
+  const discoveredRoomId = await discoverCanonicalBattleRoom(serverOrigin, allowedOrigin, timeoutMs);
   const client = new QuietSmokeClient(serverOrigin.origin, { headers: { Origin: allowedOrigin } });
   let room: Room<BattleStateSchema> | undefined;
   let reconnected: Room<BattleStateSchema> | undefined;
   try {
     room = await boundedRoomOperation(
       client,
-      client.joinOrCreate<BattleStateSchema>('battle'),
+      client.joinById<BattleStateSchema>(discoveredRoomId, { credential }),
       timeoutMs,
       'ALLOWED_MATCHMAKING_TIMEOUT',
-      'Allowed matchmaking did not complete within the bounded timeout.'
+      'Allowed join did not complete within the bounded timeout.'
     );
     const accepted: ProfileAcceptedMessage[] = [];
     room.onMessage<ProfileAcceptedMessage>(ProfileServerMessages.PROFILE_ACCEPTED, (message) => accepted.push(message));
@@ -338,13 +428,7 @@ async function checkGameplayAndReconnect(serverOrigin: URL, allowedOrigin: strin
 
     await room.leave(false);
     room = undefined;
-    reconnected = await boundedRoomOperation(
-      client,
-      client.reconnect<BattleStateSchema>(token),
-      timeoutMs,
-      'RECONNECT_TIMEOUT',
-      'The real reconnect call timed out.'
-    );
+    reconnected = await reconnectWithRetry(client, token, timeoutMs);
     if (reconnected.sessionId !== sessionId || reconnected.roomId !== roomId) {
       fail('RECONNECT_SESSION', 'Reconnect did not retain the original session and room ownership.');
     }
@@ -371,6 +455,7 @@ function safeError(error: unknown): { code: string; message: string } {
   if (error instanceof SmokeError) return { code: error.code, message: error.message.slice(0, 300) };
   const diagnostic = error instanceof Error ? error.message : 'Unexpected external smoke failure.';
   const redacted = diagnostic
+    .replace(/\bbsc1_[A-Za-z0-9_-]{43}\b/gu, '[redacted-credential]')
     .replace(/\b[A-Za-z0-9_-]{8,}:[A-Za-z0-9_-]{8,}\b/gu, '[redacted-token]')
     .replace(/https?:\/\/[^\s]+/gu, '[redacted-origin]')
     .replace(/[\r\n\t]+/gu, ' ')
@@ -445,13 +530,14 @@ async function run(environment: SmokeEnvironment): Promise<void> {
     fail('ORIGIN_CONTRACT', 'External allowed Origin must equal the client origin and hostile Origin must differ.');
   }
   const timeoutMs = parseTimeout(environment.BURNINGSPACE_EXTERNAL_SMOKE_TIMEOUT_MS);
+  const providedCredential = environment.BURNINGSPACE_SMOKE_CREDENTIAL?.trim() || undefined;
 
   await checkClient(client, timeoutMs);
   await checkJsonEndpoint(server, '/health', timeoutMs);
   await checkJsonEndpoint(server, '/ready', timeoutMs);
   await checkHostileMatchmaking(server, hostile.origin, timeoutMs);
   await rawHostileWebSocketProbe(server, hostile.origin, timeoutMs);
-  await checkGameplayAndReconnect(server, allowed.origin, timeoutMs);
+  await checkGameplayAndReconnect(server, allowed.origin, timeoutMs, providedCredential);
 
   console.log(JSON.stringify({
     ok: true,
@@ -466,6 +552,7 @@ async function run(environment: SmokeEnvironment): Promise<void> {
     },
     tlsRequiredForExternal: true,
     loopbackHttpOverride: allowLoopbackHttp,
+    credentialProvidedByOperator: providedCredential !== undefined,
     reconnectTokenPrinted: false,
     durationMs: Date.now() - startedAt
   }));

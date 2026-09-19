@@ -168,6 +168,11 @@ def test_invocation_contract(text: str) -> None:
     check("prompt contains prompt-injection resistance section",
           "Prompt-injection resistance:" in prompt_block
           and "untrusted" in prompt_block)
+    check("prompt still states the hard 500/20/100/2000 output limits",
+          "under 500 characters" in prompt_block
+          and "under 20" in prompt_block
+          and "under 100 characters" in prompt_block
+          and "under 2000 characters" in prompt_block)
 
     with open(AGENT_DEF, encoding="utf-8") as handle:
         agent = handle.read()
@@ -279,18 +284,75 @@ def test_validator(mod: types.ModuleType) -> None:
         mod.render_success = original
 
 
-def run_sanitizer(execution_file: str, tmp: str) -> tuple[int, str, str]:
+def run_sanitizer(execution_file: str, tmp: str, run_id: str = "1") -> tuple[int, str, str]:
     summary = os.path.join(tmp, "summary.md")
     open(summary, "w").close()
     proc = subprocess.run(
         [sys.executable, SANITIZER,
          "--execution-file", execution_file,
          "--summary-file", summary,
-         "--run-id", "1", "--head-sha", SHA,
+         "--run-id", run_id, "--head-sha", SHA,
          "--action-sha", "e" * 40, "--claude-version", "2.1.207"],
         capture_output=True, text=True)
     with open(summary, encoding="utf-8") as fh:
         return proc.returncode, proc.stdout, fh.read()
+
+
+SUBREASON_ROW_RE = re.compile(r"\|\s*execution file subreason\s*\|\s*([^\s|][^|]*?)\s*\|")
+RUN_ID_ROW_RE = re.compile(r"\|\s*run ID\s*\|\s*([^\s|][^|]*?)\s*\|")
+RECORD_COUNT_ROW_RE = re.compile(r"\|\s*record count\s*\|\s*([^\s|][^|]*?)\s*\|")
+STDOUT_SUBREASON_RE = re.compile(r"^Safe Claude diagnostic execution file subreason: (.+)$", re.MULTILINE)
+
+
+def subreason_of(summary: str) -> str:
+    match = SUBREASON_ROW_RE.search(summary)
+    return match.group(1) if match else ""
+
+
+def run_id_of(summary: str) -> str:
+    match = RUN_ID_ROW_RE.search(summary)
+    return match.group(1) if match else ""
+
+
+def record_count_of(summary: str) -> str:
+    match = RECORD_COUNT_ROW_RE.search(summary)
+    return match.group(1) if match else ""
+
+
+def stdout_subreason_of(out: str) -> str:
+    match = STDOUT_SUBREASON_RE.search(out)
+    return match.group(1) if match else ""
+
+
+def build_records(count: int, final_extra: dict | None = None) -> list[dict]:
+    """count-1 minimal filler records followed by one genuine 'result' record
+    (so an accepted fixture actually tests successful extraction, not merely
+    the absence of an error)."""
+    final = {"type": "result", "subtype": "success", "is_error": False,
+              "structured_output": {"x": 1}, "num_turns": 20}
+    if final_extra:
+        final.update(final_extra)
+    return [{"type": "assistant", "index": i} for i in range(count - 1)] + [final]
+
+
+def write_json_array(path: str, records: list[dict]) -> None:
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(records, fh)
+
+
+def write_jsonl(path: str, records: list[dict]) -> None:
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(json.dumps(r) for r in records))
+
+
+def jsonl_with_injected_line(total: int, inject_index: int, inject_line: str) -> str:
+    """total JSONL lines, all minimal filler records except one raw injected
+    line at inject_index -- proves content at a position beyond the old
+    200-record boundary is genuinely parsed/validated, not skipped."""
+    lines = []
+    for i in range(total):
+        lines.append(inject_line if i == inject_index else json.dumps({"type": "assistant", "index": i}))
+    return "\n".join(lines)
 
 
 def test_sanitizer() -> None:
@@ -302,9 +364,183 @@ def test_sanitizer() -> None:
         bad = os.path.join(tmp, "bad.json")
         with open(bad, "w", encoding="utf-8") as fh:
             fh.write("{broken")
-        code, out, _ = run_sanitizer(bad, tmp)
+        code, out, summary = run_sanitizer(bad, tmp)
         check("sanitizer: invalid file fails closed",
               code == 1 and "execution_file_invalid" in out)
+        check("sanitizer: malformed JSON/JSONL subreason is invalid_json",
+              subreason_of(summary) == "invalid_json")
+
+        oversize = os.path.join(tmp, "oversize.json")
+        with open(oversize, "wb") as fh:
+            fh.write(b"[" + b"1," * 499_999 + b"1]")  # > MAX_FILE_BYTES (1_000_000)
+        code, out, summary = run_sanitizer(oversize, tmp)
+        check("sanitizer: oversized file fails closed with file_size_limit subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "file_size_limit")
+
+        nullbyte = os.path.join(tmp, "nullbyte.json")
+        with open(nullbyte, "wb") as fh:
+            fh.write(b'{"a": 1}\x00')
+        code, out, summary = run_sanitizer(nullbyte, tmp)
+        check("sanitizer: null byte fails closed with null_byte subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "null_byte")
+
+        badutf8 = os.path.join(tmp, "badutf8.json")
+        with open(badutf8, "wb") as fh:
+            fh.write(b'{"a": "\xff\xfe"}')
+        code, out, summary = run_sanitizer(badutf8, tmp)
+        check("sanitizer: invalid UTF-8 fails closed with invalid_utf8 subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "invalid_utf8")
+
+        empty = os.path.join(tmp, "empty.json")
+        with open(empty, "w", encoding="utf-8") as fh:
+            fh.write("   \n  ")
+        code, out, summary = run_sanitizer(empty, tmp)
+        check("sanitizer: empty file fails closed with empty_file subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "empty_file")
+
+        dupkey = os.path.join(tmp, "dupkey.json")
+        with open(dupkey, "w", encoding="utf-8") as fh:
+            fh.write('{"a": 1, "a": 2}')
+        code, out, summary = run_sanitizer(dupkey, tmp)
+        check("sanitizer: duplicate JSON key fails closed with duplicate_json_key subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "duplicate_json_key")
+        check("sanitizer: raw exception wording never appears, only the fixed code",
+              "duplicate JSON key" not in out and "duplicate JSON key" not in summary
+              and "duplicate_json_key" in summary)
+        check("sanitizer: the fixed subreason code also appears on its own stdout line",
+              stdout_subreason_of(out) == "duplicate_json_key")
+
+        deep = os.path.join(tmp, "deep.json")
+        with open(deep, "w", encoding="utf-8") as fh:
+            fh.write("[" * 25 + "1" + "]" * 25)  # > MAX_DEPTH (20)
+        code, out, summary = run_sanitizer(deep, tmp)
+        check("sanitizer: excessive nesting fails closed with nesting_depth_limit subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "nesting_depth_limit")
+
+        # QA-RECOVERY-003: MAX_RECORDS raised 200 -> 2000. The former
+        # 201-record case is now a POSITIVE boundary (below), and
+        # 2001 takes over its old negative role -- limit coverage is
+        # replaced, not deleted.
+        toomanyrecords = os.path.join(tmp, "toomanyrecords.jsonl")
+        write_jsonl(toomanyrecords, build_records(2001))
+        assert os.path.getsize(toomanyrecords) < 1_000_000
+        code, out, summary = run_sanitizer(toomanyrecords, tmp)
+        check("sanitizer: 2001 records fails closed with record_count_limit subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "record_count_limit")
+        check("sanitizer: record_count_limit subreason also appears in stdout",
+              stdout_subreason_of(out) == "record_count_limit")
+
+        exactly200 = os.path.join(tmp, "exactly200.jsonl")
+        write_jsonl(exactly200, build_records(200))
+        assert os.path.getsize(exactly200) < 1_000_000
+        code, out, summary = run_sanitizer(exactly200, tmp)
+        check("sanitizer: exactly 200 records (JSONL) accepted with real result extraction",
+              code == 0 and "category: success" in out and record_count_of(summary) == "200")
+
+        boundary201 = os.path.join(tmp, "boundary201.jsonl")
+        write_jsonl(boundary201, build_records(201))
+        assert os.path.getsize(boundary201) < 1_000_000
+        code, out, summary = run_sanitizer(boundary201, tmp)
+        check("sanitizer: 201 records (formerly rejected) is now accepted with real result extraction",
+              code == 0 and "category: success" in out and record_count_of(summary) == "201")
+
+        exactly2000 = os.path.join(tmp, "exactly2000.json")
+        write_json_array(exactly2000, build_records(2000))
+        assert os.path.getsize(exactly2000) < 1_000_000
+        code, out, summary = run_sanitizer(exactly2000, tmp)
+        check("sanitizer: exactly 2000 records (JSON array) accepted with real result extraction",
+              code == 0 and "category: success" in out and record_count_of(summary) == "2000")
+
+        exactly2000_jsonl = os.path.join(tmp, "exactly2000.jsonl")
+        write_jsonl(exactly2000_jsonl, build_records(2000))
+        assert os.path.getsize(exactly2000_jsonl) < 1_000_000
+        code, out, summary = run_sanitizer(exactly2000_jsonl, tmp)
+        check("sanitizer: exactly 2000 records (JSONL) accepted with real result extraction",
+              code == 0 and "category: success" in out and record_count_of(summary) == "2000")
+
+        toomanyrecords_array = os.path.join(tmp, "toomanyrecords.json")
+        write_json_array(toomanyrecords_array, build_records(2001))
+        assert os.path.getsize(toomanyrecords_array) < 1_000_000
+        code, out, summary = run_sanitizer(toomanyrecords_array, tmp)
+        check("sanitizer: 2001 records (JSON array) fails closed with record_count_limit subreason",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "record_count_limit")
+
+        # Records beyond the old 200-record boundary are genuinely parsed
+        # and validated, not skipped: inject a violation at position 250 of
+        # 300 total (well under the new 2000 budget) for each existing
+        # content rule, and confirm the SAME subreason as its single-record
+        # counterpart above.
+        beyond200_malformed = os.path.join(tmp, "beyond200-malformed.jsonl")
+        with open(beyond200_malformed, "w", encoding="utf-8") as fh:
+            fh.write(jsonl_with_injected_line(300, 250, "{not json"))
+        assert os.path.getsize(beyond200_malformed) < 1_000_000
+        code, out, summary = run_sanitizer(beyond200_malformed, tmp)
+        check("sanitizer: malformed JSON at position 250 (beyond old 200 limit) still fails closed",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "invalid_json")
+
+        beyond200_dupkey = os.path.join(tmp, "beyond200-dupkey.jsonl")
+        with open(beyond200_dupkey, "w", encoding="utf-8") as fh:
+            fh.write(jsonl_with_injected_line(300, 250, '{"a": 1, "a": 2}'))
+        assert os.path.getsize(beyond200_dupkey) < 1_000_000
+        code, out, summary = run_sanitizer(beyond200_dupkey, tmp)
+        check("sanitizer: duplicate JSON key at position 250 (beyond old 200 limit) still fails closed",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "duplicate_json_key")
+
+        beyond200_deep = os.path.join(tmp, "beyond200-deep.jsonl")
+        with open(beyond200_deep, "w", encoding="utf-8") as fh:
+            fh.write(jsonl_with_injected_line(300, 250, "[" * 25 + "1" + "]" * 25))
+        assert os.path.getsize(beyond200_deep) < 1_000_000
+        code, out, summary = run_sanitizer(beyond200_deep, tmp)
+        check("sanitizer: excessive nesting at position 250 (beyond old 200 limit) still fails closed",
+              code == 1 and "execution_file_invalid" in out
+              and subreason_of(summary) == "nesting_depth_limit")
+
+        beyond200_result = os.path.join(tmp, "beyond200-result.jsonl")
+        write_jsonl(beyond200_result, build_records(250))
+        assert os.path.getsize(beyond200_result) < 1_000_000
+        code, out, summary = run_sanitizer(beyond200_result, tmp)
+        check("sanitizer: a valid final result at position 250 (beyond old 200 limit) is actually found",
+              code == 0 and "category: success" in out and record_count_of(summary) == "250")
+
+        # Run-ID display (QA-RECOVERY-003): only this trusted, numeric field
+        # gets an explicit, generous bound (2**63 - 1); safe_int's general
+        # default for every other field is untouched.
+        code, out, summary = run_sanitizer(exactly200, tmp, run_id="1")
+        check("sanitizer: run ID displays a small valid value", run_id_of(summary) == "1")
+
+        code, out, summary = run_sanitizer(exactly200, tmp, run_id="35387608535")
+        check("sanitizer: run ID displays the actual real-world run id in full",
+              run_id_of(summary) == "35387608535")
+
+        max_run_id = str(2**63 - 1)
+        code, out, summary = run_sanitizer(exactly200, tmp, run_id=max_run_id)
+        check("sanitizer: run ID displays the selected upper boundary (2**63 - 1)",
+              run_id_of(summary) == max_run_id)
+
+        code, out, summary = run_sanitizer(exactly200, tmp, run_id="0")
+        check("sanitizer: run ID zero remains unavailable", run_id_of(summary) == "unavailable")
+
+        code, out, summary = run_sanitizer(exactly200, tmp, run_id="-1")
+        check("sanitizer: negative run ID remains unavailable", run_id_of(summary) == "unavailable")
+
+        over_max_run_id = str(2**63)
+        code, out, summary = run_sanitizer(exactly200, tmp, run_id=over_max_run_id)
+        check("sanitizer: run ID one past the upper boundary remains unavailable",
+              run_id_of(summary) == "unavailable")
+
+        _, _, missing_summary = run_sanitizer(os.path.join(tmp, "still-missing.json"), tmp)
+        check("sanitizer: subreason is unavailable for execution_file_missing",
+              subreason_of(missing_summary) == "unavailable")
 
         noso = os.path.join(tmp, "noso.json")
         with open(noso, "w", encoding="utf-8") as fh:
@@ -318,9 +554,13 @@ def test_sanitizer() -> None:
         with open(ok, "w", encoding="utf-8") as fh:
             json.dump({"type": "result", "subtype": "success", "is_error": False,
                        "structured_output": {"x": 1}, "num_turns": 20}, fh)
-        code, out, _ = run_sanitizer(ok, tmp)
+        code, out, summary = run_sanitizer(ok, tmp)
         check("sanitizer: success with structured output -> success",
               code == 0 and "category: success" in out)
+        check("sanitizer: subreason is unavailable on success",
+              subreason_of(summary) == "unavailable")
+        check("sanitizer: subreason stdout line also reads unavailable on success",
+              stdout_subreason_of(out) == "unavailable")
 
         leaky = os.path.join(tmp, "leaky.json")
         fake_secret = "ghp_" + "A1b2C3d4" * 4

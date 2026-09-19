@@ -80,9 +80,26 @@ interface OriginEvaluation {
 }
 
 type CorsHeadersFactory = typeof matchMaker.controller.getCorsHeaders;
+type ExposedMethodsList = typeof matchMaker.controller.exposedMethods;
+
+/**
+ * PERSIST002-NET-01: the canonical singleton world's one BattleRoom is
+ * created exactly once, internally, via matchMaker.createRoom() during
+ * production boot -- a distinct, lower-level function that
+ * matchMaker.controller.exposedMethods never gates. Colyseus's own
+ * default (["joinOrCreate", "create", "join", "joinById", "reconnect"])
+ * additionally exposes public room creation: any authenticated caller
+ * could otherwise spin up an independent, parallel BattleRoom instance
+ * against the same durable world (autoDispose=false means it never
+ * self-cleans, and it can independently acquire real gameplay leases).
+ * Only admission into the already-published canonical room, and
+ * reconnection to it, are ever exposed publicly.
+ */
+const PUBLIC_MATCHMAKING_METHODS = Object.freeze(['joinById', 'reconnect']) as unknown as ExposedMethodsList;
 
 const installations: InstallationRecord[] = [];
 let previousCorsHeadersFactory: CorsHeadersFactory | undefined;
+let previousExposedMethods: ExposedMethodsList | undefined;
 
 function parseFinitePositive(
   environmentValue: string | undefined,
@@ -340,6 +357,23 @@ export function isRequestOriginAllowed(
   return evaluateOrigin(config, originHeader).allowed;
 }
 
+export interface HttpOriginEvaluation {
+  readonly allowed: boolean;
+  readonly normalizedOrigin?: string;
+}
+
+/**
+ * Reuses the same private Origin evaluation the WebSocket/matchmaking path
+ * already owns, so plain HTTP endpoints (guest identity, world discovery)
+ * never duplicate normalization or allowlist logic.
+ */
+export function evaluateRequestOrigin(
+  config: NetworkBoundaryConfig,
+  originHeader: string | readonly string[] | undefined
+): HttpOriginEvaluation {
+  return evaluateOrigin(config, originHeader);
+}
+
 export function getActiveNetworkBoundaryConfig(): NetworkBoundaryConfig {
   for (let index = installations.length - 1; index >= 0; index -= 1) {
     const installation = installations[index];
@@ -398,8 +432,13 @@ export function installNetworkBoundary(
   if (!hasActiveInstallation()) {
     previousCorsHeadersFactory = matchMaker.controller.getCorsHeaders;
     matchMaker.controller.getCorsHeaders = installedCorsHeadersFactory;
-  } else if (matchMaker.controller.getCorsHeaders !== installedCorsHeadersFactory) {
-    throw new Error('Network boundary CORS policy ownership was replaced unexpectedly.');
+    previousExposedMethods = matchMaker.controller.exposedMethods;
+    matchMaker.controller.exposedMethods = PUBLIC_MATCHMAKING_METHODS;
+  } else if (
+    matchMaker.controller.getCorsHeaders !== installedCorsHeadersFactory ||
+    matchMaker.controller.exposedMethods !== PUBLIC_MATCHMAKING_METHODS
+  ) {
+    throw new Error('Network boundary CORS/matchmaking policy ownership was replaced unexpectedly.');
   }
 
   const record: InstallationRecord = { config, active: true };
@@ -418,6 +457,11 @@ export function installNetworkBoundary(
       compactInactiveInstallations();
 
       if (hasActiveInstallation()) {
+        // Nested installation still owns the shared matchMaker.controller
+        // state (another caller, or another test in the same worker
+        // process, is still relying on it) -- never restore permissive
+        // methods while any owning installation could still be serving
+        // public requests.
         return;
       }
 
@@ -430,7 +474,15 @@ export function installNetworkBoundary(
         matchMaker.controller.getCorsHeaders = previousCorsHeadersFactory;
       }
 
+      if (
+        previousExposedMethods &&
+        matchMaker.controller.exposedMethods === PUBLIC_MATCHMAKING_METHODS
+      ) {
+        matchMaker.controller.exposedMethods = previousExposedMethods;
+      }
+
       previousCorsHeadersFactory = undefined;
+      previousExposedMethods = undefined;
     }
   });
 }

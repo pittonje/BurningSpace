@@ -39,6 +39,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Start real PostgreSQL test database
+        run: |
+          set -euo pipefail
+          project="burningspace-core-test-db"
+          docker compose -f deploy/docker-compose.test.db.yml -p "$project" up -d
+          for attempt in $(seq 1 30); do
+            container="$(docker compose -f deploy/docker-compose.test.db.yml -p "$project" ps -q postgres)"
+            status="$(docker inspect --format '{{.State.Health.Status}}' "$container" 2>/dev/null || true)"
+            if [ "$status" = "healthy" ]; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker compose -f deploy/docker-compose.test.db.yml -p "$project" logs
+              exit 1
+            fi
+            sleep 1
+          done
+          echo "BURNINGSPACE_TEST_DATABASE_URL=postgres://burningspace_test_admin:burningspace_test_password@127.0.0.1:55432/burningspace_test" >> "$GITHUB_ENV"
+
       - name: Run test suite
         run: npm test
 
@@ -56,6 +75,10 @@ jobs:
       - name: Network client callback diagnostic
         run: npx tsx apps/client/scripts/network-client-callback-check.ts
 
+      - name: Stop real PostgreSQL test database
+        if: always()
+        run: docker compose -f deploy/docker-compose.test.db.yml -p burningspace-core-test-db down --volumes --remove-orphans
+
       - name: Movement diagnostic
         run: npx tsx apps/server/scripts/movement-check.ts
 
@@ -64,6 +87,9 @@ jobs:
 
       - name: Typecheck external staging verification scripts
         run: npx tsc -p apps/server/scripts/tsconfig.external-staging.json --noEmit
+
+      - name: Typecheck persistence operator tooling scripts
+        run: npx tsc -p apps/server/scripts/tsconfig.persistence-tools.json --noEmit
 
       - name: Validate external staging preflight and committed templates
         run: |
@@ -238,16 +264,45 @@ jobs:
             'docs/ops/public-arena-caddy-edge-runbook.md',
             'docs/ops/public-arena-external-staging-runbook.md',
             'docs/ops/ops-002-phase-b-go-packet.md',
+            'deploy/docker-compose.staging.integration.yml',
+            'deploy/docker-compose.staging.db.yml',
+            'deploy/staging.db.env.example',
+            'deploy/postgres/init/001-burningspace-roles.sh',
+            'deploy/postgres/apply-runtime-grants.sql',
+            'apps/server/scripts/backup-dump.ts',
+            'apps/server/scripts/backup-restore-verify.ts',
+            'apps/server/scripts/db-privilege-check.ts',
+            'apps/server/scripts/persistence-tooling.ts',
+            'apps/server/scripts/tsconfig.persistence-tools.json',
+            'apps/server/scripts/public-arena-smoke.ts',
+            'docs/ops/persist-002-staging-db-integration-plan.md',
             '.github/workflows/pr-checks.yml'
           ];
           const contents = files.map((file) => readFileSync(file, 'utf8')).join('\n');
           const findings = [
             /-----BEGIN [A-Z ]*PRIVATE KEY-----\r?\n[A-Za-z0-9+/=]{20,}/u,
             /\b(?:ghp_|github_pat_|xox[baprs]-|AKIA)[A-Za-z0-9_-]{20,}\b/u,
-            /\bsk-[A-Za-z0-9_-]{20,}\b/u
+            /\bsk-[A-Za-z0-9_-]{20,}\b/u,
+            /\bbsc1_[A-Za-z0-9_-]{43}\b/u
           ].filter((pattern) => pattern.test(contents));
           if (findings.length > 0) {
             throw new Error('High-signal credential or private-key material detected in Phase A files.');
+          }
+          const allowedDatabaseUrlHosts = new Set(['postgres', 'localhost', '127.0.0.1']);
+          const databaseUrlMatches = contents.match(/\bpostgres(?:ql)?:\/\/[^\s'"]+/gu) ?? [];
+          for (const rawUrl of databaseUrlMatches) {
+            let parsed;
+            try {
+              parsed = new URL(rawUrl.replace(/[)'",;]+$/u, ''));
+            } catch {
+              continue;
+            }
+            if (!allowedDatabaseUrlHosts.has(parsed.hostname)) {
+              throw new Error(
+                `Phase A files contain a PostgreSQL connection string with an unexpected host "${parsed.hostname}" ` +
+                '(only the internal CI service name or loopback are expected in committed files).'
+              );
+            }
           }
           console.log(JSON.stringify({ ok: true, event: 'phase_a_secret_scan_completed', files: files.length }));
           NODE
@@ -269,6 +324,7 @@ jobs:
               --env-file deploy/staging.env.example \
               -f deploy/docker-compose.staging.yml \
               -f deploy/docker-compose.staging.build.yml \
+              -f deploy/docker-compose.staging.integration.yml \
               "$@"
           }
           cleanup() {
@@ -282,47 +338,146 @@ jobs:
           const { readFileSync } = require('node:fs');
           const model = JSON.parse(readFileSync(process.argv[2], 'utf8'));
           const services = model.services || {};
-          if (Object.keys(services).sort().join(',') !== 'client,server') {
-            throw new Error('Expected exactly the client and server Compose services.');
+          const expectedServiceNames = ['client', 'grantor', 'migrator', 'postgres', 'privilege-checker', 'server'];
+          if (Object.keys(services).sort().join(',') !== expectedServiceNames.join(',')) {
+            throw new Error('Expected exactly the client, server, postgres, migrator, grantor, and privilege-checker Compose services.');
           }
-          const expected = {
-            server: { cpus: 1, memory: 1073741824 },
-            client: { cpus: 0.25, memory: 268435456 }
-          };
-          for (const [name, service] of Object.entries(services)) {
+
+          function assertNoPublicPort(name, service) {
             for (const port of service.ports || []) {
-              if (port.host_ip !== '127.0.0.1') throw new Error('Every published port must bind exactly 127.0.0.1.');
+              if (port.host_ip !== '127.0.0.1') throw new Error(`${name} published port must bind exactly 127.0.0.1.`);
             }
-            if (Number(service.cpus) !== expected[name].cpus) throw new Error(`${name} CPU limit is incorrect.`);
-            if (Number(service.mem_limit) !== expected[name].memory) throw new Error(`${name} memory limit is incorrect.`);
+          }
+          function assertLogBounds(name, service) {
             if (service.logging?.driver !== 'json-file' || service.logging?.options?.['max-size'] !== '10m' ||
                 String(service.logging?.options?.['max-file']) !== '3') {
               throw new Error(`${name} Docker log bounds are incorrect.`);
             }
-            if (Object.keys(service.networks || {}).join(',') !== 'burningspace') {
-              throw new Error(`${name} must use only the project-scoped BurningSpace network.`);
-            }
-            if (service.privileged === true) throw new Error('Privileged Compose service is forbidden.');
-            if (service.network_mode === 'host') throw new Error('Host networking is forbidden.');
-            if (service.read_only !== true) throw new Error('Every service must retain a read-only root filesystem.');
+          }
+          function assertNotPrivilegedOrHostNetwork(name, service) {
+            if (service.privileged === true) throw new Error(`${name} must not be privileged.`);
+            if (service.network_mode === 'host') throw new Error(`${name} must not use host networking.`);
+          }
+
+          const clientAndServer = { server: { cpus: 1, memory: 1073741824 }, client: { cpus: 0.25, memory: 268435456 } };
+          for (const name of ['server', 'client']) {
+            const service = services[name];
+            assertNoPublicPort(name, service);
+            if (Number(service.cpus) !== clientAndServer[name].cpus) throw new Error(`${name} CPU limit is incorrect.`);
+            if (Number(service.mem_limit) !== clientAndServer[name].memory) throw new Error(`${name} memory limit is incorrect.`);
+            assertLogBounds(name, service);
+            assertNotPrivilegedOrHostNetwork(name, service);
+            if (service.read_only !== true) throw new Error(`${name} must retain a read-only root filesystem.`);
             if (!Array.isArray(service.tmpfs) || !service.tmpfs.some((entry) => String(entry).startsWith('/tmp'))) {
-              throw new Error('Every service must retain its /tmp tmpfs.');
+              throw new Error(`${name} must retain its /tmp tmpfs.`);
             }
             if (service.volumes && service.volumes.length > 0) {
-              throw new Error('Service bind mounts and persistent volumes are forbidden.');
+              throw new Error(`${name} bind mounts and persistent volumes are forbidden -- the runtime image must be self-contained.`);
             }
           }
+          const clientNetworks = Object.keys(services.client.networks || {}).sort().join(',');
+          if (clientNetworks !== 'burningspace') throw new Error('client must use only the project-scoped BurningSpace network.');
+          const serverNetworks = Object.keys(services.server.networks || {}).sort().join(',');
+          if (serverNetworks !== 'burningspace,burningspace_db') {
+            throw new Error('server must use exactly the BurningSpace and BurningSpace DB networks.');
+          }
+
+          const postgres = services.postgres;
+          assertNoPublicPort('postgres', postgres);
+          assertLogBounds('postgres', postgres);
+          assertNotPrivilegedOrHostNetwork('postgres', postgres);
+          if (Object.keys(postgres.networks || {}).join(',') !== 'burningspace_db') {
+            throw new Error('postgres must use only the internal BurningSpace DB network.');
+          }
+          if (!Array.isArray(postgres.tmpfs) || !postgres.tmpfs.some((entry) => String(entry).startsWith('/var/lib/postgresql/data'))) {
+            throw new Error('postgres must store its data on tmpfs in the CI integration model.');
+          }
+          const postgresVolumes = postgres.volumes || [];
+          if (postgresVolumes.length !== 1 || !postgresVolumes[0].read_only ||
+              !String(postgresVolumes[0].target).endsWith('001-burningspace-roles.sh')) {
+            throw new Error('postgres must mount exactly the expected read-only role-init script.');
+          }
+
+          for (const name of ['migrator', 'grantor', 'privilege-checker']) {
+            const service = services[name];
+            assertNoPublicPort(name, service);
+            assertLogBounds(name, service);
+            assertNotPrivilegedOrHostNetwork(name, service);
+            if (Object.keys(service.networks || {}).join(',') !== 'burningspace_db') {
+              throw new Error(`${name} must use only the internal BurningSpace DB network.`);
+            }
+            if (service.read_only !== true) throw new Error(`${name} must retain a read-only root filesystem.`);
+            const volumes = service.volumes || [];
+            if (volumes.length > 1 || (volumes.length === 1 && !volumes[0].read_only)) {
+              throw new Error(`${name} may only mount the exact expected read-only configuration file, if any.`);
+            }
+          }
+
           const networks = model.networks || {};
-          if (Object.keys(networks).join(',') !== 'burningspace' || networks.burningspace.external === true ||
-              networks.burningspace.name !== `${model.name}_burningspace` ||
+          if (Object.keys(networks).sort().join(',') !== 'burningspace,burningspace_db') {
+            throw new Error('Expected exactly the BurningSpace and internal BurningSpace DB networks.');
+          }
+          if (networks.burningspace.external === true || networks.burningspace.name !== `${model.name}_burningspace` ||
               (networks.burningspace.driver && networks.burningspace.driver !== 'bridge')) {
-            throw new Error('Expected one non-external project-scoped bridge network.');
+            throw new Error('Expected one non-external project-scoped BurningSpace bridge network.');
+          }
+          if (networks.burningspace_db.internal !== true || networks.burningspace_db.name !== `${model.name}_burningspace_db` ||
+              (networks.burningspace_db.driver && networks.burningspace_db.driver !== 'bridge')) {
+            throw new Error('Expected one internal project-scoped BurningSpace DB bridge network.');
           }
           if (model.volumes && Object.keys(model.volumes).length > 0) throw new Error('Named volumes are forbidden.');
           console.log(JSON.stringify({ ok: true, event: 'compose_hardening_validated', services: Object.keys(services).length }));
           NODE
-          compose build server client
-          compose up -d server client
+          compose build server client migrator privilege-checker
+
+          server_image="$(node - "$RUNNER_TEMP/burningspace-compose.json" <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const model = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          if (model.services.server.volumes && model.services.server.volumes.length > 0) {
+            throw new Error('server must have no bind mounts -- the runtime image must be self-contained.');
+          }
+          console.log(model.services.server.image);
+          NODE
+          )"
+          echo '{"ok":true,"event":"server_service_has_no_migration_bind_mount"}'
+
+          docker run --rm --entrypoint test "$server_image" \
+            -f /app/apps/server/db/migrations/001_persistent_identity_foundation.sql
+          echo "{\"ok\":true,\"event\":\"runtime_image_contains_migration_authority_files\",\"image\":\"$server_image\"}"
+
+          runtime_user="$(docker run --rm --entrypoint whoami "$server_image")"
+          if [ "$runtime_user" != "node" ]; then
+            echo "server runtime image must run as the non-root node user, got: $runtime_user" >&2
+            exit 1
+          fi
+          echo "{\"ok\":true,\"event\":\"runtime_image_user_verified\",\"user\":\"$runtime_user\"}"
+
+          compose up -d server client privilege-checker
+
+          for name in migrator grantor privilege-checker; do
+            container_id="$(compose ps --all -q "$name")"
+            if [ -z "$container_id" ]; then
+              echo "Expected a $name container to have run." >&2
+              exit 1
+            fi
+            for attempt in $(seq 1 60); do
+              status="$(docker inspect --format '{{.State.Status}}' "$container_id")"
+              if [ "$status" = "exited" ]; then break; fi
+              if [ "$attempt" -eq 60 ]; then
+                echo "$name did not exit within the bounded wait." >&2
+                compose logs "$name"
+                exit 1
+              fi
+              sleep 1
+            done
+            exit_code="$(docker inspect --format '{{.State.ExitCode}}' "$container_id")"
+            if [ "$exit_code" != "0" ]; then
+              echo "$name exited with a non-zero status." >&2
+              compose logs "$name"
+              exit 1
+            fi
+          done
+          echo '{"ok":true,"event":"one_shot_persistence_services_completed","services":["migrator","grantor","privilege-checker"]}'
 
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:2567/health >/dev/null; then

@@ -117,8 +117,9 @@ explicit pg repositories, durable guest UUID/credential, world/faction membershi
 and fenced session/world lifecycle. See
 [Persistent World and Identity Architecture](docs/architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md).
 The registry now has 39 accepted decisions under explicit delegated PA authority;
-independent Architecture/Security review and final PERSIST-001 acceptance remain
-pending. Runtime persistence and PERSIST-002 have not started. Use
+independent Architecture/Security review APPROVED and PERSIST-001 acceptance is
+complete. PERSIST-001 is MERGED / CLOSED, and PERSIST-002 is open as the active
+bounded runtime implementation task. Use
 [CURRENT](docs/handoffs/CURRENT.md) for exact task/review state and deferred mobile
 UX. Local GameScene remains preserved non-authoritative prototype material.
 
