@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-19
-Updated by: Implementation engineer — SOURCE-TEXT-FIX1: visible escapes for embedded control characters (see below)
+Updated by: Implementation engineer — PERSIST-002 post-merge reconciliation (documentation only)
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -10,10 +10,11 @@ Updated by: Implementation engineer — SOURCE-TEXT-FIX1: visible escapes for em
 - Environment: `burningspace-staging-01` on the existing shared Contabo VPS.
 - OPS-002 external staging deployment is complete and validated.
 - Original deployed application release: `4a774354859c036d45666496539c2fc3c24b9f1c`.
-- Server runtime remains on the approved immutable server image from OPS-002.
+- Last verified staging server runtime: the approved immutable server image from OPS-002 (not re-inspected by later documentation work).
 - Subsequent MOBILE-001B/C updates replaced only the static client container; server, Caddy, TLS and network remained unchanged during those bounded client-only updates.
 - Public health/readiness and the bounded external multiplayer smoke passed after the client updates.
-- Persistence remains **NOT IMPLEMENTED** in runtime: world/player campaign state is still in-memory and may reset on server restart. Staging is not production or campaign MVP.
+- **Deployed state:** the last verified staging deployment is the earlier **non-persistent** runtime — world/player campaign state there is in-memory and may reset on server restart. Staging is not production or campaign MVP.
+- **Repository state:** persistence (PERSIST-002) is implemented and merged in the repository (PR #86); it is **not deployed**, and no persistence deployment is authorized (see the PERSIST-002 status below).
 
 Canonical historical deployment details remain in the OPS-002 task/review evidence and Git history. `CURRENT.md` intentionally records only the latest operational/task state.
 
@@ -35,11 +36,26 @@ Authority commit: `0dec9d546cd7289f73bff843d8cfdeda79bc87b8`
 
 Reviewed architecture commit: `356b2f94573c3be641296a26fff727158063ed36`
 
-PR #85 merge commit (current `origin/main`): `98bda8f5bed41112f5687eb4ef2fd52a0c82950a`
+PR #85 merge commit (the base of PERSIST-002; `origin/main` before PR #86): `98bda8f5bed41112f5687eb4ef2fd52a0c82950a`
 
 Status: **ARCHITECTURE/SECURITY REVIEW APPROVED / PRODUCT ARCHITECT ACCEPTED / MERGED / CLOSED**
 
-Active bounded implementation task: [PERSIST-002 — Durable World & Identity Foundation](../tasks/persist-002-durable-world-identity-foundation.md), branch `feat/persist-002-durable-world-identity-foundation`, **PR [#86](https://github.com/pittonje/BurningSpace/pull/86) — OPEN, not merged, no auto-merge**. Packets 1–7, post-implementation corrections FIX1–FIX4, the QA-RECOVERY-001/002 infrastructure patches, and ARCH-FIX1/ARCH-FIX2 are pushed as local sequential commits; the branch itself has never been reset, rebased, or amended. At the QA-RECOVERY-002 head `097cb92804ede1449f3fc1dca1a8a063f9aa3cef`, Core Pull Request Checks were **SUCCESS** (run `35193478755`) and governed Claude QA ran and returned **"Approved with suggestions"** (run `35193478806`). An independent Architecture review of that head then raised **PERSIST002-C-01 (MEDIUM)** — `BattleRoom.updateSimulation()` and related paths did not check process/world authority before running; Product Architect disposition was **REQUEST_CHANGES**. **ARCH-FIX1** (`cc87ab0c679acbce5c16f866f84780c1804c4e31`) implemented the runtime fix; **independent delta review CLOSED the runtime finding PERSIST002-C-01 at that commit**, but found ARCH-FIX1's own test evidence insufficient (REVIEW-C01-A: a resource leak in the teardown-window scenario's cleanup; REVIEW-C01-B: a missing-capability regression that passed on both pre-fix and fixed code), so ARCH-FIX1's overall delta disposition remained **REQUEST_CHANGES**. **ARCH-FIX2** was a bounded, test-only correction of both findings. Independent review of ARCH-FIX2 then **CLOSED REVIEW-C01-B** and confirmed REVIEW-C01-A's successful-path cleanup, but found its early-assertion-failure cleanup path still defective (could leak resources and obscure the original test failure behind a secondary error). **ARCH-FIX3** moves all cleanup responsibility into the harness's shared, guaranteed `stop()` path. Independent verification of the remaining REVIEW-C01-A path, and Core/Claude QA for the resulting ARCH-FIX3 head, have not yet been observed. A separate independent Network review of that head then raised **PERSIST002-NET-01 (HIGH)**: public `create`/`joinOrCreate` could create additional parallel `BattleRoom` instances against the same durable world and acquire real gameplay leases. **NET-FIX1** restricts the shared Colyseus `matchMaker.controller.exposedMethods` to exactly `joinById`/`reconnect`, so only admission into and reconnection to the already-published canonical room are ever exposed publicly — see the task file's NET-FIX1 section, and the section below, for full evidence. **PERSIST002-NET-02 (MEDIUM) remains OPEN**, documentation-only in this fix. Independent Network delta review of NET-FIX1, the still-outstanding REVIEW-C01-A verification, required independent Security review, Product Architect final acceptance, and human merge all remain outstanding. No staging deployment, image publication, or VPS/Contabo contact has occurred at any point; the branch implementation is not the same thing as the deployed staging environment described above, which remains unchanged and non-persistent. See the task file's Status section for the full evidence list.
+PERSIST-002 — Durable World & Identity Foundation: **PA ACCEPTED / MERGED** (2026-09-19). **Repository implementation complete; no persistence deployment is authorized.**
+
+- **Merge provenance:** PR [#86](https://github.com/pittonje/BurningSpace/pull/86), human-merged by `pittonje` at 2026-09-19T05:13:39Z. Merge commit on `main`: `0c988f69ddac99e167e48255b05b1e7822d03fa5`; parents: base `98bda8f5bed41112f5687eb4ef2fd52a0c82950a` and approved source HEAD `098362b189f95cb8662bf70861d5eb665213a503`.
+- **Tree equivalence:** the approved source HEAD, the historical CI PR-merge checkout `e0754b073629484c1177bb1b532e95637a8dc398` (parents: the same base and source HEAD; a CI artifact, not the commit on `main`) and the actual merge commit all have Git tree `12d9152708891972999ef654882680c7f86a6bef`.
+- **Accepted evidence checkpoint** (historical checks at source HEAD `098362b...`; they are not fresh checks of the merge commit or of any later documentation commit):
+  - Core Pull Request Checks run `35419305467` / job `105833832318` / attempt 1: **SUCCESS** — completed remote suite **52 files / 516 tests / zero skipped**; classifier 29 OK; QA audit 89 PASS / 0 FAIL; standard build/typecheck and integration checks succeeded.
+  - Governed Claude QA run `35419305462` / job `105833832325` / attempt 1: **SUCCESS** — published comment `5739111798`; Blockers: None; **Approved with suggestions**; the reviewer disclosed static-only inspection.
+- **Dispositions:** **QA-03 (final evidence reconciliation) — ACCEPTED / CLOSED** by the Product Architect. The earlier Architecture, Network, Persistence and Security closures (C-01, REVIEW-C01-A/B, NET-01, PERS-01, SEC-01/02/03) remain closed at their actual historical checkpoints; independent functional QA remains a separate accepted review. None of those reports is relabelled as a new review of `main` or of this documentation change.
+- **Open obligations:**
+  - **QA-01 — OPEN / DEFERRED:** test-completeness hardening; non-blocking for the completed source merge.
+  - **QA-02 — OPEN / DEFERRED:** original-review archival; missing original review reports remain missing and are not reconstructed, and supplied report/patch hashes are not claimed as independently recomputed.
+  - **PERSIST002-NET-02 — MEDIUM / OPEN / BLOCKS PUBLIC PERSISTENCE ROLLOUT.** Public rollout requires an implemented admission-budget mitigation, spoof-resistance and multi-client-budget tests, explicit Security/Ops acceptance, and a separate Product Architect deployment authorization (see [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md)). Merging PR #86 or the documentation PR that records this state is **not** deployment permission.
+- **Execution limitations, kept explicit:** (1) a supplemental temporary tsconfig reported a `process.send` typing error; an identical baseline run was not established, so it is not claimed to be pre-existing (standard typechecks passed); (2) a complete local default-forks run at the final source HEAD is not claimed — the 52/516 completed run is remote Core evidence; (3) SOURCE-TEXT-FIX1's local validation used owned disposable databases inside the existing `deploy-postgres-1`, not a newly created isolated container, and its cleanup/container-state statements are supplied local evidence, not GitHub verification.
+- **Repository state vs deployed state:** persistence is implemented and merged in the repository. The last verified staging deployment is the earlier non-persistent runtime described under "Current state" above; this reconciliation does not inspect or update staging, and no deployment, image publication or VPS access is authorized by it.
+
+The dated sections below are the historical, pre-merge record of how each fix was made and reviewed. Wording in them such as "open", "pending", "not yet observed" or "awaiting merge" describes their own checkpoint and is superseded by this status.
 
 ## PERSIST-001 accepted architecture
 
@@ -922,8 +938,7 @@ against real disposable PostgreSQL 6/6 passed, 0 skipped;
 `npx tsc -p apps/server/scripts/tsconfig.external-staging.json --noEmit`,
 `npx tsc -p apps/server/scripts/tsconfig.persistence-tools.json --noEmit`
 and `npm run typecheck` clean (a temporary tsconfig covering the two
-changed files reported only the pre-existing `process.send` typing error on
-an untouched line of the test's telemetry-filter block); `public-arena-smoke.ts`
+changed files reported only a `process.send` typing error on an untouched line of the test's telemetry-filter block; an identical baseline run was not established, so it is not claimed to be pre-existing); `public-arena-smoke.ts`
 against an owned local production-mode server on a disposable database
 completed with the hostile-Origin check, and a smoke Origin containing
 U+0001 was rejected with the same "exact HTTP or HTTPS origin" error; the
@@ -934,20 +949,16 @@ remains required. The QA-RECOVERY-003 files are unchanged
 `test-claude-qa-audit.py` `af850e7fd907d831b584619713497802d79fcf77`, and
 the workflow `89ccd3928ee452ebb23ecb632a7d93b6a3d76ddb`).
 
-Exact-new-head automatic Core and governed QA outcomes for the
-correction commit are **not yet observed**. The earlier independent
+*(At publication time; the later observed outcomes and the merge are recorded in the post-merge status.)* Exact-new-head automatic Core and governed QA outcomes for the correction commit were **not yet observed** then. The earlier independent
 acceptances and closures stand; the binary-diff observation alone does not
 invalidate them or show that earlier reviewers did not read these files.
-Still open, unchanged: QA-01 (deferred test-completeness hardening), QA-02
+Still open at that time (current state: see the post-merge status): QA-01 (deferred test-completeness hardening), QA-02
 (original-review archival), QA-03 (final evidence reconciliation),
 PERSIST002-NET-02 (MEDIUM/OPEN, blocks public persistence rollout), the
 final PA merge approval and human merge.
 
 ## Current next safe action
 
-Inspect the exact-new-head automatic Core and governed Claude QA outcomes
-for the SOURCE-TEXT-FIX1 commit (Core must show a completed test summary),
-then complete the remaining evidence reconciliation (QA-02/QA-03) and the
-Product Architect merge decision. No closed review starts again. Human
-merge remains outstanding, and public persistence rollout stays blocked on
-the NET-02 gate regardless of merge status.
+The immediate next step for the post-merge documentation reconciliation is Product Architect inspection of its published PR and the applicable automatic checks. No closed review starts again.
+
+The subsequent public persistence rollout remains gated by **PERSIST002-NET-02** (implemented admission-budget mitigation, spoof-resistance and multi-client-budget tests, Security/Ops acceptance, separate PA deployment authorization). Nothing in this reconciliation authorizes mitigation implementation, deployment, image publication or VPS access.
