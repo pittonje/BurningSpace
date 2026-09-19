@@ -51,7 +51,7 @@ PERSIST-002 — Durable World & Identity Foundation: **PA ACCEPTED / MERGED** (2
 - **Open obligations:**
   - **QA-01 — OPEN / DEFERRED:** test-completeness hardening; non-blocking for the completed source merge.
   - **QA-02 — OPEN / DEFERRED:** original-review archival; missing original review reports remain missing and are not reconstructed, and supplied report/patch hashes are not claimed as independently recomputed.
-  - **PERSIST002-NET-02 — MEDIUM / OPEN / PA SOURCE APPROVED / PUBLICATION AUTHORIZED / AWAITING EXACT-HEAD CI AND INDEPENDENT REVIEWS / STILL BLOCKS PUBLIC PERSISTENCE ROLLOUT.** The bounded mitigation is implemented, including PA FIX2 for the HIGH blocker `PERSIST002-NET02-EDGE-AUTH-01` and PA FIX3 for the HIGH secret-transport blocker `PERSIST002-NET02-SECRET-TRANSPORT-01`. The Product Architect completed source review of the FIX3 delta and authorized publication; the implementation is **not** accepted for merge, and **no deployment is authorized**; see [`docs/tasks/persist-002-net-02-admission-budget-hardening.md`](../tasks/persist-002-net-02-admission-budget-hardening.md) and the NET-02 section below. Public rollout requires an implemented admission-budget mitigation, spoof-resistance and multi-client-budget tests, explicit Security/Ops acceptance, and a separate Product Architect deployment authorization (see [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md)). Merging PR #86 or the documentation PR that records this state is **not** deployment permission.
+  - **PERSIST002-NET-02 — MEDIUM / OPEN / PUBLISHED ON PR #88 / AWAITING EXACT-HEAD GOVERNED QA AND BOUNDED DELTA REVIEWS / STILL BLOCKS PUBLIC PERSISTENCE ROLLOUT.** The bounded mitigation is implemented and published, including PA FIX2 for the HIGH blocker `PERSIST002-NET02-EDGE-AUTH-01`, PA FIX3 for the HIGH secret-transport blocker `PERSIST002-NET02-SECRET-TRANSPORT-01`, and PA FIX4 review hardening at commit `55fe274b90dc3f43dabcdbe87b7328f6c9a267c8`. PR [#88](https://github.com/pittonje/BurningSpace/pull/88) remains **OPEN**; publication is **not** merge acceptance, merge authority is human-only, and **no deployment is authorized**; see [`docs/tasks/persist-002-net-02-admission-budget-hardening.md`](../tasks/persist-002-net-02-admission-budget-hardening.md) and the NET-02 section below. Public rollout requires an implemented admission-budget mitigation, spoof-resistance and multi-client-budget tests, explicit Security/Ops acceptance, and a separate Product Architect deployment authorization (see [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md)). Merging PR #86 or the documentation PR that records this state is **not** deployment permission.
 - **Execution limitations, kept explicit:** (1) a supplemental temporary tsconfig reported a `process.send` typing error; an identical baseline run was not established, so it is not claimed to be pre-existing (standard typechecks passed); (2) a complete local default-forks run at the final source HEAD is not claimed — the 52/516 completed run is remote Core evidence; (3) SOURCE-TEXT-FIX1's local validation used owned disposable databases inside the existing `deploy-postgres-1`, not a newly created isolated container, and its cleanup/container-state statements are supplied local evidence, not GitHub verification.
 - **Repository state vs deployed state:** persistence is implemented and merged in the repository. The last verified staging deployment is the earlier non-persistent runtime described under "Current state" above; this reconciliation does not inspect or update staging, and no deployment, image publication or VPS access is authorized by it.
 
@@ -1099,7 +1099,7 @@ Status: `PA SOURCE APPROVED / PUBLICATION AUTHORIZED / AWAITING EXACT-HEAD CI AN
 PERSIST002-NET-02 — **OPEN**. PUBLIC PERSISTENCE ROLLOUT — **BLOCKED**.
 **NO DEPLOYMENT AUTHORIZED.**
 
-## PERSIST002-NET-02 PA FIX4 (2026-09-19): review hardening — IMPLEMENTED LOCALLY, NOT CLOSED
+## PERSIST002-NET-02 PA FIX4 (2026-09-19): review hardening — PUBLISHED ON PR #88, NOT CLOSED
 
 Independent Architecture, Network and Security reviews and governed Claude QA
 all returned **approve / approved with suggestions, no blockers** on head
@@ -1156,18 +1156,70 @@ environment secret delivery; secret rotation; broader stale-documentation
 cleanup; and the historically present QA attempt-1 failure comment, which was
 not deleted or rewritten.
 
-**State:** local working-tree changes on the existing PR #88 branch. **No
-merge, no auto-merge, no deployment, no VPS/Contabo access, no image
-publication, no Caddy reload, no real edge secret, no database or schema
-change.** Merge authority is human-only.
+**State:** implemented and **published** on PR
+[#88](https://github.com/pittonje/BurningSpace/pull/88), which remains
+**OPEN**.
 
-Status: `PA SOURCE APPROVED / PUBLICATION AUTHORIZED / AWAITING EXACT-HEAD CI AND INDEPENDENT REVIEWS`.
+- FIX4 source commit: `55fe274b90dc3f43dabcdbe87b7328f6c9a267c8`
+- Parent: `b3ca93567abf3254f1baa181e4c2ff6d42454ba2`
+- Commit message: `fix(network): address NET-02 review hardening`
 
-PERSIST002-NET-02 — **OPEN**. PUBLIC PERSISTENCE ROLLOUT — **BLOCKED**.
-**NO DEPLOYMENT AUTHORIZED.**
+Publishing FIX4 does **not** authorize merge. **No merge, no auto-merge, no
+deployment, no VPS/Contabo access, no image publication, no Caddy reload, no
+real edge secret, no database or schema change.** Merge authority remains
+human-only.
+
+**Exact-head automatic checks for `55fe274b…`** (triggered automatically by
+`pull_request` on publication; no manual dispatch and no rerun):
+
+- **Core Pull Request Checks** — run `35459015045`, job `105939378346`,
+  attempt 1: **SUCCESS**. Observed in its log: `Test Files 54 passed (54)`,
+  `Tests 676 passed (676)`, no DB-dependent skips,
+  `runtimeExecuted: true` / `caddyVersion 2.11.4` with
+  `caddy_edge_contract_assertions_verified` reporting **62** checks, and
+  `phase_a_secret_scan_completed` over 30 files.
+- **Governed Claude QA Review Pilot** — run `35459015056`, job
+  `105939378428`, attempt 1: **FAILURE**. Steps 1–7 succeeded; step 8
+  `Publish QA review comment` failed with the renderer limit
+  `summary exceeds max length 2000`, and a sanitized
+  "Not approved — automation failure" comment was published against
+  `55fe274b…`. This is the same QA harness rendering limit previously seen at
+  head `b3ca9356…` attempt 1; it is **not** a review finding against the FIX4
+  change, and exact-head governed QA evidence is therefore still
+  **outstanding**.
+
+Status: `PA FIX4 PUBLISHED / AWAITING EXACT-HEAD GOVERNED QA AND BOUNDED DELTA REVIEWS`.
+
+PERSIST002-NET-02 — **OPEN**. FIX4 did not close it. PUBLIC PERSISTENCE
+ROLLOUT — **BLOCKED**. **NO DEPLOYMENT AUTHORIZED.**
 
 ## Current next safe action
 
-The Product Architect has completed source review of the PERSIST002-NET-02 FIX3 delta and authorized publication. The immediate next step is exact-head automatic CI plus independent Architecture / Network / Security / QA review of the published implementation. Nothing is committed, published or deployed; publication is a separate PA decision, and no closed review starts again.
+PA FIX4 is implemented and **published** on PR #88 as commit
+`55fe274b90dc3f43dabcdbe87b7328f6c9a267c8` (parent
+`b3ca93567abf3254f1baa181e4c2ff6d42454ba2`). The PR remains **OPEN** and
+publication does **not** authorize merge.
 
-The subsequent public persistence rollout remains gated by **PERSIST002-NET-02**, which is implemented and published but **NOT CLOSED**: it still needs exact-head Core SUCCESS, governed QA, independent Architecture / Network / Security / QA review, Security/Ops acceptance, PA acceptance, human merge, and then a separate PA deployment authorization. Nothing here authorizes deployment, image publication or VPS access.
+At the exact head `55fe274b…`, Core Pull Request Checks (run `35459015045`)
+completed **SUCCESS**, and governed Claude QA (run `35459015056`, attempt 1)
+completed **FAILURE** on the harness renderer limit
+`summary exceeds max length 2000`, so exact-head governed QA evidence is still
+outstanding.
+
+The next safe governance actions, in order:
+
+1. obtain exact-head **Core SUCCESS** — already observed for `55fe274b…`;
+2. obtain exact-head **governed Claude QA** evidence;
+3. bounded **Architecture / Network / Security** delta reviews of FIX4;
+4. **Product Architect final merge disposition**;
+5. **human-only merge**, if authorized.
+
+The earlier Architecture, Network, Security and governed QA approvals belong to
+head `b3ca93567abf3254f1baa181e4c2ff6d42454ba2` and are **not** transferred to
+`55fe274b…`; the QA attempt-1 failure history on this PR is preserved as-is.
+
+Even after a repository merge, public persistence deployment remains a
+**separate later authorization**: it additionally requires Security/Ops
+acceptance and an explicit Product Architect deployment authorization. Nothing
+here authorizes deployment, image publication, VPS/Contabo access, a Caddy
+reload, a real edge secret, or any database/schema change.
