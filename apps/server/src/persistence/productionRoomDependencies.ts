@@ -1,7 +1,8 @@
-import type { AuthContext } from 'colyseus';
+import { ErrorCode, ServerError, type AuthContext } from 'colyseus';
 import type { Pool } from 'pg';
 import { parseCredential } from './credential.js';
 import { findActiveCredentialByHash, isCredentialActiveForPlayer } from './repositories/credentialsRepository.js';
+import type { AdmissionPeerIdentityResolver } from '../security/admissionPeerIdentity.js';
 import type { PeerRateLimiter } from '../security/peerRateLimiter.js';
 import { SessionBindingRegistry } from './sessionBinding.js';
 import {
@@ -52,8 +53,6 @@ export interface ProductionRoomDependencies {
   renewGameplayLease(params: LeaseSessionParams): Promise<boolean>;
 }
 
-const FALLBACK_PEER_KEY = 'matchmaking-peer';
-
 export interface CreateProductionRoomDependenciesOptions {
   readonly worldId: string;
   readonly serverInstanceId: string;
@@ -61,6 +60,8 @@ export interface CreateProductionRoomDependenciesOptions {
   readonly pool: Pool;
   readonly writer: WriterAuthoritySafe;
   readonly freshAuthLimiter: PeerRateLimiter;
+  /** PERSIST002-NET-02: the single canonical admission-peer identity resolver. */
+  readonly admissionPeerIdentity: AdmissionPeerIdentityResolver;
   /** Test-only: forwarded to gameplayAuthority.ts's createGameplayAuthority(). */
   readonly gameplayAuthorityTestHooks?: GameplayAuthorityTestHooks;
 }
@@ -69,14 +70,30 @@ export interface CreateProductionRoomDependenciesOptions {
  * context.ip is populated from X-Real-IP / X-Forwarded-For before falling
  * back to the socket address (verified against the installed
  * @colyseus/ws-transport and @colyseus/core sources), so it is NOT a
- * trustworthy peer key. context.req (present for fresh HTTP matchmake
- * requests, the only path that invokes onAuth) exposes the raw
- * IncomingMessage; its socket.remoteAddress is the trustworthy direct
- * transport peer. When req/socket are unavailable, fall back to one fixed
- * conservative key shared by all callers.
+ * trustworthy peer key and is never read here. context.req (present for
+ * fresh HTTP matchmake requests, the only path that invokes onAuth) exposes
+ * the raw IncomingMessage: its socket.remoteAddress is the trustworthy
+ * direct transport peer and its headers carry the internal edge assertion.
+ *
+ * PERSIST002-NET-02: both are handed to the ONE canonical admission
+ * resolver, exactly as POST /identity/guest does. When the direct peer is
+ * trusted but its internal assertion is missing or malformed, the resolver
+ * rejects and this throws the EXISTING `auth_rate_limited` failure shape --
+ * fail-closed, with no shared trusted-proxy bucket, no new client protocol
+ * field, and no change to BattleRoom.onAuth's own logic. Origin rejection
+ * still happens before this is ever reached.
  */
-function resolveAuthPeerKey(context: AuthContext): string {
-  return context.req?.socket?.remoteAddress ?? FALLBACK_PEER_KEY;
+function resolveAuthPeerKey(resolver: AdmissionPeerIdentityResolver, context: AuthContext): string {
+  const admission = resolver.resolve({
+    headers: context.req?.headers,
+    directPeerAddress: context.req?.socket?.remoteAddress
+  });
+
+  if (admission.kind === 'rejected') {
+    throw new ServerError(ErrorCode.AUTH_FAILED, 'auth_rate_limited');
+  }
+
+  return admission.peerKey;
 }
 
 export function createProductionRoomDependencies(
@@ -99,7 +116,7 @@ export function createProductionRoomDependencies(
     freshAuthLimiter: options.freshAuthLimiter,
     sessionBindings,
     isAuthoritySafe: () => options.writer.isControlSafe(),
-    getAuthPeerKey: resolveAuthPeerKey,
+    getAuthPeerKey: (context) => resolveAuthPeerKey(options.admissionPeerIdentity, context),
     authenticateCredential: async (rawCredential) => {
       if (!options.writer.isControlSafe()) {
         return undefined;

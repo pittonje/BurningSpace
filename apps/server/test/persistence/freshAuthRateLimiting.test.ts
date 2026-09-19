@@ -9,6 +9,10 @@ import {
   type ProductionRoomDependenciesInstallation
 } from '../../src/persistence/productionRoomDependencies.js';
 import {
+  createAdmissionPeerIdentityResolver,
+  parseAdmissionPeerIdentityConfig
+} from '../../src/security/admissionPeerIdentity.js';
+import {
   installNetworkBoundary,
   parseNetworkBoundaryConfig,
   type NetworkBoundaryInstallation
@@ -78,7 +82,14 @@ function installHarness(options: {
       writerEpoch: 1n,
       pool: pool as unknown as Pool,
       writer: { isControlSafe: () => options.isAuthoritySafe ?? true },
-      freshAuthLimiter: limiter
+      freshAuthLimiter: limiter,
+      // PERSIST002-NET-02: this suite's fixture is deliberately the
+      // direct-peer-only default (BURNINGSPACE_TRUSTED_EDGE_PEERS absent), so
+      // every assertion below continues to exercise the exact pre-NET-02
+      // direct-transport-peer keying.
+      admissionPeerIdentity: createAdmissionPeerIdentityResolver({
+        config: parseAdmissionPeerIdentityConfig({})
+      })
     })
   );
 

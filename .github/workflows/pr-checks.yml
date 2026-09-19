@@ -224,14 +224,53 @@ jobs:
           done
           printf '%s\n' '{"ok":true,"event":"caddy_origin_mutation_negatives_verified","tests":8}'
 
+          # PERSIST002-NET02-CI-01: the contract checker deliberately exercises
+          # the EXACT production credential runtime path that systemd would
+          # expose for caddy.service, so the {file.*} source under test is the
+          # real one and not a temp-path substitute. On a GitHub-hosted runner
+          # that absolute /run path does not exist and the unprivileged runner
+          # user cannot create it, which made the checker fail during
+          # initialization. Provision only that one directory, owned by the
+          # runner, so the checker itself stays unprivileged.
+          credential_runtime_dir="/run/credentials/caddy.service"
+
+          if sudo test -e "$credential_runtime_dir"; then
+            echo "Unexpected pre-existing Caddy credential runtime directory." >&2
+            exit 1
+          fi
+
+          sudo install \
+            -d \
+            -m 0700 \
+            -o "$(id -u)" \
+            -g "$(id -g)" \
+            "$credential_runtime_dir"
+
+          # Registered BEFORE the checker runs, so the directory this job
+          # created is removed on success or failure. Only that exact path is
+          # removed -- never /run/credentials, /run, or anything else.
+          cleanup_credential_runtime_dir() {
+            sudo rm -rf --one-file-system "$credential_runtime_dir"
+          }
+          trap cleanup_credential_runtime_dir EXIT
+
           contract_result="$(BURNINGSPACE_CADDY_BINARY="$caddy" \
             npx tsx apps/server/scripts/external-staging-edge-contract-check.ts --self-test)"
           printf '%s\n' "$contract_result"
+
+          # The checker owns the lifetime of its own disposable credential.
+          # If the 43-byte file survived, the checker did not clean up and the
+          # job must fail rather than silently deleting secret-shaped material.
+          if [ -e "$credential_runtime_dir/burningspace-edge-assertion-secret" ]; then
+            echo "Disposable edge credential was not removed by the contract checker." >&2
+            exit 1
+          fi
+          printf '%s\n' '{"ok":true,"event":"caddy_edge_disposable_credential_removed"}'
           CONTRACT_RESULT="$contract_result" node <<'NODE'
           const result = JSON.parse(process.env.CONTRACT_RESULT || '{}');
           const checks = result.checks || {};
           if (!result.ok || result.runtimeExecuted !== true || result.caddyVersion !== '2.11.4' ||
-              Object.keys(checks).length !== 26 || Object.values(checks).some((value) => value !== true)) {
+              Object.keys(checks).length !== 62 || Object.values(checks).some((value) => value !== true)) {
             throw new Error('Caddy runtime contract did not execute every required assertion.');
           }
           console.log(JSON.stringify({

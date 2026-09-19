@@ -223,6 +223,147 @@ hop is trusted, and why nothing upstream of it can forge the header). Do
 for the mitigation above. NET-02 is not marked fixed, waived, or accepted
 by this document.
 
+### Mitigation implementation status (2026-09-19)
+
+The bounded mitigation is **implemented locally and awaiting PA delta
+inspection**. NET-02 is **NOT CLOSED**, and public persistence rollout remains
+**BLOCKED**. See
+[PERSIST002-NET-02 — Admission Budget Hardening](../tasks/persist-002-net-02-admission-budget-hardening.md)
+for the full behavioral contract.
+
+Trust boundary, stated explicitly as this gate requires:
+
+- The one trusted hop is the Caddy edge running on the same host, reached by
+  Node only over the loopback-published Docker port. Nothing upstream of Caddy
+  can forge the assertion, because Caddy SET-overwrites
+  `X-BurningSpace-Edge-Peer` with its own `{remote_host}` on the public server
+  route (`header_up` without `+`), discarding any client-supplied value.
+- Node honors that header **only** when the canonical direct
+  `request.socket.remoteAddress` is listed in
+  `BURNINGSPACE_TRUSTED_EDGE_PEERS`. From any other peer the header is ignored
+  entirely and the direct peer keys the budget, so the header alone grants no
+  authority. This is proven by a real multi-client test that runs the fixed
+  code without trusted-edge configuration and shows the two clients colliding
+  again.
+- `X-Forwarded-For`, `X-Real-IP` and `Forwarded` are still **not** trusted and
+  are not consumed for admission identity anywhere. `trusted_proxies` remains
+  unused.
+- No rate-limit quota was raised. Guest identity stays capacity 3 / 1 per 60 s
+  and fresh auth stays capacity 10 / 1 per second, with the same 10,000-bucket
+  cap and 600,000 ms idle eviction.
+
+Rollout-time requirement that is deliberately **not** satisfied in the
+repository: `BURNINGSPACE_TRUSTED_EDGE_PEERS` must be set to the exact IP
+literal of the direct socket peer the server container actually observes for
+edge traffic, measured inside the target container during the separately
+authorized rollout task. The committed examples carry the explicit
+direct-peer-only sentinel `none`; the live Docker gateway address is
+deliberately not guessed here, and `none` or an omitted value is **never**
+rollout acceptance. `deploy/docker-compose.staging.yml` makes the variable a
+required substitution so the real path cannot silently default.
+
+Still outstanding for this gate: exact-head Core SUCCESS, governed QA, and
+independent Architecture / Network / Security / QA review of the mitigation,
+then explicit Security/Ops acceptance, PA acceptance, human merge, and a
+separate PA deployment authorization. Merging the mitigation is not deployment
+permission.
+
+### PA FIX2 — the trusted peer is not proof of Caddy (2026-09-19)
+
+PA source-delta review raised one HIGH blocker against the FIX1 design,
+`PERSIST002-NET02-EDGE-AUTH-01`, and it is now addressed locally.
+
+**The blocker.** The statement above that "nothing upstream of Caddy can forge
+the assertion" was true but insufficient. The threat is not upstream of Caddy;
+it is *beside* it. In the real staging topology Node observes the Docker
+bridge / NAT gateway as the direct socket peer for everything arriving through
+the host-published loopback port. That address identifies the host-side Docker
+NAT path, **not** the Caddy process. Another local process on the VPS can
+reach `127.0.0.1:${BURNINGSPACE_SERVER_BIND_PORT}` and arrive with the same
+trusted direct peer as Caddy, then forge `X-BurningSpace-Edge-Peer` and be
+treated as an edge-attributed client.
+
+This document must not be read as claiming that the Docker gateway address
+uniquely identifies Caddy. It does not.
+
+**The fix.** The exact direct-peer allowlist is retained but demoted to one
+factor — a network-location restriction. A second, cryptographic factor
+authenticates the Caddy/operator hop: `X-BurningSpace-Edge-Proof`, set by Caddy
+from `BURNINGSPACE_EDGE_ASSERTION_SECRET` in its own process environment.
+Node honors the peer assertion only when the canonical direct peer is trusted
+**and** the proof authenticates. A trusted socket peer alone is not sufficient.
+
+Startup fails closed on any mismatched pair: trusted peers without a valid
+secret, or a real secret without trusted peers. The committed examples carry
+`none` for both, and `none` is never rollout acceptance.
+
+The server retains only a SHA-256 verifier, hashes the supplied proof before a
+`crypto.timingSafeEqual` comparison, and never logs the secret, the verifier,
+the supplied proof or the raw header. Diagnostics use only the fixed codes
+`edge_proof_missing`, `edge_proof_malformed` and `edge_proof_rejected`. Public
+failure shapes are unchanged and no token is consumed for an invalid proof.
+
+**Rollout-time requirements, unchanged and added to.** The exact observed
+direct peer must still be measured inside the target container, and must be
+**re-measured after any Docker network recreation**. In addition, a freshly
+generated 32-byte secret must be installed in both the Caddy process
+(as a systemd unit credential loaded from the root-owned
+`/etc/caddy/burningspace-edge-assertion-secret`, kept out of the non-secret
+`/etc/caddy/burningspace.env` inventory and out of service environment
+entirely -- see the FIX3 section below) and the Node server environment.
+
+NET-02 remains **OPEN**. This section records local implementation only.
+
+### PA FIX3 — secure credential transport and canonical proof (2026-09-19)
+
+PA source review of the FIX2 patch accepted the core architecture and returned
+three bounded corrections. All three are addressed locally. NET-02 stays
+**OPEN**.
+
+**FIX3-A (HIGH) — `PERSIST002-NET02-SECRET-TRANSPORT-01`.** FIX2 delivered the
+edge secret to Caddy through `EnvironmentFile=` and read it with
+`{$BURNINGSPACE_EDGE_ASSERTION_SECRET}`. PA rejected service environment as
+the final transport: the secret exists precisely to stop another host-local
+process from impersonating Caddy, so it must not be ordinary service
+environment. The approved design uses a systemd unit credential —
+
+- source file `/etc/caddy/burningspace-edge-assertion-secret`, `root:root`,
+  `0600`, containing only the raw 43-character value with no `KEY=` prefix and
+  no trailing newline;
+- drop-in line
+  `LoadCredential=burningspace-edge-assertion-secret:/etc/caddy/burningspace-edge-assertion-secret`;
+- systemd exposes it to `caddy.service` alone at
+  `/run/credentials/caddy.service/burningspace-edge-assertion-secret`;
+- the public server route reads it at request time through
+  `header_up X-BurningSpace-Edge-Proof {file./run/credentials/...}`.
+
+`EnvironmentFile=` is removed, and the preflight now rejects any
+service-environment channel in the drop-in, the environment placeholder in the
+template, and any proof source other than the exact credential path. This is
+`LoadCredential=`, **not** `LoadCredentialEncrypted=`; no encryption-at-rest
+claim is made.
+
+**FIX3-B (LOW) — `PERSIST002-NET02-PROOF-CANON-01`.** The startup parser
+already enforced a canonical base64url round-trip; the incoming proof verifier
+did not. It now applies the identical check after the 32-byte length test, so
+a non-canonical spelling of the real secret is rejected as
+`edge_proof_malformed` rather than accepted.
+
+**FIX3-C (MEDIUM) — `PERSIST002-NET02-ENV-EXAMPLE-01`.** A generation command
+embedded in `deploy/external-staging.env.example` had been split across lines,
+leaving a bare non-comment line containing a quote. That command is removed;
+the example now points at the runbook, and the file parses cleanly through
+`docker compose --env-file` plus the repository's own preflight parser.
+
+**Rollout-time requirements, restated.** The exact observed direct peer must
+still be measured inside the target container and re-measured after any Docker
+network recreation. In addition, a freshly generated 32-byte secret must be
+written to the Caddy host credential source file described above and supplied
+to the Node server environment. Node's own delivery is unchanged in this task
+and is deliberately not expanded into Docker-secret architecture.
+
+NET-02 remains **OPEN**. This section records local implementation only.
+
 ## Not a production or HA claim
 
 This plan describes a single-instance PostgreSQL database with a

@@ -83,6 +83,31 @@ const EXPECTED_SHA256 = '527fbf917c39189a1e3b31d34fa955601680b2d5c8055d2a87b8b95
 const EXPECTED_SHA512 = '8220d1f013b6f27510247b2360c9e0ca9f018feebd82515f07635318b34ff9777ccc8fd0b6e6f2486ce3a33fe389fbb7db12d05baa474f4587509fb4f5ebf1c9';
 const EXPECTED_ARTIFACT = `${EXPECTED_ARTIFACT_NAME}@sha256:${EXPECTED_SHA256}`;
 const ENVIRONMENT_ID = 'burningspace-staging-01';
+// PERSIST002-NET-02: the TWO internal admission headers the public SERVER
+// route must set, and the public CLIENT route must never carry. The peer is
+// the claim; the proof (PA FIX2) is what authenticates the Caddy hop, and it
+// may only ever come from the operator-controlled systemd credential file --
+// never a literal in Git, never a request header, never service environment.
+/**
+ * PA FIX3-A: the edge secret is a systemd unit CREDENTIAL, never service
+ * environment. The operator writes the raw 43-character base64url value (no
+ * KEY= prefix, no trailing newline, root:root 0600) to the source path;
+ * systemd exposes it read-only to caddy.service alone at the runtime path,
+ * and Caddy reads it there through the {file.*} placeholder.
+ */
+const EDGE_CREDENTIAL_ID = 'burningspace-edge-assertion-secret';
+const EDGE_CREDENTIAL_SOURCE = '/etc/caddy/burningspace-edge-assertion-secret';
+const EDGE_CREDENTIAL_RUNTIME_PATH = `/run/credentials/caddy.service/${EDGE_CREDENTIAL_ID}`;
+const EDGE_CREDENTIAL_DIRECTIVE = `LoadCredential=${EDGE_CREDENTIAL_ID}:${EDGE_CREDENTIAL_SOURCE}`;
+const EDGE_PROOF_SOURCE_PLACEHOLDER = `{file.${EDGE_CREDENTIAL_RUNTIME_PATH}}`;
+
+const EDGE_PEER_HEADER = 'X-BurningSpace-Edge-Peer';
+const EDGE_PROOF_HEADER = 'X-BurningSpace-Edge-Proof';
+const EDGE_SECRET_VARIABLE = 'BURNINGSPACE_EDGE_ASSERTION_SECRET';
+const EDGE_PEER_SET_DIRECTIVE = `header_up ${EDGE_PEER_HEADER} {remote_host}`;
+const EDGE_PEER_REMOVE_DIRECTIVE = `header_up -${EDGE_PEER_HEADER}`;
+const EDGE_PROOF_SET_DIRECTIVE = `header_up ${EDGE_PROOF_HEADER} ${EDGE_PROOF_SOURCE_PLACEHOLDER}`;
+const EDGE_PROOF_REMOVE_DIRECTIVE = `header_up -${EDGE_PROOF_HEADER}`;
 const CLIENT_PORT = 18_080;
 const SERVER_PORT = 2_567;
 const ADMIN_ADDRESS = 'unix//run/caddy/burningspace-admin.sock';
@@ -256,13 +281,137 @@ function validateRelease(raw: unknown): ValidationRelease {
   return release;
 }
 
+/**
+ * PERSIST002-NET-02 + PA FIX1/FIX2: the internal admission headers are
+ * security-internal, held to a least-privilege per-route contract.
+ *
+ * - The public SERVER reverse proxy SETs each of them exactly once. A SET
+ *   (no leading `+`) overwrites any client-supplied value, so nothing
+ *   upstream of Caddy can dictate either one.
+ *     - the PEER is set from Caddy's own {remote_host};
+ *     - the PROOF is read from the systemd credential file that the unit's
+ *       LoadCredential= line provides, so no real secret can ever appear in
+ *       this template, in the rendered config, or in service environment.
+ * - The public CLIENT reverse proxy REMOVEs each of them exactly once, so the
+ *   static client upstream never sees either header, and never receives a
+ *   synthesized peer value or a copy of the edge proof.
+ * - Neither route may carry the other route's operation.
+ * - BurningSpace must never introduce an X-Forwarded-For / X-Real-IP /
+ *   Forwarded edge dependency for admission identity.
+ */
+function validateEdgeHeaderContract(
+  template: string,
+  serverBlock: number,
+  options: {
+    readonly header: string;
+    readonly setDirective: string;
+    readonly removeDirective: string;
+    readonly expectedValue: string;
+  }
+): void {
+  const occurrences = [...template.matchAll(/\bheader_up\s+(\S+)([^\r\n]*)/giu)]
+    .filter((match) => match[1]!.replace(/^[+\-?>]+/u, '').toLowerCase() === options.header.toLowerCase())
+    .map((match) => ({
+      prefix: /^[+\-?>]+/u.exec(match[1]!)?.[0] ?? '',
+      name: match[1]!.replace(/^[+\-?>]+/u, ''),
+      value: match[2]!.trim(),
+      route: match.index < serverBlock ? ('client' as const) : ('server' as const)
+    }));
+
+  const sets = occurrences.filter((entry) => entry.prefix === '');
+  const removes = occurrences.filter((entry) => entry.prefix === '-');
+
+  if (occurrences.length !== 2 || sets.length !== 1 || removes.length !== 1) {
+    fail(
+      'EDGE_PEER_ASSERTION',
+      'Each internal admission header requires exactly one SET and exactly one REMOVE.'
+    );
+  }
+
+  const set = sets[0]!;
+  const remove = removes[0]!;
+
+  if (set.name !== options.header || set.value !== options.expectedValue) {
+    fail('EDGE_PEER_ASSERTION', 'An internal admission header is not SET to its exact approved source.');
+  }
+
+  if (remove.name !== options.header || remove.value !== '') {
+    fail('EDGE_PEER_ASSERTION', 'An internal admission REMOVE must name the exact header and carry no value.');
+  }
+
+  if (!template.includes(options.setDirective) || !template.includes(options.removeDirective)) {
+    fail('EDGE_PEER_ASSERTION', 'The internal admission directives are not the exact approved forms.');
+  }
+
+  if (set.route !== 'server') {
+    fail('EDGE_PEER_ROUTE', 'An internal admission header may only be SET on the public server route.');
+  }
+
+  if (remove.route !== 'client') {
+    fail('EDGE_PEER_ROUTE', 'An internal admission header may only be REMOVED on the public client route.');
+  }
+}
+
+function validateEdgePeerAssertion(template: string): void {
+  const clientBlock = template.indexOf('{$BURNINGSPACE_PUBLIC_CLIENT_HOSTNAME}');
+  const serverBlock = template.indexOf('{$BURNINGSPACE_PUBLIC_SERVER_HOSTNAME}');
+
+  if (clientBlock < 0 || serverBlock < 0 || clientBlock > serverBlock) {
+    fail('EDGE_PEER_ROUTE', 'The template must declare the public client route before the public server route.');
+  }
+
+  // PA FIX3-A secret hygiene: the proof may ONLY come from the systemd
+  // credential file that Caddy reads at request time. Any other spelling --
+  // a literal, a request header, an environment placeholder -- would either
+  // bake a secret into Git, hand it to the service environment, or let a
+  // public client influence its own proof.
+  for (const match of template.matchAll(/\bheader_up\s+[+\-?>]*x-burningspace-edge-proof\b([^\r\n]*)/giu)) {
+    const value = match[1]!.trim();
+
+    if (value !== '' && value !== EDGE_PROOF_SOURCE_PLACEHOLDER) {
+      fail('EDGE_PROOF_SOURCE', 'The internal edge proof must come only from the systemd credential file placeholder.');
+    }
+  }
+
+  // The environment channel is rejected outright: the edge secret must never
+  // be reachable as a Caddy environment variable.
+  if (template.includes(`{$${EDGE_SECRET_VARIABLE}}`)) {
+    fail('EDGE_PROOF_SOURCE', 'The edge secret must not be a Caddy environment placeholder.');
+  }
+
+  validateEdgeHeaderContract(template, serverBlock, {
+    header: EDGE_PEER_HEADER,
+    setDirective: EDGE_PEER_SET_DIRECTIVE,
+    removeDirective: EDGE_PEER_REMOVE_DIRECTIVE,
+    expectedValue: '{remote_host}'
+  });
+
+  validateEdgeHeaderContract(template, serverBlock, {
+    header: EDGE_PROOF_HEADER,
+    setDirective: EDGE_PROOF_SET_DIRECTIVE,
+    removeDirective: EDGE_PROOF_REMOVE_DIRECTIVE,
+    expectedValue: EDGE_PROOF_SOURCE_PLACEHOLDER
+  });
+
+  if (/\bheader_up\s+[+\-?>]*(?:x-forwarded-\S*|x-real-ip|forwarded)\b/iu.test(template)) {
+    fail('EDGE_PEER_FORWARDED', 'BurningSpace must not introduce a forwarded-header edge dependency.');
+  }
+}
+
 function validateTemplate(template: string): void {
   if (template.length > 65_536) fail('TEMPLATE_SIZE', 'Caddyfile template exceeds the bounded size.');
+  // PA FIX2: checked before the generic placeholder gate, so a literal secret
+  // baked into the template reports EDGE_PROOF_SOURCE rather than being masked
+  // by the missing-placeholder failure it also causes.
+  validateEdgePeerAssertion(template);
   for (const key of [
     'BURNINGSPACE_CADDY_ADMIN_ADDRESS', 'BURNINGSPACE_PUBLIC_CLIENT_HOSTNAME',
     'BURNINGSPACE_PUBLIC_SERVER_HOSTNAME', 'BURNINGSPACE_CLIENT_BIND_PORT',
     'BURNINGSPACE_SERVER_BIND_PORT', 'BURNINGSPACE_CADDY_STREAM_TIMEOUT',
     'BURNINGSPACE_CADDY_STREAM_CLOSE_DELAY', 'BURNINGSPACE_CADDY_LOG_DIRECTORY'
+    // PA FIX3-A: the edge secret is deliberately NOT a template placeholder.
+    // It reaches Caddy as a systemd credential and is read through
+    // {file.<runtime path>}, which validateEdgePeerAssertion pins exactly.
   ]) {
     if (!template.includes(`{$${key}}`)) fail('TEMPLATE_PLACEHOLDER', 'Caddyfile is missing a required environment placeholder.');
   }
@@ -295,7 +444,14 @@ function validateTemplate(template: string): void {
     if (caddyHeaderPatternTargetsOrigin(match[1]!)) fail('ORIGIN_MUTATION', 'Caddy must not mutate, synthesize, or remove Origin.');
   }
   if (/^\s*(?:rewrite|uri)\s+/imu.test(template)) fail('URI_REWRITE', 'Caddy must not rewrite path or query data.');
-  if (/\b(?:tls_insecure_skip_verify|trusted_proxies|tls\s+internal|debug|credentials)\b/iu.test(template)) {
+  if (/\b(?:tls_insecure_skip_verify|trusted_proxies|tls\s+internal|debug)\b/iu.test(template)) {
+    fail('FORBIDDEN_DIRECTIVE', 'Caddyfile contains a forbidden trust, TLS, debug, or credential directive.');
+  }
+  // PA FIX3-A: `credentials` is still forbidden as a DIRECTIVE, but the
+  // approved systemd credential path (/run/credentials/caddy.service/...)
+  // legitimately contains that word, so the match is anchored to a directive
+  // position instead of matching the substring anywhere in the file.
+  if (/^[ \t]*credentials\b/imu.test(template)) {
     fail('FORBIDDEN_DIRECTIVE', 'Caddyfile contains a forbidden trust, TLS, debug, or credential directive.');
   }
   if (/\bprotocols\b[^\r\n]*\bh3\b/iu.test(template)) fail('HTTP3', 'HTTP/3 is outside the reviewed initial surface.');
@@ -311,11 +467,25 @@ function validateSystemdDropIn(dropIn: string): void {
     'RuntimeDirectory=caddy',
     'RuntimeDirectoryMode=0700',
     'UMask=0077',
+    // PA FIX3-A: the ONLY channel that carries the operator edge secret to
+    // the Caddy service. systemd hands the unit a private, read-only
+    // credential instead of treating secret material as ordinary service
+    // environment. This is LoadCredential=, not LoadCredentialEncrypted=:
+    // nothing here claims encryption at rest.
+    EDGE_CREDENTIAL_DIRECTIVE,
     'ExecReload=',
     ADMIN_RELOAD
   ];
   if (lines.length !== expected.length || lines.some((line, index) => line !== expected[index])) {
-    fail('SYSTEMD_DROPIN', 'Caddy systemd drop-in must define the exact private runtime directory, umask, and Unix-socket reload override.');
+    fail('SYSTEMD_DROPIN', 'Caddy systemd drop-in must define the exact private runtime directory, umask, credential, and Unix-socket reload override.');
+  }
+
+  // PA FIX3-A: the environment channel is rejected outright. An
+  // EnvironmentFile= or Environment= line carrying the edge secret would put
+  // it back into ordinary service environment, which is exactly what the
+  // credential mechanism replaces.
+  if (/^\s*Environment(?:File)?=/imu.test(dropIn)) {
+    fail('SYSTEMD_DROPIN_SECRET_CHANNEL', 'The Caddy drop-in must not carry the edge secret through service environment.');
   }
 }
 
@@ -448,10 +618,23 @@ function validatePlan(
   return plan;
 }
 
+/**
+ * PA FIX3-A: there is no secret placeholder left to preserve. The proof comes
+ * from a systemd credential file that Caddy reads at request time, so the
+ * template carries no environment placeholder for it and every `{$VAR}` must
+ * resolve. `{file.*}` is a Caddy runtime placeholder, not a `{$VAR}`
+ * substitution, so it passes through untouched by construction.
+ */
 function render(template: string, env: Record<string, string>): string {
   let rendered = template;
   for (const key of ENV_KEYS) rendered = rendered.replaceAll(`{$${key}}`, env[key] ?? '');
   if (/\{\$[A-Z][A-Z0-9_]*\}/u.test(rendered)) fail('RENDER_PLACEHOLDER', 'Rendered Caddyfile retained an unresolved placeholder.');
+  if (!rendered.includes(EDGE_PROOF_SOURCE_PLACEHOLDER)) {
+    fail('RENDER_SECRET', 'The rendered Caddyfile must read the edge proof from the systemd credential file.');
+  }
+  if (/header_up\s+X-BurningSpace-Edge-Proof\s+[A-Za-z0-9_-]{43}\b/u.test(rendered)) {
+    fail('RENDER_SECRET', 'The rendered Caddyfile must never contain a literal edge secret.');
+  }
   return rendered;
 }
 
@@ -561,6 +744,31 @@ function inspectAdapted(raw: unknown, plan: EdgePlan): void {
     }
   }
   if (expectedRoutes.size !== 0) fail('ADAPTED_ROUTE', 'An approved hostname route is missing from adapted configuration.');
+
+  // PA FIX3-A: the adapted artifact must retain ONLY the approved runtime
+  // credential placeholder. `{file.*}` is resolved by the running Caddy at
+  // request time, so it survives `caddy adapt` as text and the retained JSON
+  // stays secret-free. A 43-character literal, or any other source, means the
+  // secret was baked in or could be influenced -- reject the artifact.
+  let adaptedProofSources = 0;
+  walk(http, (record) => {
+    if (record.handler !== 'reverse_proxy' || record.headers === undefined) return;
+    const headers = object(record.headers, 'ADAPTED_PROXY_HEADERS');
+    if (headers.request === undefined) return;
+    const request = object(headers.request, 'ADAPTED_PROXY_HEADERS');
+    const set = request.set === undefined ? {} : object(request.set, 'ADAPTED_PROXY_HEADERS');
+    for (const [name, value] of Object.entries(set)) {
+      if (name.toLowerCase() !== 'x-burningspace-edge-proof') continue;
+      const entries = Array.isArray(value) ? value.map(String) : [String(value)];
+      if (entries.length !== 1 || entries[0] !== EDGE_PROOF_SOURCE_PLACEHOLDER) {
+        fail('ADAPTED_EDGE_PROOF', 'The adapted configuration does not read the edge proof from the approved systemd credential placeholder.');
+      }
+      adaptedProofSources += 1;
+    }
+  });
+  if (adaptedProofSources !== 1) {
+    fail('ADAPTED_EDGE_PROOF', 'The adapted configuration must set the internal edge proof exactly once.');
+  }
 
   const handlers: string[] = [];
   const proxies: Record<string, unknown>[] = [];
@@ -764,6 +972,85 @@ function runSelfTests(): number {
   reject('reload-address-mismatch', 'SYSTEMD_DROPIN', (f) => { f.systemdDropIn = f.systemdDropIn.replace(ADMIN_ADDRESS, 'unix//run/caddy/other.sock'); });
   reject('admin-disabled', 'TEMPLATE_PLACEHOLDER', (f) => { f.template = f.template.replace('admin {$BURNINGSPACE_CADDY_ADMIN_ADDRESS}', 'admin off'); });
   passNamed('valid-systemd-drop-in', () => { validateSystemdDropIn(fixture('template').systemdDropIn); });
+  // ---- PA FIX3-A: the secret travels as a systemd credential, never env ----
+  passNamed('render-reads-the-edge-proof-from-the-systemd-credential-file', () => {
+    const f = fixture('template');
+    const rendered = render(f.template, f.env);
+
+    if (!rendered.includes(EDGE_PROOF_SOURCE_PLACEHOLDER)) {
+      fail('SELF_TEST', 'The rendered Caddyfile must read the edge proof from the systemd credential file.');
+    }
+    // No environment placeholder for the secret survives anywhere, and no
+    // 43-character base64url literal was substituted in its place.
+    if (rendered.includes(`{$${EDGE_SECRET_VARIABLE}}`)) {
+      fail('SELF_TEST', 'The rendered Caddyfile must not reference the edge secret as an environment placeholder.');
+    }
+    if (/header_up\s+X-BurningSpace-Edge-Proof\s+[A-Za-z0-9_-]{43}\b/u.test(rendered)) {
+      fail('SELF_TEST', 'The rendered Caddyfile must never contain a literal edge secret.');
+    }
+  });
+  passNamed('render-refuses-a-template-whose-edge-proof-is-a-literal-secret', () => {
+    const f = fixture('template');
+    // A template that baked the secret in would render a config file
+    // containing it. render() must refuse, independently of validateTemplate.
+    const baked = f.template.replace(EDGE_PROOF_SOURCE_PLACEHOLDER, 'A'.repeat(43));
+    let code = '';
+    try {
+      render(baked, f.env);
+    } catch (error) {
+      code = error instanceof EdgeValidationError ? error.code : 'UNEXPECTED';
+    }
+    if (code !== 'RENDER_SECRET') fail('SELF_TEST', 'render() must refuse a literal edge secret.');
+  });
+  passNamed('systemd-drop-in-carries-the-exact-credential-and-no-environment', () => {
+    const dropIn = fixture('template').systemdDropIn;
+    validateSystemdDropIn(dropIn);
+    if (!dropIn.includes(EDGE_CREDENTIAL_DIRECTIVE)) {
+      fail('SELF_TEST', 'The Caddy drop-in must carry the exact LoadCredential line.');
+    }
+    if (/Environment(?:File)?=/iu.test(dropIn)) {
+      fail('SELF_TEST', 'The Caddy drop-in must not carry any service-environment channel.');
+    }
+    if (dropIn.includes('burningspace-edge-secret.env')) {
+      fail('SELF_TEST', 'The rejected EnvironmentFile secret channel must be gone.');
+    }
+    if (/LoadCredentialEncrypted=/iu.test(dropIn)) {
+      fail('SELF_TEST', 'This task uses LoadCredential=, not LoadCredentialEncrypted=.');
+    }
+  });
+  reject('systemd-drop-in-without-the-credential', 'SYSTEMD_DROPIN', (f) => {
+    f.systemdDropIn = f.systemdDropIn.replace(`${EDGE_CREDENTIAL_DIRECTIVE}\n`, '');
+  });
+  reject('systemd-drop-in-with-a-different-credential-id', 'SYSTEMD_DROPIN', (f) => {
+    f.systemdDropIn = f.systemdDropIn.replace(EDGE_CREDENTIAL_ID, 'some-other-credential');
+  });
+  reject('systemd-drop-in-with-a-different-credential-source', 'SYSTEMD_DROPIN', (f) => {
+    f.systemdDropIn = f.systemdDropIn.replace(EDGE_CREDENTIAL_SOURCE, '/etc/caddy/elsewhere');
+  });
+  reject('systemd-drop-in-reverting-to-the-environment-file-channel', 'SYSTEMD_DROPIN', (f) => {
+    f.systemdDropIn = f.systemdDropIn.replace(
+      EDGE_CREDENTIAL_DIRECTIVE,
+      'EnvironmentFile=/etc/caddy/burningspace-edge-secret.env'
+    );
+  });
+  reject('systemd-drop-in-adding-an-environment-secret', 'SYSTEMD_DROPIN', (f) => {
+    f.systemdDropIn = f.systemdDropIn.replace(
+      EDGE_CREDENTIAL_DIRECTIVE,
+      `${EDGE_CREDENTIAL_DIRECTIVE}\nEnvironment=BURNINGSPACE_EDGE_ASSERTION_SECRET=none`
+    );
+  });
+  reject('edge-proof-from-the-environment-placeholder', 'EDGE_PROOF_SOURCE', (f) => {
+    f.template = f.template.replace(EDGE_PROOF_SOURCE_PLACEHOLDER, `{$${EDGE_SECRET_VARIABLE}}`);
+  });
+  reject('edge-proof-from-a-different-credential-path', 'EDGE_PROOF_SOURCE', (f) => {
+    f.template = f.template.replace(
+      EDGE_PROOF_SOURCE_PLACEHOLDER,
+      '{file./run/credentials/caddy.service/some-other-credential}'
+    );
+  });
+  reject('edge-proof-from-an-arbitrary-host-file', 'EDGE_PROOF_SOURCE', (f) => {
+    f.template = f.template.replace(EDGE_PROOF_SOURCE_PLACEHOLDER, '{file./etc/caddy/burningspace.env}');
+  });
   reject('malformed-systemd-drop-in', 'SYSTEMD_DROPIN', (f) => { f.systemdDropIn = f.systemdDropIn.replace('RuntimeDirectoryMode=0700', 'RuntimeDirectoryMode=0700x'); });
   passNamed('admin-output-canary', () => {
     const seeded = 'ops002-admin-canary-never-print';
@@ -788,6 +1075,167 @@ function runSelfTests(): number {
   reject('origin-delete-suffix-wildcard', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up -*gin\n'; });
   reject('origin-delete-substring-wildcard', 'ORIGIN_MUTATION', (f) => { f.template += '\nheader_up -*rig*\n'; });
   reject('uri-rewrite', 'URI_REWRITE', (f) => { f.template += '\nrewrite * /rewritten\n'; });
+  passNamed('edge-peer-set-on-server-route-and-removed-on-client-route', () => {
+    const f = fixture('template');
+    validateTemplate(f.template);
+    const clientRoute = f.template.slice(
+      f.template.indexOf('{$BURNINGSPACE_PUBLIC_CLIENT_HOSTNAME}'),
+      f.template.indexOf('{$BURNINGSPACE_PUBLIC_SERVER_HOSTNAME}')
+    );
+    const serverRoute = f.template.slice(f.template.indexOf('{$BURNINGSPACE_PUBLIC_SERVER_HOSTNAME}'));
+    if (!clientRoute.includes(EDGE_PEER_REMOVE_DIRECTIVE) || clientRoute.includes(EDGE_PEER_SET_DIRECTIVE)) {
+      fail('SELF_TEST', 'The public client route must REMOVE, and never SET, the internal admission-peer header.');
+    }
+    if (!serverRoute.includes(EDGE_PEER_SET_DIRECTIVE) || serverRoute.includes(EDGE_PEER_REMOVE_DIRECTIVE)) {
+      fail('SELF_TEST', 'The public server route must SET, and never REMOVE, the internal admission-peer header.');
+    }
+  });
+  reject('edge-peer-remove-missing-from-client-route', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PEER_REMOVE_DIRECTIVE, '');
+  });
+  reject('edge-peer-removed-twice', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(
+      EDGE_PEER_REMOVE_DIRECTIVE,
+      `${EDGE_PEER_REMOVE_DIRECTIVE}\n\t\t${EDGE_PEER_REMOVE_DIRECTIVE}`
+    );
+  });
+  reject('edge-peer-remove-carries-a-value', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PEER_REMOVE_DIRECTIVE, `${EDGE_PEER_REMOVE_DIRECTIVE} {remote_host}`);
+  });
+  reject('edge-peer-set-on-client-route', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PEER_REMOVE_DIRECTIVE, EDGE_PEER_SET_DIRECTIVE);
+  });
+  reject('edge-peer-removed-on-server-route', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PEER_SET_DIRECTIVE, EDGE_PEER_REMOVE_DIRECTIVE);
+  });
+  reject('edge-peer-routes-swapped', 'EDGE_PEER_ROUTE', (f) => {
+    f.template = f.template
+      .replace(EDGE_PEER_REMOVE_DIRECTIVE, '@@FIX1_PLACEHOLDER@@')
+      .replace(EDGE_PEER_SET_DIRECTIVE, EDGE_PEER_REMOVE_DIRECTIVE)
+      .replace('@@FIX1_PLACEHOLDER@@', EDGE_PEER_SET_DIRECTIVE);
+  });
+  reject('edge-peer-set-missing', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PEER_SET_DIRECTIVE, '');
+  });
+  reject('edge-peer-set-duplicated', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template += `\n${EDGE_PEER_SET_DIRECTIVE}\n`;
+  });
+  reject('edge-peer-added-not-set', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PEER_SET_DIRECTIVE, `header_up +${EDGE_PEER_HEADER} {remote_host}`);
+  });
+  reject('edge-peer-deleted', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PEER_SET_DIRECTIVE, `header_up -${EDGE_PEER_HEADER}`);
+  });
+  reject('edge-peer-static-value', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PEER_SET_DIRECTIVE, `header_up ${EDGE_PEER_HEADER} 203.0.113.9`);
+  });
+  reject('edge-peer-from-client-ip', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PEER_SET_DIRECTIVE, `header_up ${EDGE_PEER_HEADER} {client_ip}`);
+  });
+  reject('edge-peer-from-forwarded-for', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(
+      EDGE_PEER_SET_DIRECTIVE,
+      `header_up ${EDGE_PEER_HEADER} {http.request.header.X-Forwarded-For}`
+    );
+  });
+  reject('forwarded-for-dependency', 'EDGE_PEER_FORWARDED', (f) => {
+    f.template += '\nheader_up X-Forwarded-For {remote_host}\n';
+  });
+  reject('real-ip-dependency', 'EDGE_PEER_FORWARDED', (f) => {
+    f.template += '\nheader_up X-Real-IP {remote_host}\n';
+  });
+  reject('forwarded-dependency', 'EDGE_PEER_FORWARDED', (f) => {
+    f.template += '\nheader_up Forwarded for={remote_host}\n';
+  });
+  reject('trusted-proxies-directive', 'FORBIDDEN_DIRECTIVE', (f) => {
+    f.template += '\ntrusted_proxies static 172.18.0.0/16\n';
+  });
+  // ---- PA FIX2: the edge proof carries the same per-route contract ----
+  passNamed('edge-proof-set-on-server-route-and-removed-on-client-route', () => {
+    const f = fixture('template');
+    validateTemplate(f.template);
+    const clientRoute = f.template.slice(
+      f.template.indexOf('{$BURNINGSPACE_PUBLIC_CLIENT_HOSTNAME}'),
+      f.template.indexOf('{$BURNINGSPACE_PUBLIC_SERVER_HOSTNAME}')
+    );
+    const serverRoute = f.template.slice(f.template.indexOf('{$BURNINGSPACE_PUBLIC_SERVER_HOSTNAME}'));
+    if (!clientRoute.includes(EDGE_PROOF_REMOVE_DIRECTIVE) || clientRoute.includes(EDGE_PROOF_SET_DIRECTIVE)) {
+      fail('SELF_TEST', 'The public client route must REMOVE, and never SET, the internal edge proof.');
+    }
+    if (!serverRoute.includes(EDGE_PROOF_SET_DIRECTIVE) || serverRoute.includes(EDGE_PROOF_REMOVE_DIRECTIVE)) {
+      fail('SELF_TEST', 'The public server route must SET, and never REMOVE, the internal edge proof.');
+    }
+  });
+  passNamed('edge-proof-template-carries-no-real-secret', () => {
+    const f = fixture('template');
+    validateTemplate(f.template);
+    // The only spelling of the proof value in Git is the environment
+    // placeholder: a 43-character base64url literal must never appear.
+    if (/header_up\s+X-BurningSpace-Edge-Proof\s+[A-Za-z0-9_-]{43}\b/u.test(f.template)) {
+      fail('SELF_TEST', 'The Caddyfile template must never carry a literal edge secret.');
+    }
+  });
+  reject('edge-proof-remove-missing-from-client-route', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PROOF_REMOVE_DIRECTIVE, '');
+  });
+  reject('edge-proof-removed-twice', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(
+      EDGE_PROOF_REMOVE_DIRECTIVE,
+      `${EDGE_PROOF_REMOVE_DIRECTIVE}\n\t\t${EDGE_PROOF_REMOVE_DIRECTIVE}`
+    );
+  });
+  reject('edge-proof-remove-carries-a-value', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(
+      EDGE_PROOF_REMOVE_DIRECTIVE,
+      `${EDGE_PROOF_REMOVE_DIRECTIVE} ${EDGE_PROOF_SOURCE_PLACEHOLDER}`
+    );
+  });
+  reject('edge-proof-set-on-client-route', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PROOF_REMOVE_DIRECTIVE, EDGE_PROOF_SET_DIRECTIVE);
+  });
+  reject('edge-proof-removed-on-server-route', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PROOF_SET_DIRECTIVE, EDGE_PROOF_REMOVE_DIRECTIVE);
+  });
+  reject('edge-proof-routes-swapped', 'EDGE_PEER_ROUTE', (f) => {
+    f.template = f.template
+      .replace(EDGE_PROOF_REMOVE_DIRECTIVE, '@@FIX2_PLACEHOLDER@@')
+      .replace(EDGE_PROOF_SET_DIRECTIVE, EDGE_PROOF_REMOVE_DIRECTIVE)
+      .replace('@@FIX2_PLACEHOLDER@@', EDGE_PROOF_SET_DIRECTIVE);
+  });
+  reject('edge-proof-set-missing', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(EDGE_PROOF_SET_DIRECTIVE, '');
+  });
+  reject('edge-proof-set-duplicated', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template += `\n${EDGE_PROOF_SET_DIRECTIVE}\n`;
+  });
+  reject('edge-proof-added-not-set', 'EDGE_PEER_ASSERTION', (f) => {
+    f.template = f.template.replace(
+      EDGE_PROOF_SET_DIRECTIVE,
+      `header_up +${EDGE_PROOF_HEADER} ${EDGE_PROOF_SOURCE_PLACEHOLDER}`
+    );
+  });
+  reject('edge-proof-literal-secret-in-template', 'EDGE_PROOF_SOURCE', (f) => {
+    // A disposable non-secret stand-in of the right shape; never a real value.
+    f.template = f.template.replace(
+      EDGE_PROOF_SET_DIRECTIVE,
+      `header_up ${EDGE_PROOF_HEADER} ${'A'.repeat(43)}`
+    );
+  });
+  reject('edge-proof-from-request-header', 'EDGE_PROOF_SOURCE', (f) => {
+    f.template = f.template.replace(
+      EDGE_PROOF_SET_DIRECTIVE,
+      `header_up ${EDGE_PROOF_HEADER} {http.request.header.X-BurningSpace-Edge-Proof}`
+    );
+  });
+  reject('edge-proof-from-remote-host', 'EDGE_PROOF_SOURCE', (f) => {
+    f.template = f.template.replace(EDGE_PROOF_SET_DIRECTIVE, `header_up ${EDGE_PROOF_HEADER} {remote_host}`);
+  });
+  reject('edge-proof-from-wrong-environment-variable', 'EDGE_PROOF_SOURCE', (f) => {
+    f.template = f.template.replace(
+      EDGE_PROOF_SET_DIRECTIVE,
+      `header_up ${EDGE_PROOF_HEADER} {$BURNINGSPACE_ALLOWED_ORIGINS}`
+    );
+  });
   reject('websocket-disabled', 'WEBSOCKET', (f) => { f.plan.webSocketEnabled = false; });
   reject('missing-stream-timeout', 'TEMPLATE_PLACEHOLDER', (f) => { f.template = f.template.replaceAll('stream_timeout {$BURNINGSPACE_CADDY_STREAM_TIMEOUT}', ''); });
   reject('unbounded-stream-timeout', 'STREAM_TIMEOUT', (f) => { f.plan.streamTimeout = '0s'; });

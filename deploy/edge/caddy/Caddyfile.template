@@ -39,6 +39,13 @@
 	}
 
 	reverse_proxy 127.0.0.1:{$BURNINGSPACE_CLIENT_BIND_PORT} {
+		# PERSIST002-NET-02 (PA FIX1/FIX2): least privilege for the two
+		# security-internal headers. The static client upstream has no admission
+		# logic and must never see either header at all, so any client-supplied
+		# value is REMOVED here. Neither a peer value nor an edge proof is ever
+		# synthesized for the client upstream.
+		header_up -X-BurningSpace-Edge-Peer
+		header_up -X-BurningSpace-Edge-Proof
 		stream_timeout {$BURNINGSPACE_CADDY_STREAM_TIMEOUT}
 		stream_close_delay {$BURNINGSPACE_CADDY_STREAM_CLOSE_DELAY}
 		transport http {
@@ -69,6 +76,35 @@
 	}
 
 	reverse_proxy 127.0.0.1:{$BURNINGSPACE_SERVER_BIND_PORT} {
+		# PERSIST002-NET-02: the ONE internal admission-peer assertion, set only
+		# on this public-server route. header_up without a leading + is a
+		# SET/overwrite, so any client-supplied value is replaced by Caddy's own
+		# direct connecting host. The public-client route REMOVES the header
+		# instead, and never synthesizes one.
+		#
+		# BurningSpace deliberately never consumes X-Forwarded-For, X-Real-IP or
+		# Forwarded for admission identity. Caddy's reverse_proxy defaults already
+		# ignore incoming X-Forwarded-* values for spoof-resistance, so this
+		# dedicated header is an explicit, narrow, independently testable edge
+		# contract rather than a workaround for any Caddy trust behaviour.
+		header_up X-BurningSpace-Edge-Peer {remote_host}
+		# PA FIX2/FIX3-A: the peer assertion above is only a claim. This is the
+		# proof that the hop really is the operator's Caddy. The trusted direct
+		# socket peer is a network-location restriction -- in the real topology
+		# it is the Docker bridge/NAT gateway, which any other host-local
+		# process can also present -- so Node additionally requires this
+		# operator-controlled secret before it will honour the peer assertion.
+		#
+		# The secret is delivered by systemd as a unit CREDENTIAL, not as
+		# service environment: the drop-in carries
+		#   LoadCredential=burningspace-edge-assertion-secret:/etc/caddy/burningspace-edge-assertion-secret
+		# and systemd exposes it read-only, for this unit only, at the path
+		# below. Caddy's {file.*} placeholder reads it at request time, so the
+		# secret never enters the Caddy environment, the rendered Caddyfile,
+		# the adapted JSON, or a command line.
+		#
+		# SET (no leading +) so a client-supplied proof is always overwritten.
+		header_up X-BurningSpace-Edge-Proof {file./run/credentials/caddy.service/burningspace-edge-assertion-secret}
 		stream_timeout {$BURNINGSPACE_CADDY_STREAM_TIMEOUT}
 		stream_close_delay {$BURNINGSPACE_CADDY_STREAM_CLOSE_DELAY}
 		transport http {
