@@ -14,6 +14,19 @@ services:
       NODE_ENV: production
       PORT: "2567"
       BURNINGSPACE_ALLOWED_ORIGINS: ${BURNINGSPACE_ALLOWED_ORIGINS:?set BURNINGSPACE_ALLOWED_ORIGINS}
+      # PERSIST002-NET-02 admission-budget attribution. Required, never defaulted:
+      # either the exact IP literal(s) of the direct socket peer the server
+      # container actually observes for edge traffic (measured in the target
+      # container during rollout, not guessed here), or the explicit literal
+      # "none" for direct-peer-only mode. "none" is not rollout acceptance.
+      BURNINGSPACE_TRUSTED_EDGE_PEERS: ${BURNINGSPACE_TRUSTED_EDGE_PEERS:?set BURNINGSPACE_TRUSTED_EDGE_PEERS to exact trusted edge peer IP literals, or none}
+      # PA FIX2: the trusted peer allowlist above is a network-location
+      # restriction only -- in this topology it is the Docker bridge/NAT
+      # gateway, which any other host-local process can also present. This is
+      # the cryptographic proof of the Caddy hop, and the server refuses to
+      # boot unless both are set consistently: either both real, or both the
+      # explicit literal "none".
+      BURNINGSPACE_EDGE_ASSERTION_SECRET: ${BURNINGSPACE_EDGE_ASSERTION_SECRET:?set BURNINGSPACE_EDGE_ASSERTION_SECRET to the 43-character base64url operator edge secret, or none}
       BURNINGSPACE_RECONNECT_GRACE_SECONDS: ${BURNINGSPACE_RECONNECT_GRACE_SECONDS:-10}
       BURNINGSPACE_SHUTDOWN_TIMEOUT_SECONDS: ${BURNINGSPACE_SHUTDOWN_TIMEOUT_SECONDS:-15}
       BURNINGSPACE_PROFILE_RATE_BURST: ${BURNINGSPACE_PROFILE_RATE_BURST:-8}

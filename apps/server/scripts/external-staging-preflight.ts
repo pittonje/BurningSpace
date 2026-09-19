@@ -52,6 +52,13 @@ const ENV_KEYS = new Set([
   'BURNINGSPACE_PUBLIC_CLIENT_ORIGIN',
   'BURNINGSPACE_PUBLIC_SERVER_ORIGIN',
   'BURNINGSPACE_ALLOWED_ORIGINS',
+  // PERSIST002-NET-02: required by docker-compose.staging.yml, so the
+  // documentation-safe example inventory must be able to declare it.
+  'BURNINGSPACE_TRUSTED_EDGE_PEERS',
+  // PA FIX2/FIX3: the paired edge proof secret, required by the same compose
+  // file for the Node server. The Caddy edge receives the same value as a
+  // systemd credential, never through this inventory.
+  'BURNINGSPACE_EDGE_ASSERTION_SECRET',
   'VITE_BURNINGSPACE_SERVER_URL',
   'BURNINGSPACE_SERVER_IMAGE',
   'BURNINGSPACE_CLIENT_IMAGE',

@@ -10,6 +10,7 @@ import { CREDENTIAL_ALGORITHM, CREDENTIAL_VERSION, generateCredential } from '..
 import { withTransaction } from '../persistence/pool.js';
 import { insertCredential } from '../persistence/repositories/credentialsRepository.js';
 import { createPlayer } from '../persistence/repositories/playersRepository.js';
+import type { AdmissionPeerIdentityResolver } from '../security/admissionPeerIdentity.js';
 import { evaluateRequestOrigin, type NetworkBoundaryConfig } from '../security/networkBoundary.js';
 import type { PeerRateLimiter } from '../security/peerRateLimiter.js';
 
@@ -32,19 +33,13 @@ export interface IdentityGuestEndpointContext {
   getPool(): Pool | undefined;
   readonly networkBoundaryConfig: NetworkBoundaryConfig;
   readonly limiter: PeerRateLimiter;
+  /** PERSIST002-NET-02: the single canonical admission-peer identity resolver. */
+  readonly admissionPeerIdentity: AdmissionPeerIdentityResolver;
   readonly log: IdentityGuestOperationalLog;
 }
 
 export function matchesIdentityGuestPath(pathname: string): boolean {
   return pathname === IDENTITY_GUEST_PATH;
-}
-
-function peerKeyFromRequest(request: IncomingMessage): string {
-  // Only the raw transport peer is trusted in this foundation; X-Forwarded-For
-  // / X-Real-IP / Forwarded are never honored. In the current Caddy/loopback
-  // staging topology this means multiple public clients behind that proxy
-  // share one budget -- an accepted conservative limitation, not a bug.
-  return request.socket.remoteAddress ?? 'unknown-peer';
 }
 
 function writeJson(
@@ -183,11 +178,21 @@ export async function handleIdentityGuestRequest(
     return;
   }
 
-  const peerKey = peerKeyFromRequest(request);
-  const limiterResult = context.limiter.consume(peerKey);
+  // PERSIST002-NET-02: admission identity is resolved AFTER the Origin gate
+  // (so a hostile Origin still never consumes a budget token) and through the
+  // one canonical resolver shared with fresh BattleRoom.onAuth. A rejected
+  // trusted-edge assertion fails closed onto the existing 429 rate_limited
+  // shape -- no new client protocol field, and no shared trusted-proxy bucket.
+  const admission = context.admissionPeerIdentity.resolve({
+    headers: request.headers,
+    directPeerAddress: request.socket.remoteAddress
+  });
 
-  if (!limiterResult.allowed) {
-    const retryAfterSeconds = Math.max(1, Math.ceil(limiterResult.retryAfterMs / 1000));
+  const limiterResult = admission.kind === 'resolved' ? context.limiter.consume(admission.peerKey) : undefined;
+
+  if (!limiterResult || !limiterResult.allowed) {
+    const retryAfterMs = limiterResult?.retryAfterMs ?? 1000;
+    const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
     writeJson(response, 429, { ok: false, error: 'rate_limited' } satisfies IdentityHttpErrorResponse, {
       ...corsHeaders,
       'Retry-After': String(retryAfterSeconds)
