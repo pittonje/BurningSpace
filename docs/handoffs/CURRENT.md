@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-19
-Updated by: Implementation engineer — PERSIST-002 post-merge reconciliation (documentation only)
+Updated by: Implementation engineer — PERSIST002-NET-02 admission budget hardening, PA FIX2 edge-hop authentication, PA FIX3 credential transport (local implementation)
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -51,7 +51,7 @@ PERSIST-002 — Durable World & Identity Foundation: **PA ACCEPTED / MERGED** (2
 - **Open obligations:**
   - **QA-01 — OPEN / DEFERRED:** test-completeness hardening; non-blocking for the completed source merge.
   - **QA-02 — OPEN / DEFERRED:** original-review archival; missing original review reports remain missing and are not reconstructed, and supplied report/patch hashes are not claimed as independently recomputed.
-  - **PERSIST002-NET-02 — MEDIUM / OPEN / BLOCKS PUBLIC PERSISTENCE ROLLOUT.** Public rollout requires an implemented admission-budget mitigation, spoof-resistance and multi-client-budget tests, explicit Security/Ops acceptance, and a separate Product Architect deployment authorization (see [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md)). Merging PR #86 or the documentation PR that records this state is **not** deployment permission.
+  - **PERSIST002-NET-02 — MEDIUM / OPEN / PA SOURCE APPROVED / PUBLICATION AUTHORIZED / AWAITING EXACT-HEAD CI AND INDEPENDENT REVIEWS / STILL BLOCKS PUBLIC PERSISTENCE ROLLOUT.** The bounded mitigation is implemented, including PA FIX2 for the HIGH blocker `PERSIST002-NET02-EDGE-AUTH-01` and PA FIX3 for the HIGH secret-transport blocker `PERSIST002-NET02-SECRET-TRANSPORT-01`. The Product Architect completed source review of the FIX3 delta and authorized publication; the implementation is **not** accepted for merge, and **no deployment is authorized**; see [`docs/tasks/persist-002-net-02-admission-budget-hardening.md`](../tasks/persist-002-net-02-admission-budget-hardening.md) and the NET-02 section below. Public rollout requires an implemented admission-budget mitigation, spoof-resistance and multi-client-budget tests, explicit Security/Ops acceptance, and a separate Product Architect deployment authorization (see [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md)). Merging PR #86 or the documentation PR that records this state is **not** deployment permission.
 - **Execution limitations, kept explicit:** (1) a supplemental temporary tsconfig reported a `process.send` typing error; an identical baseline run was not established, so it is not claimed to be pre-existing (standard typechecks passed); (2) a complete local default-forks run at the final source HEAD is not claimed — the 52/516 completed run is remote Core evidence; (3) SOURCE-TEXT-FIX1's local validation used owned disposable databases inside the existing `deploy-postgres-1`, not a newly created isolated container, and its cleanup/container-state statements are supplied local evidence, not GitHub verification.
 - **Repository state vs deployed state:** persistence is implemented and merged in the repository. The last verified staging deployment is the earlier non-persistent runtime described under "Current state" above; this reconciliation does not inspect or update staging, and no deployment, image publication or VPS access is authorized by it.
 
@@ -957,8 +957,147 @@ Still open at that time (current state: see the post-merge status): QA-01 (defer
 PERSIST002-NET-02 (MEDIUM/OPEN, blocks public persistence rollout), the
 final PA merge approval and human merge.
 
+## PERSIST002-NET-02 (2026-09-19): admission budget hardening — IMPLEMENTED LOCALLY, NOT CLOSED
+
+Task: [PERSIST002-NET-02 — Admission Budget Hardening](../tasks/persist-002-net-02-admission-budget-hardening.md)
+
+- **Base:** exact `origin/main` `3aab85dbc21e01cf0689a1f9bb2dc59d2e64cb96` (merge commit of PR #87), verified by `git fetch origin --prune`.
+- **Branch / worktree:** `security/persist-002-net-02-admission-budget-hardening` in a dedicated implementation worktree. The read-only blueprint branch was not reused and the preserved primary checkout was not modified.
+- **State:** local working-tree changes only. **No commit, no push, no PR, no merge, no workflow dispatch, no image publication, no VPS access, no staging traffic, no Caddy reload on any real host, no DB schema or migration change.**
+- **What changed:** one canonical server-private admission-peer identity resolver (`apps/server/src/security/admissionPeerIdentity.ts`) now keys BOTH admission budgets. Under a trusted edge peer, the internal `X-BurningSpace-Edge-Peer` assertion (Caddy `header_up ... {remote_host}`, SET/overwrite on the public **server** route; explicitly REMOVED on the public **client** route per PA FIX1) gives each public client its own budget; from any untrusted peer the header is ignored entirely. Malformed or missing assertions from a trusted peer FAIL CLOSED onto the existing `rate_limited` / `auth_rate_limited` shapes. `X-Forwarded-For`, `X-Real-IP` and `Forwarded` remain unused for admission identity, `trusted_proxies` remains unused, and no rate-limit quota changed.
+- **Untouched by design:** `networkBoundary.ts`, `peerRateLimiter.ts`, `tokenBucketRateLimiter.ts`, `rooms/BattleRoom.ts`, and all gameplay profile/input limiters.
+- **Negative control:** built against exact baseline `3aab85db...` in a disposable detached worktree. Baseline reproduced the bug through real admission behavior (client B rate-limited on its first request by client A's consumption; 3 player rows). The fixed code gives B an independent budget in the same scenario, and the fixed code run WITHOUT trusted-edge configuration collides again — proving the header alone grants no authority.
+- **Caddy proof:** pinned real Caddy 2.11.4 (sha256/sha512 verified against `deploy/edge/caddy/caddy-validation-release.json`) executed in a throwaway Linux container. `fmt --diff` clean on the rendered real template, `adapt` + `validate` pass, adapted JSON shows the internal header SET only on the server route from `{http.request.remote.host}` and REMOVED only on the client route, and the runtime edge-contract check reported `runtimeExecuted: true` with all 39 assertions true, including the NET-02 spoof-resistance set and the PA FIX1 client-route stripping proof.
+- **Factual correction recorded:** Caddy's current `reverse_proxy` defaults already ignore incoming `X-Forwarded-*` values for spoof-resistance. Nothing in this work claims the current edge blindly trusts attacker-controlled `X-Forwarded-For`; the dedicated internal header was chosen for explicitness and testability.
+- **Rollout value deliberately not committed:** `BURNINGSPACE_TRUSTED_EDGE_PEERS` is a required substitution in `deploy/docker-compose.staging.yml`, and the committed examples carry the explicit direct-peer-only sentinel `none`. The live Docker gateway address is not guessed here; a public rollout must measure the exact peer inside the target container, and `none` or an omitted value is never rollout acceptance.
+- **One approved surface exception:** `apps/server/scripts/external-staging-preflight.ts` received a single `ENV_KEYS` allowlist entry (no validation logic change) because its strict inventory check otherwise rejects the new required variable in `deploy/external-staging.env.example`. This was raised to and approved by the PA before editing.
+- **NET-02 is NOT CLOSED.** It closes only after publication, exact-head Core SUCCESS, governed QA, independent Architecture / Network / Security / QA review, PA acceptance and human merge. Even a CLOSED NET-02 removes only one rollout blocker and does **not** authorize persistence deployment. QA-01 and QA-02 remain unrelated deferred items.
+
+## PERSIST002-NET-02 PA FIX2 (2026-09-19): authenticate the trusted edge hop — IMPLEMENTED LOCALLY, NOT CLOSED
+
+PA source-delta review of FIX1 found one HIGH security blocker,
+`PERSIST002-NET02-EDGE-AUTH-01`. FIX2 addresses it locally. NET-02 stays
+**OPEN**.
+
+- **Blocker:** the trusted direct socket peer is the Docker bridge / NAT
+  gateway, which identifies the host-side NAT path and **not** the Caddy
+  process. Another local process on the VPS could reach the host-published
+  loopback port, arrive with the same trusted peer, forge
+  `X-BurningSpace-Edge-Peer`, and be treated as an edge-attributed client.
+- **Pre-FIX2 negative result** (real server, real PostgreSQL, trusting
+  `127.0.0.1`, direct loopback call, no proof): forged peer `198.51.100.11`
+  and forged peer `198.51.100.22` each obtained an independent capacity-3
+  burst (`[201,201,201,429]` twice), creating six durable players from one
+  socket peer.
+- **Fix:** the peer allowlist is retained but is now only one factor. A second
+  cryptographic factor, `X-BurningSpace-Edge-Proof` carrying
+  `BURNINGSPACE_EDGE_ASSERTION_SECRET` from the operator-controlled Caddy
+  environment, authenticates the hop. Node honors the peer assertion only when
+  the canonical direct peer is trusted **and** the proof authenticates; the
+  proof is checked first. Startup fails closed on any mismatched pair.
+- **Secret handling:** exactly 32 random bytes in canonical unpadded base64url
+  (43 characters). Only a SHA-256 verifier is retained, privately; the
+  resolver's public config omits it structurally; comparison is
+  `crypto.timingSafeEqual` over fixed 32-byte digests. The secret, verifier,
+  supplied proof and raw header values are never logged. Diagnostics carry
+  only `edge_proof_missing` / `edge_proof_malformed` / `edge_proof_rejected`.
+- **Post-FIX2 proof:** the same direct bypass now returns `429 rate_limited`
+  for every shape (no proof, wrong proof, malformed proof, padded proof,
+  repeated proof, empty proof) across two forged identities, with **0** player
+  rows; twenty distinct forged identities consume no token, leaving a genuine
+  client's full capacity-3 burst intact; the identical request through the
+  trusted edge proxy that SET-overwrites both headers succeeds.
+- **Array contract correction:** `Array.isArray` now always rejects for both
+  internal headers; the single-element acceptance test is replaced with
+  rejection evidence.
+- **Caddy:** the public server route SETs both internal headers and the public
+  client route REMOVEs both. The rendered `/etc/caddy/Caddyfile` keeps
+  `{$BURNINGSPACE_EDGE_ASSERTION_SECRET}` unresolved, so the on-disk config
+  never contains the secret; the adapted-config inspector rejects an artifact
+  in which it was resolved.
+- **Operator environment:** because `/etc/caddy/burningspace.env` is
+  documented as a non-secret inventory, the secret is delivered through a
+  separate root-owned, `caddy`-readable
+  `/etc/caddy/burningspace-edge-secret.env`, added to the reviewed systemd
+  drop-in as the one exact additional file this required. **Superseded by PA
+  FIX3-A below:** that environment channel was rejected and replaced by a
+  systemd `LoadCredential=` unit credential.
+- **Ops accuracy, recorded deliberately:** the Docker bridge peer allowlist is
+  a network-location restriction, **not** proof of the Caddy process. The edge
+  proof authenticates the Caddy/operator hop. After Docker network recreation
+  the observed direct peer may change and must be re-measured before an
+  authorized rollout. It is not claimed that the Docker gateway address
+  uniquely identifies Caddy.
+- **Validation:** complete suite against reachable PostgreSQL 17.11 — **54
+  test files / 655 tests / 0 skipped**; `npm run typecheck` clean; `npm run
+  build` clean (with the CI-supplied `VITE_BURNINGSPACE_SERVER_URL`);
+  `git diff --check` clean; classifier 29 OK; Claude QA audit 89 PASS / 0
+  FAIL; Phase A secret scan clean. Edge preflight self-tests 101. Pinned real
+  Caddy **2.11.4** runtime contract check executed in a throwaway Linux
+  container: `runtimeExecuted: true`, **54 assertions, all true**, 56 tests,
+  covering both internal headers on the server route (including HTTP and
+  WebSocket upgrade) and zero values for both on the client route. The check
+  uses a runtime-generated disposable secret and never prints it.
+- **State:** local working-tree changes only. **No commit, no push, no PR, no
+  deployment, no image publication, no VPS access, no Caddy reload on any real
+  host, no production secret creation, no database or schema change.**
+
+Status: `IMPLEMENTED LOCALLY / PA SOURCE REVIEW PENDING`.
+
+## PERSIST002-NET-02 PA FIX3 (2026-09-19): secure credential transport + canonical proof — IMPLEMENTED LOCALLY, NOT CLOSED
+
+PA source review of the FIX2 patch **accepted the core architecture** and
+returned three bounded corrections. All three are implemented locally. NET-02
+stays **OPEN**.
+
+- **FIX3-A (HIGH) `PERSIST002-NET02-SECRET-TRANSPORT-01`:** `EnvironmentFile=`
+  is rejected as the secret transport and **removed**. The edge secret now
+  reaches Caddy as a systemd unit credential: source
+  `/etc/caddy/burningspace-edge-assertion-secret` (`root:root` `0600`, raw
+  43-character value, no `KEY=` prefix, no trailing newline), drop-in line
+  `LoadCredential=burningspace-edge-assertion-secret:/etc/caddy/burningspace-edge-assertion-secret`,
+  exposed to `caddy.service` alone at
+  `/run/credentials/caddy.service/burningspace-edge-assertion-secret`, and read
+  by the public server route through
+  `header_up X-BurningSpace-Edge-Proof {file./run/credentials/...}`. This is
+  `LoadCredential=`, **not** `LoadCredentialEncrypted=`; no encryption-at-rest
+  claim is made. The Node server's own delivery is unchanged.
+- **FIX3-B (LOW) `PERSIST002-NET02-PROOF-CANON-01`:** the incoming proof
+  verifier now applies the same canonical base64url round-trip as the startup
+  parser, rejecting a non-canonical spelling of the real secret as
+  `edge_proof_malformed` before hashing.
+- **FIX3-C (MEDIUM) `PERSIST002-NET02-ENV-EXAMPLE-01`:** the malformed bare
+  line in `deploy/external-staging.env.example` (a generation command split
+  across lines) is removed; the file now parses cleanly through
+  `docker compose --env-file` and the repository's own preflight parser.
+- **Runtime evidence, re-run after the TypeScript change:** complete suite
+  against reachable PostgreSQL 17.11 — **54 test files / 659 tests / 0
+  skipped**. Focused unit suite 113. Direct host-local bypass still fails
+  closed for every shape with 0 player rows. Canonical-equivalence test proven
+  discriminating: with the FIX3-B check temporarily removed it fails.
+- **Edge evidence:** edge preflight self-tests 108; template mode, render,
+  `caddy fmt --diff` clean, `adapt` + `validate` pass, adapted JSON retains
+  only the approved `{file....}` placeholder and no secret; staging preflight
+  self-tests 56 plus a live compose-config parse of the repaired env example;
+  `systemd-analyze verify` passes with and without the credential source
+  present. Pinned real **Caddy 2.11.4** runtime contract: `runtimeExecuted:
+  true`, **57 assertions, all true**, 59 tests — including proof that the
+  running Caddy's own `/proc/<pid>/environ` contains neither the secret nor
+  the variable name, and that the on-disk Caddyfile contains no secret.
+- **CI contract synchronized:** edge-contract assertion count **54 -> 57**
+  (numeric contract only).
+- **State:** local working-tree changes only. **No commit, no push, no PR, no
+  merge, no workflow dispatch, no deployment, no image publication, no VPS
+  access, no Caddy reload on any real host, no production secret creation or
+  use, no database or schema change.**
+
+Status: `PA SOURCE APPROVED / PUBLICATION AUTHORIZED / AWAITING EXACT-HEAD CI AND INDEPENDENT REVIEWS`.
+
+PERSIST002-NET-02 — **OPEN**. PUBLIC PERSISTENCE ROLLOUT — **BLOCKED**.
+**NO DEPLOYMENT AUTHORIZED.**
+
 ## Current next safe action
 
-The immediate next step for the post-merge documentation reconciliation is Product Architect inspection of its published PR and the applicable automatic checks. No closed review starts again.
+The Product Architect has completed source review of the PERSIST002-NET-02 FIX3 delta and authorized publication. The immediate next step is exact-head automatic CI plus independent Architecture / Network / Security / QA review of the published implementation. Nothing is committed, published or deployed; publication is a separate PA decision, and no closed review starts again.
 
-The subsequent public persistence rollout remains gated by **PERSIST002-NET-02** (implemented admission-budget mitigation, spoof-resistance and multi-client-budget tests, Security/Ops acceptance, separate PA deployment authorization). Nothing in this reconciliation authorizes mitigation implementation, deployment, image publication or VPS access.
+The subsequent public persistence rollout remains gated by **PERSIST002-NET-02**, which is implemented and published but **NOT CLOSED**: it still needs exact-head Core SUCCESS, governed QA, independent Architecture / Network / Security / QA review, Security/Ops acceptance, PA acceptance, human merge, and then a separate PA deployment authorization. Nothing here authorizes deployment, image publication or VPS access.

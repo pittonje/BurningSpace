@@ -231,7 +231,7 @@ jobs:
           const result = JSON.parse(process.env.CONTRACT_RESULT || '{}');
           const checks = result.checks || {};
           if (!result.ok || result.runtimeExecuted !== true || result.caddyVersion !== '2.11.4' ||
-              Object.keys(checks).length !== 26 || Object.values(checks).some((value) => value !== true)) {
+              Object.keys(checks).length !== 57 || Object.values(checks).some((value) => value !== true)) {
             throw new Error('Caddy runtime contract did not execute every required assertion.');
           }
           console.log(JSON.stringify({

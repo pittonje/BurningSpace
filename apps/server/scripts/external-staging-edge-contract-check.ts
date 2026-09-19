@@ -1,9 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { connect, createServer as createTcpServer, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 
 interface SeenRequest {
@@ -13,6 +13,16 @@ interface SeenRequest {
   origin?: string;
   forwardedHost?: string;
   forwardedProto?: string;
+  /** PERSIST002-NET-02: exactly what the upstream observed, never what the client sent. */
+  edgePeer?: string | string[];
+  edgePeerCount?: number;
+  /**
+   * PA FIX2: whether the upstream's observed proof matched the operator
+   * value, and how many proof headers arrived. The proof VALUE is
+   * deliberately never stored here and never printed.
+   */
+  edgeProofMatches?: boolean;
+  edgeProofCount?: number;
 }
 
 class ContractError extends Error {
@@ -28,6 +38,35 @@ const CLIENT_QUERY_CANARY = 'ops002-client-query-canary-9c7b3e';
 const AUTH_CANARY = 'Bearer ops002-authorization-canary-7b2d';
 const COOKIE_CANARY = 'ops002-cookie-canary-5e8a';
 const ERROR_QUERY_CANARY = 'ops002-error-query-canary-73da';
+const EDGE_PEER_HEADER = 'x-burningspace-edge-peer';
+const EDGE_PROOF_HEADER = 'x-burningspace-edge-proof';
+/** What a hostile public client tries to make the upstream believe. */
+const EDGE_PEER_SPOOF = '198.51.100.66';
+/** What Caddy's own {remote_host} must produce for a loopback client instead. */
+const EDGE_PEER_EXPECTED = '127.0.0.1';
+/**
+ * PA FIX2: a DISPOSABLE 32-byte edge secret, generated fresh in this process
+ * for this run only. It is never persisted, never committed and never
+ * printed -- only the boolean "the upstream observed exactly this" is.
+ */
+const EDGE_PROOF_SECRET = randomBytes(32).toString('base64url');
+/** A hostile client's own attempt at a proof. Never the operator value. */
+const EDGE_PROOF_SPOOF = 'A'.repeat(43);
+/**
+ * PA FIX3-A: the operator hop's secret reaches Caddy exactly the way the real
+ * unit does -- as a systemd CREDENTIAL file, never as service environment.
+ * The real service credential lives at
+ * /run/credentials/caddy.service/burningspace-edge-assertion-secret; this
+ * disposable proof environment creates that exact path, read-only, holding
+ * exactly the 43 secret bytes with no trailing newline.
+ *
+ * The secret is deliberately NOT exported into this process's environment,
+ * so no child Caddy (`adapt`, `validate`, `run`, `reload`) can ever see it
+ * as a variable.
+ */
+const EDGE_CREDENTIAL_ID = 'burningspace-edge-assertion-secret';
+const EDGE_CREDENTIAL_RUNTIME_PATH = `/run/credentials/caddy.service/${EDGE_CREDENTIAL_ID}`;
+const EDGE_PROOF_SOURCE_PLACEHOLDER = `{file.${EDGE_CREDENTIAL_RUNTIME_PATH}}`;
 
 function fail(code: string, message: string): never { throw new ContractError(code, message); }
 
@@ -50,6 +89,29 @@ async function freePorts(count: number): Promise<number[]> {
   } finally {
     await Promise.all(reservations.map((server) => new Promise<void>((resolveClose) => server.close(() => resolveClose()))));
   }
+}
+
+function observedEdgeHeaders(request: IncomingMessage): Pick<
+  SeenRequest,
+  'edgePeer' | 'edgePeerCount' | 'edgeProofMatches' | 'edgeProofCount'
+> {
+  const raw = request.rawHeaders;
+  let peerCount = 0;
+  let proofCount = 0;
+  for (let index = 0; index + 1 < raw.length; index += 2) {
+    const name = raw[index]!.toLowerCase();
+    if (name === EDGE_PEER_HEADER) peerCount += 1;
+    if (name === EDGE_PROOF_HEADER) proofCount += 1;
+  }
+  const proof = request.headers[EDGE_PROOF_HEADER];
+  return {
+    edgePeer: request.headers[EDGE_PEER_HEADER],
+    edgePeerCount: peerCount,
+    // Only the comparison result is retained: the proof value itself never
+    // enters a record that could be logged or printed.
+    edgeProofMatches: typeof proof === 'string' && proof === EDGE_PROOF_SECRET,
+    edgeProofCount: proofCount
+  };
 }
 
 function websocketAccept(key: string): string {
@@ -89,7 +151,8 @@ async function startUpstream(kind: 'client' | 'server', port: number, seen: Seen
       host: request.headers.host,
       origin: typeof request.headers.origin === 'string' ? request.headers.origin : undefined,
       forwardedHost: typeof request.headers['x-forwarded-host'] === 'string' ? request.headers['x-forwarded-host'] : undefined,
-      forwardedProto: typeof request.headers['x-forwarded-proto'] === 'string' ? request.headers['x-forwarded-proto'] : undefined
+      forwardedProto: typeof request.headers['x-forwarded-proto'] === 'string' ? request.headers['x-forwarded-proto'] : undefined,
+      ...observedEdgeHeaders(request)
     };
     seen.push(item);
     response.setHeader('content-type', 'application/json');
@@ -105,7 +168,8 @@ async function startUpstream(kind: 'client' | 'server', port: number, seen: Seen
       host: request.headers.host,
       origin: typeof request.headers.origin === 'string' ? request.headers.origin : undefined,
       forwardedHost: typeof request.headers['x-forwarded-host'] === 'string' ? request.headers['x-forwarded-host'] : undefined,
-      forwardedProto: typeof request.headers['x-forwarded-proto'] === 'string' ? request.headers['x-forwarded-proto'] : undefined
+      forwardedProto: typeof request.headers['x-forwarded-proto'] === 'string' ? request.headers['x-forwarded-proto'] : undefined,
+      ...observedEdgeHeaders(request)
     });
     socket.write([
       'HTTP/1.1 101 Switching Protocols',
@@ -154,8 +218,18 @@ function testCaddyfile(values: {
 \t\t\t}
 \t\t}
 \t}`;
-  const proxy = (upstream: number): string => `
+  const proxy = (upstream: number, edgePeer: 'set' | 'remove'): string => {
+    // PA FIX2: the real template's per-route contract, reproduced exactly --
+    // the server route SETs both internal headers, the client route REMOVEs
+    // both. The proof value reaches Caddy ONLY as a systemd credential file,
+    // read at request time through {file.*} -- never through its environment.
+    const directives = edgePeer === 'set'
+      ? `header_up X-BurningSpace-Edge-Peer {remote_host}
+		header_up X-BurningSpace-Edge-Proof ${EDGE_PROOF_SOURCE_PLACEHOLDER}`
+      : 'header_up -X-BurningSpace-Edge-Peer\n\t\theader_up -X-BurningSpace-Edge-Proof';
+    return `
 \treverse_proxy 127.0.0.1:${upstream} {
+\t\t${directives}
 \t\tstream_timeout 24h
 \t\tstream_close_delay 5m
 \t\ttransport http {
@@ -165,6 +239,7 @@ function testCaddyfile(values: {
 \t\t\tkeepalive 2m
 \t\t}
 \t}`;
+  };
   return `{
 \tadmin unix/${values.adminSocket}
 \tpersist_config off
@@ -188,16 +263,16 @@ function testCaddyfile(values: {
 }
 
 http://:${values.clientPort} {
-\tbind 127.0.0.1${logBlock('client-access.log')}${proxy(values.clientUpstream)}
+\tbind 127.0.0.1${logBlock('client-access.log')}${proxy(values.clientUpstream, 'remove')}
 }
 
 http://:${values.serverPort} {
-\tbind 127.0.0.1${logBlock('server-access.log')}${proxy(values.serverUpstream)}
+\tbind 127.0.0.1${logBlock('server-access.log')}${proxy(values.serverUpstream, 'set')}
 }
 `;
 }
 
-function boundedRequest(port: number, path: string, headers: Record<string, string> = {}): Promise<SeenRequest> {
+function boundedRequest(port: number, path: string, headers: Record<string, string | string[]> = {}): Promise<SeenRequest> {
   return new Promise((resolveRequest, rejectRequest) => {
     const request = httpRequest({ host: '127.0.0.1', port, path, method: 'GET', headers }, (response) => {
       const chunks: Buffer[] = [];
@@ -343,6 +418,34 @@ function assertUnrelatedUserDenied(socketPath: string): void {
   }
 }
 
+/**
+ * Materializes the disposable operator credential at the EXACT path systemd
+ * would expose for caddy.service, so the runtime proof exercises the real
+ * {file.*} source rather than a stand-in. Written 0400, exactly 43 bytes,
+ * no trailing newline, then made read-only for the Caddy process.
+ *
+ * This only ever runs inside the throwaway Linux proof environment; the
+ * value is generated per run and never leaves it.
+ */
+function installDisposableEdgeCredential(): void {
+  const directory = dirname(EDGE_CREDENTIAL_RUNTIME_PATH);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  writeFileSync(EDGE_CREDENTIAL_RUNTIME_PATH, EDGE_PROOF_SECRET, { encoding: 'utf8', mode: 0o400 });
+  chmodSync(EDGE_CREDENTIAL_RUNTIME_PATH, 0o400);
+
+  const written = readFileSync(EDGE_CREDENTIAL_RUNTIME_PATH);
+
+  if (written.length !== 43 || written.toString('utf8') !== EDGE_PROOF_SECRET) {
+    fail('EDGE_CREDENTIAL_FILE', 'The disposable edge credential was not written as exactly 43 bytes without a newline.');
+  }
+}
+
+function removeDisposableEdgeCredential(): void {
+  if (!existsSync(EDGE_CREDENTIAL_RUNTIME_PATH)) return;
+  chmodSync(EDGE_CREDENTIAL_RUNTIME_PATH, 0o600);
+  rmSync(EDGE_CREDENTIAL_RUNTIME_PATH, { force: true });
+}
+
 async function runRuntime(binary: string): Promise<Record<string, boolean>> {
   const exactBinary = resolve(binary);
   if (!existsSync(exactBinary)) fail('CADDY_BINARY', 'The supplied Caddy binary does not exist.');
@@ -362,6 +465,7 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
   let stderr = '';
   let stage = 'initialization';
   try {
+    installDisposableEdgeCredential();
     const [clientPort, serverPort, clientUpstreamPort, serverUpstreamPort] = await freePorts(4);
     const ports = {
       adminSocket, clientPort: clientPort!, serverPort: serverPort!,
@@ -412,10 +516,143 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
       Host: 'arena-api.example.invalid', Origin: 'https://hostile.example.invalid'
     });
     const absentOrigin = await boundedRequest(ports.serverPort, '/absent', { Host: 'arena-api.example.invalid' });
+    // PA FIX3-A transport proof: the running Caddy must have obtained the
+    // proof from the credential FILE, and its own environment must not
+    // contain the secret anywhere.
+    const caddyEnvironment = readFileSync(`/proc/${String(caddy.pid ?? 0)}/environ`, 'utf8');
+
+    // Guard against a vacuous pass: an unreadable or empty environ would
+    // otherwise "prove" the secret is absent.
+    if (!caddyEnvironment.includes('PATH=')) {
+      fail('EDGE_CREDENTIAL_ENV', 'The Caddy process environment could not be read for inspection.');
+    }
+    if (caddyEnvironment.includes(EDGE_PROOF_SECRET)) {
+      fail('EDGE_CREDENTIAL_ENV', 'The Caddy process environment contained the edge secret.');
+    }
+    if (/BURNINGSPACE_EDGE_ASSERTION_SECRET=/u.test(caddyEnvironment)) {
+      fail('EDGE_CREDENTIAL_ENV', 'The Caddy process environment declared the edge secret variable.');
+    }
+    if (readFileSync(configPath, 'utf8').includes(EDGE_PROOF_SECRET)) {
+      fail('EDGE_CREDENTIAL_CONFIG', 'The on-disk Caddyfile contained the edge secret.');
+    }
+
+    // PERSIST002-NET-02 + PA FIX2 real-runtime spoof-resistance proof. Every
+    // one of these is a hostile PUBLIC request trying to dictate BOTH its own
+    // admission identity and its own edge proof. The upstream must observe
+    // exactly Caddy's {remote_host} and exactly the operator secret.
+    const edgeSpoofs: { readonly label: string; readonly headers: Record<string, string | string[]> }[] = [
+      {
+        label: 'single',
+        headers: { 'X-BurningSpace-Edge-Peer': EDGE_PEER_SPOOF, 'X-BurningSpace-Edge-Proof': EDGE_PROOF_SPOOF }
+      },
+      {
+        label: 'repeated',
+        headers: {
+          'X-BurningSpace-Edge-Peer': [EDGE_PEER_SPOOF, '203.0.113.9'],
+          'X-BurningSpace-Edge-Proof': [EDGE_PROOF_SPOOF, 'B'.repeat(43)]
+        }
+      },
+      {
+        label: 'casing',
+        headers: { 'x-burningspace-EDGE-peer': EDGE_PEER_SPOOF, 'X-BURNINGSPACE-edge-PROOF': EDGE_PROOF_SPOOF }
+      },
+      {
+        label: 'comma',
+        headers: {
+          'X-BurningSpace-Edge-Peer': `${EDGE_PEER_SPOOF},203.0.113.9`,
+          'X-BurningSpace-Edge-Proof': `${EDGE_PROOF_SPOOF},${'B'.repeat(43)}`
+        }
+      },
+      { label: 'forwarded-for', headers: { 'X-Forwarded-For': EDGE_PEER_SPOOF } },
+      { label: 'real-ip', headers: { 'X-Real-IP': EDGE_PEER_SPOOF } },
+      { label: 'forwarded', headers: { Forwarded: `for=${EDGE_PEER_SPOOF}` } },
+      { label: 'proof-absent', headers: { 'X-BurningSpace-Edge-Peer': EDGE_PEER_SPOOF } },
+      { label: 'proof-empty', headers: { 'X-BurningSpace-Edge-Proof': '' } },
+      {
+        label: 'combined',
+        headers: {
+          'X-BurningSpace-Edge-Peer': [EDGE_PEER_SPOOF, `${EDGE_PEER_SPOOF}:443`],
+          'X-BurningSpace-Edge-Proof': [EDGE_PROOF_SPOOF, `${EDGE_PROOF_SPOOF}x`],
+          'X-Forwarded-For': EDGE_PEER_SPOOF,
+          'X-Real-IP': EDGE_PEER_SPOOF,
+          Forwarded: `for=${EDGE_PEER_SPOOF}`
+        }
+      }
+    ];
+
+    for (const spoof of edgeSpoofs) {
+      const observed = await boundedRequest(ports.serverPort, `/edge-peer-${spoof.label}`, {
+        Host: 'arena-api.example.invalid',
+        Origin: 'https://arena.example.invalid',
+        ...spoof.headers
+      });
+      if (observed.edgePeer !== EDGE_PEER_EXPECTED || observed.edgePeerCount !== 1) {
+        fail('EDGE_PEER_SPOOF', 'The upstream did not observe exactly the Caddy {remote_host} admission-peer value.');
+      }
+      if (observed.edgeProofMatches !== true || observed.edgeProofCount !== 1) {
+        fail('EDGE_PROOF_SPOOF', 'The upstream did not observe exactly one operator-generated edge proof.');
+      }
+    }
+
+    // PA FIX1/FIX2 least-privilege proof: the public CLIENT route REMOVEs both
+    // internal headers, so the static client upstream must observe ZERO values
+    // for every public request shape -- and Caddy must never synthesize either
+    // one there.
+    const clientShapes: { readonly label: string; readonly headers: Record<string, string | string[]> }[] = [
+      { label: 'absent', headers: {} },
+      {
+        label: 'single',
+        headers: { 'X-BurningSpace-Edge-Peer': EDGE_PEER_SPOOF, 'X-BurningSpace-Edge-Proof': EDGE_PROOF_SPOOF }
+      },
+      {
+        label: 'repeated',
+        headers: {
+          'X-BurningSpace-Edge-Peer': [EDGE_PEER_SPOOF, '203.0.113.9'],
+          'X-BurningSpace-Edge-Proof': [EDGE_PROOF_SPOOF, 'B'.repeat(43)]
+        }
+      },
+      {
+        label: 'casing',
+        headers: { 'x-burningspace-EDGE-peer': EDGE_PEER_SPOOF, 'X-BURNINGSPACE-edge-PROOF': EDGE_PROOF_SPOOF }
+      },
+      {
+        label: 'comma',
+        headers: {
+          'X-BurningSpace-Edge-Peer': `${EDGE_PEER_SPOOF},203.0.113.9`,
+          'X-BurningSpace-Edge-Proof': `${EDGE_PROOF_SPOOF},${'B'.repeat(43)}`
+        }
+      }
+    ];
+
+    for (const shape of clientShapes) {
+      const observed = await boundedRequest(ports.clientPort, `/edge-peer-client-${shape.label}`, {
+        Host: 'arena.example.invalid',
+        ...shape.headers
+      });
+      if (observed.kind !== 'client' || observed.edgePeer !== undefined || observed.edgePeerCount !== 0) {
+        fail(
+          'EDGE_PEER_CLIENT_ROUTE',
+          'The public client upstream must observe zero internal admission-peer header values.'
+        );
+      }
+      if (observed.edgeProofCount !== 0 || observed.edgeProofMatches !== false) {
+        fail(
+          'EDGE_PROOF_CLIENT_ROUTE',
+          'The public client upstream must observe zero internal edge-proof header values.'
+        );
+      }
+    }
+
     const websocket = await websocketRoundTrip(ports.serverPort);
     const expectedWebSocketQuery = `/battle?reconnectionToken=${TOKEN_CANARY}&other=unchanged`;
     const wsSeen = seen.find((entry) => entry.url === expectedWebSocketQuery);
     if (!wsSeen) fail('QUERY_PASS', 'WebSocket query did not reach the server upstream unchanged.');
+    if (wsSeen.edgePeer !== EDGE_PEER_EXPECTED || wsSeen.edgePeerCount !== 1) {
+      fail('EDGE_PEER_UPGRADE', 'The WebSocket upgrade did not carry exactly the Caddy {remote_host} admission-peer value.');
+    }
+    if (wsSeen.edgeProofMatches !== true || wsSeen.edgeProofCount !== 1) {
+      fail('EDGE_PROOF_UPGRADE', 'The WebSocket upgrade did not carry exactly one operator-generated edge proof.');
+    }
     if (client.kind !== 'client' || exactOrigin.kind !== 'server') fail('ROUTING', 'Client/server edge routing crossed upstreams.');
     if (exactOrigin.origin !== 'https://arena.example.invalid' || hostileOrigin.origin !== 'https://hostile.example.invalid' || absentOrigin.origin !== undefined) {
       fail('ORIGIN', 'Exact, hostile, or absent Origin was not preserved unchanged.');
@@ -463,6 +700,11 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
     for (const canary of [TOKEN_CANARY, CLIENT_QUERY_CANARY, ERROR_QUERY_CANARY, AUTH_CANARY, COOKIE_CANARY]) {
       if (allRuntimeOutput.includes(canary)) fail('LOG_LEAK', 'A seeded query or credential canary appeared in edge output.');
     }
+    // PA FIX2 secret hygiene: the operator edge proof must never reach any
+    // access log, any Caddy stream, or this script's own output.
+    if (allRuntimeOutput.includes(EDGE_PROOF_SECRET)) {
+      fail('EDGE_PROOF_LEAK', 'The operator edge proof appeared in edge runtime output.');
+    }
     for (const line of serverLog.trim().split(/\r?\n/u).filter(Boolean)) {
       const entry = JSON.parse(line) as Record<string, unknown>;
       const request = entry.request as Record<string, unknown> | undefined;
@@ -476,12 +718,30 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
       adminSocketCreated: true, adminSocketDirectoryPrivate: true, adminSocketServiceOnly: true,
       adminTcpListenerAbsent: true, unrelatedUserDenied: true, unixSocketReload: true,
       postReloadClientRouting: true, postReloadServerRouting: true,
-      errorLogSafe: true, reloadValidationOffline: true, socketCleanup: true, cleanupBounded: true
+      errorLogSafe: true, reloadValidationOffline: true, socketCleanup: true, cleanupBounded: true,
+      edgePeerSetFromRemoteHost: true, edgePeerOverwritesClientValue: true,
+      edgePeerOverwritesRepeatedValue: true, edgePeerOverwritesHeaderCasing: true,
+      edgePeerOverwritesCommaValue: true, edgePeerIgnoresForwardedHeaders: true,
+      edgePeerSingleValuedUpstream: true, edgePeerOnWebSocketUpgrade: true,
+      edgePeerAbsentOnClientRoute: true, edgePeerStrippedOnClientRoute: true,
+      edgePeerRepeatedStrippedOnClientRoute: true, edgePeerCasingStrippedOnClientRoute: true,
+      edgePeerCommaStrippedOnClientRoute: true,
+      edgeProofSetFromSystemdCredential: true, edgeProofOverwritesClientValue: true,
+      edgeProofOverwritesRepeatedValue: true, edgeProofOverwritesHeaderCasing: true,
+      edgeProofOverwritesCommaValue: true, edgeProofSuppliedWhenClientOmitsIt: true,
+      edgeProofSuppliedWhenClientSendsEmpty: true, edgeProofSingleValuedUpstream: true,
+      edgeProofOnWebSocketUpgrade: true, edgeProofAbsentOnClientRoute: true,
+      edgeProofStrippedOnClientRoute: true, edgeProofRepeatedStrippedOnClientRoute: true,
+      edgeProofCasingStrippedOnClientRoute: true, edgeProofCommaStrippedOnClientRoute: true,
+      edgeProofNeverLogged: true,
+      edgeProofFromSystemdCredentialFile: true, edgeProofAbsentFromCaddyEnvironment: true,
+      edgeProofAbsentFromOnDiskConfig: true
     };
   } catch (error) {
     if (error instanceof ContractError) throw error;
     fail('RUNTIME_UNEXPECTED', `Unexpected bounded edge-contract failure during ${stage}.`);
   } finally {
+    removeDisposableEdgeCredential();
     await stopProcess(caddy);
     await closeServer(clientUpstream);
     await closeServer(serverUpstream);
@@ -516,7 +776,7 @@ async function main(): Promise<void> {
   }
   const checks = await runRuntime(binary);
   console.log(JSON.stringify({
-    ok: true, event: 'external_staging_edge_contract_self_tested', tests: 28,
+    ok: true, event: 'external_staging_edge_contract_self_tested', tests: 59,
     runtimeExecuted: true, caddyVersion: '2.11.4', checks
   }));
 }

@@ -35,13 +35,24 @@ enforcement is enabled.
 - `deploy/edge/caddy/caddy-validation-release.json` binds the official
   validation artifact and checksums.
 - `deploy/edge/caddy/systemd/caddy.service.d/10-burningspace-edge.conf` is the
-  canonical future service drop-in. It creates the private runtime directory
-  and replaces `ExecReload` with the exact Unix-socket reload command.
+  canonical future service drop-in. It creates the private runtime directory,
+  loads the edge secret as a systemd unit credential, and replaces
+  `ExecReload` with the exact Unix-socket reload command.
 - `/etc/caddy/Caddyfile` is the standard future rendered host configuration.
 - `/etc/caddy/burningspace.env` is the standard future root-owned, non-secret
   environment inventory consumed through a reviewed systemd drop-in. It must
   not contain provider credentials, certificate private keys, SSH material,
   passwords, or tokens.
+- `/etc/caddy/burningspace-edge-assertion-secret` is the standard future
+  root-owned (`root:root`, `0600`) source file that carries **only** the raw
+  43-character edge secret -- no `KEY=` prefix, no trailing newline. systemd
+  loads it as the unit credential `burningspace-edge-assertion-secret` and
+  exposes it to `caddy.service` alone at
+  `/run/credentials/caddy.service/burningspace-edge-assertion-secret`. It
+  exists so the inventory above keeps its no-tokens contract and so the secret
+  never becomes service environment. It is never created by repository
+  preparation and a real secret is never committed. See the PA FIX3-A section
+  below.
 - `/var/lib/caddy` remains Caddy's service-owned data/certificate state.
 - `/var/log/caddy/burningspace` is the service-owned bounded access-log
   directory.
@@ -142,6 +153,211 @@ The public Host remains coherent and Caddy supplies its normal
 are configured because no upstream proxy is authorized before Caddy.
 Forwarded client IP is operations metadata only, never identity or gameplay
 authority.
+
+Caddy's current `reverse_proxy` defaults **ignore** incoming `X-Forwarded-*`
+values for spoof-resistance. This runbook therefore does not claim, and must
+not be read as claiming, that the edge blindly trusts or appends
+attacker-controlled `X-Forwarded-For`.
+
+## Internal admission-peer assertion (PERSIST002-NET-02)
+
+The public **server** route, and only that route, SETs exactly one internal
+header:
+
+```
+header_up X-BurningSpace-Edge-Peer {remote_host}
+```
+
+The public **client** route, and only that route, REMOVEs exactly that header:
+
+```
+header_up -X-BurningSpace-Edge-Peer
+```
+
+`header_up` without a leading `+` is a SET/overwrite, so any client-supplied
+value is replaced by Caddy's own direct connecting host. This is a dedicated,
+narrow, independently testable edge contract — not a workaround for any Caddy
+trust behavior. BurningSpace deliberately never consumes `X-Forwarded-For`,
+`X-Real-IP` or `Forwarded` for admission identity, and `trusted_proxies` and
+`{client_ip}` remain unused.
+
+The client route's REMOVE is a least-privilege requirement for a
+security-internal header (PA FIX1): the static-client upstream owns no
+admission logic, so it must never see the header at all. Caddy strips any
+client-supplied value there and never synthesizes a peer value for that
+upstream. Neither route may carry the other's operation — the server route must
+never REMOVE the header and the client route must never SET it.
+
+Node reads the header only when the canonical direct
+`request.socket.remoteAddress` is listed in `BURNINGSPACE_TRUSTED_EDGE_PEERS`
+(comma-separated exact IP literals, or the explicit `none` sentinel for
+direct-peer-only mode). A present-but-empty or malformed value fails startup.
+When the direct peer is trusted, a missing or malformed assertion fails that
+one admission attempt closed on the existing `rate_limited` /
+`auth_rate_limited` shapes; there is no shared trusted-proxy fallback bucket.
+
+The real value for a public persistence rollout is the exact direct socket
+peer the server container actually observes for edge traffic, measured inside
+the target container during that rollout task. It is deliberately not guessed
+or committed here, and `none` is never rollout acceptance. See
+[PERSIST002-NET-02 — Admission Budget Hardening](../tasks/persist-002-net-02-admission-budget-hardening.md).
+
+The pinned real-Caddy runtime contract check proves both halves. On the
+**server** upstream, a public request injecting the internal header (single,
+repeated, differently cased or comma-valued) plus `X-Forwarded-For` /
+`X-Real-IP` / `Forwarded` always arrives as exactly one Caddy
+`{remote_host}`-derived value, on both the plain-HTTP and the
+WebSocket-upgrade path. On the **client** upstream, every one of those request
+shapes — including no header at all — arrives with **zero**
+`X-BurningSpace-Edge-Peer` values.
+
+## Edge proof: authenticating the Caddy hop (PA FIX2)
+
+A trusted direct socket peer is **not** proof of the Caddy process.
+
+In the real staging topology the Node container observes the Docker bridge /
+NAT gateway as the direct socket peer for everything arriving through the
+host-published loopback port. That address identifies the **host-side Docker
+NAT path**, not Caddy. Any other local process on the VPS can reach
+
+```
+127.0.0.1:${BURNINGSPACE_SERVER_BIND_PORT} -> Docker NAT -> Node
+```
+
+and arrive with exactly the same direct socket peer as Caddy. Do **not** write
+or accept the claim that "the Docker gateway address uniquely identifies
+Caddy" — it does not.
+
+The peer allowlist is therefore a **network-location restriction**, and it is
+only the first of two required factors. The second is a cryptographic proof of
+the Caddy/operator hop:
+
+```
+header_up X-BurningSpace-Edge-Proof {file./run/credentials/caddy.service/burningspace-edge-assertion-secret}
+```
+
+where the value comes from the systemd credential described below -- set on
+the public **server** route only, and removed on the public **client** route
+only:
+
+```
+header_up -X-BurningSpace-Edge-Proof
+```
+
+Node honours `X-BurningSpace-Edge-Peer` only when **both** hold:
+
+1. the canonical `request.socket.remoteAddress` is in
+   `BURNINGSPACE_TRUSTED_EDGE_PEERS`; and
+2. `X-BurningSpace-Edge-Proof` authenticates against
+   `BURNINGSPACE_EDGE_ASSERTION_SECRET`.
+
+### Secret format and configuration pairing
+
+`BURNINGSPACE_EDGE_ASSERTION_SECRET` is exactly 32 random bytes in canonical
+unpadded base64url: exactly 43 characters over `[A-Za-z0-9_-]`, no padding, no
+whitespace, no alternative encoding. The single explicit non-secret spelling is
+the literal `none`.
+
+| `BURNINGSPACE_TRUSTED_EDGE_PEERS` | `BURNINGSPACE_EDGE_ASSERTION_SECRET` | Result |
+| --- | --- | --- |
+| absent / `none` | absent / `none` | direct-peer-only |
+| non-empty | valid 256-bit secret | trusted-edge |
+| non-empty | missing / `none` / malformed | **startup failure** |
+| absent / `none` | a real secret | **startup failure** |
+
+The last row exists so an unused secret can never create a false sense of
+configured trust. A real rollout must replace **both** variables; `none` is
+never rollout acceptance.
+
+
+### Where the secret lives
+
+`/etc/caddy/burningspace.env` remains the documented **non-secret** inventory
+and must continue to contain no tokens. The edge secret never enters it, and
+never enters the Caddy service environment at all.
+
+Instead the secret is delivered as a **systemd unit credential** (PA FIX3-A).
+The operator writes the raw value to a source file:
+
+- path: `/etc/caddy/burningspace-edge-assertion-secret`
+- contents: **only** the canonical 43-character base64url secret
+- **no** `KEY=` prefix
+- **no** trailing newline
+- ownership/mode: `root:root`, `0600`
+
+The reviewed drop-in loads it:
+
+```
+LoadCredential=burningspace-edge-assertion-secret:/etc/caddy/burningspace-edge-assertion-secret
+```
+
+Because the unit is `caddy.service`, systemd exposes the credential read-only,
+to that unit alone, at:
+
+```
+/run/credentials/caddy.service/burningspace-edge-assertion-secret
+```
+
+and the public server route reads it at request time through Caddy's `{file.*}`
+placeholder:
+
+```
+header_up X-BurningSpace-Edge-Proof {file./run/credentials/caddy.service/burningspace-edge-assertion-secret}
+```
+
+This is `LoadCredential=`, **not** `LoadCredentialEncrypted=`. No claim of
+encryption at rest is made or implied; the protection here is that the secret
+is a private, unit-scoped credential rather than ordinary service environment.
+
+The secret must therefore never appear in: the Caddy environment,
+`Environment=`, `EnvironmentFile=`, the rendered Caddyfile, retained adapted
+JSON, or a command line. The edge preflight enforces each of these, and the
+adapted-config inspector requires the retained artifact to carry exactly the
+`{file....}` placeholder and nothing else.
+
+The Node server receives the same value through its existing server
+configuration (`BURNINGSPACE_EDGE_ASSERTION_SECRET`). Both sides must carry
+the identical value.
+
+Generate a rollout secret with, for example — one line, exactly 43 characters,
+no newline:
+
+```
+openssl rand 32 | basenc --base64url | tr -d '=' | tr -d '\n' > /etc/caddy/burningspace-edge-assertion-secret
+```
+
+then `chown root:root` and `chmod 0600` that file, and verify it is exactly 43
+bytes (`stat -c %s`). Never commit a real secret. Repository examples use
+`none` for both variables.
+
+### Operational diagnostics
+
+Only fixed reason codes are reportable: `edge_proof_missing`,
+`edge_proof_malformed`, `edge_proof_rejected` (alongside the existing
+`edge_assertion_*` codes). The secret, the stored verifier, a supplied proof
+and the raw internal header values are never logged. Public failure shapes are
+unchanged: `/identity/guest` returns `429 rate_limited` and fresh auth returns
+`auth_rate_limited`. No token bucket is consumed for an invalid edge proof.
+
+### After Docker network recreation
+
+The observed direct peer may change when the Docker network is recreated. It
+must be **re-measured inside the target container** before an authorized
+rollout, and `BURNINGSPACE_TRUSTED_EDGE_PEERS` updated accordingly. The edge
+proof does not remove this requirement; it authenticates the hop, while the
+peer allowlist continues to restrict network location.
+
+### Runtime proof
+
+The pinned real-Caddy runtime contract check proves both headers together. On
+the **server** upstream, a public request injecting either internal header
+(single, repeated, differently cased or comma-valued), an absent or empty
+proof, and `X-Forwarded-For` / `X-Real-IP` / `Forwarded`, always arrives as
+exactly one Caddy `{remote_host}`-derived peer and exactly one
+operator-generated proof, on both the plain-HTTP and the WebSocket-upgrade
+path. On the **client** upstream, every one of those shapes arrives with
+**zero** values for both headers. The check asserts only that the observed
+proof matched; it never prints the proof itself.
 
 ## WebSocket and upstream timeouts
 

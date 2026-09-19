@@ -37,6 +37,13 @@ import type { GameplayAuthorityTestHooks } from './persistence/gameplayAuthority
 import { registerProductionRooms } from './rooms/productionRoomRegistry.js';
 import type { BattleRoom } from './rooms/BattleRoom.js';
 import {
+  createAdmissionPeerIdentityResolver,
+  describeAdmissionPeerIdentityMode,
+  parseAdmissionPeerIdentityConfig,
+  type AdmissionPeerIdentityEnvironment,
+  type AdmissionPeerIdentityLog
+} from './security/admissionPeerIdentity.js';
+import {
   createWebSocketVerifyClient,
   describeNetworkBoundaryMode,
   installNetworkBoundary,
@@ -60,7 +67,10 @@ const FRESH_AUTH_LIMITER_REFILL_PER_SECOND = 1;
 const FRESH_AUTH_LIMITER_MAX_BUCKETS = 10_000;
 const FRESH_AUTH_LIMITER_IDLE_EVICTION_MILLIS = 10 * 60 * 1000;
 
-export interface ProductionServerEnvironment extends NetworkBoundaryEnvironment, PersistenceEnv {
+export interface ProductionServerEnvironment
+  extends NetworkBoundaryEnvironment,
+    PersistenceEnv,
+    AdmissionPeerIdentityEnvironment {
   readonly PORT?: string;
   readonly BURNINGSPACE_SHUTDOWN_TIMEOUT_SECONDS?: string;
 }
@@ -231,9 +241,21 @@ export async function startProductionServer(
     const port = options.port ?? parsePort(environment.PORT);
     const shutdownTimeoutSeconds = parseShutdownTimeoutSeconds(environment);
     const networkBoundaryConfig = options.networkBoundaryConfigOverride ?? parseNetworkBoundaryConfig(environment);
+    // PERSIST002-NET-02: parsed during startup so a present-but-empty or
+    // malformed BURNINGSPACE_TRUSTED_EDGE_PEERS fails the boot rather than
+    // silently degrading admission attribution. Absent means direct-peer-only.
+    //
+    // PA FIX2: this also parses BURNINGSPACE_EDGE_ASSERTION_SECRET and fails
+    // the boot on any mismatched pair -- trusted peers without an edge
+    // secret, or an edge secret without trusted peers. Only the secret's
+    // SHA-256 verifier survives the call; the secret itself is never
+    // retained, described or logged.
+    const admissionPeerIdentityConfig = parseAdmissionPeerIdentityConfig(environment);
     const securityMode = describeNetworkBoundaryMode(networkBoundaryConfig);
     const operationalDetails = {
       securityMode,
+      admissionPeerMode: describeAdmissionPeerIdentityMode(admissionPeerIdentityConfig),
+      trustedEdgePeerCount: admissionPeerIdentityConfig.trustedEdgePeers.size,
       reconnectGraceSeconds: networkBoundaryConfig.reconnectGraceSeconds,
       shutdownTimeoutSeconds
     } as const;
@@ -247,6 +269,13 @@ export async function startProductionServer(
     // bounded-value truncation are otherwise identical, so widen the type
     // at this one integration seam for the endpoints' own event names.
     const identityLog: IdentityGuestEndpointContext['log'] = log as unknown as IdentityGuestEndpointContext['log'];
+    // One resolver instance per process, shared by BOTH admission budgets, so
+    // the trusted-edge contract and its bounded diagnostic sampling cannot
+    // diverge between /identity/guest and fresh BattleRoom.onAuth.
+    const admissionPeerIdentity = createAdmissionPeerIdentityResolver({
+      config: admissionPeerIdentityConfig,
+      log: identityLog as unknown as AdmissionPeerIdentityLog
+    });
     const guestIdentityLimiter = new PeerRateLimiter({
       capacity: GUEST_IDENTITY_LIMITER_CAPACITY,
       refillRatePerSecond: GUEST_IDENTITY_LIMITER_REFILL_PER_SECOND,
@@ -263,6 +292,7 @@ export async function startProductionServer(
         getPool: () => identityPool,
         networkBoundaryConfig,
         limiter: guestIdentityLimiter,
+        admissionPeerIdentity,
         log: identityLog
       },
       worldDiscovery: {
@@ -391,6 +421,7 @@ export async function startProductionServer(
         pool: identityPool,
         writer: roomAuthoritySafe,
         freshAuthLimiter,
+        admissionPeerIdentity,
         gameplayAuthorityTestHooks: options.gameplayAuthorityTestHooks
       })
     );
