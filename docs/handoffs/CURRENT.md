@@ -1085,11 +1085,81 @@ stays **OPEN**.
   running Caddy's own `/proc/<pid>/environ` contains neither the secret nor
   the variable name, and that the on-disk Caddyfile contains no secret.
 - **CI contract synchronized:** edge-contract assertion count **54 -> 57**
-  (numeric contract only).
+  (numeric contract only). **Incomplete as written — see PA FIX4-D below:**
+  a later commit on this branch also added CI provisioning of the exact
+  `/run/credentials/caddy.service` path, recorded as
+  `PERSIST002-NET02-CI-01`.
 - **State:** local working-tree changes only. **No commit, no push, no PR, no
   merge, no workflow dispatch, no deployment, no image publication, no VPS
   access, no Caddy reload on any real host, no production secret creation or
   use, no database or schema change.**
+
+Status: `PA SOURCE APPROVED / PUBLICATION AUTHORIZED / AWAITING EXACT-HEAD CI AND INDEPENDENT REVIEWS`.
+
+PERSIST002-NET-02 — **OPEN**. PUBLIC PERSISTENCE ROLLOUT — **BLOCKED**.
+**NO DEPLOYMENT AUTHORIZED.**
+
+## PERSIST002-NET-02 PA FIX4 (2026-09-19): review hardening — IMPLEMENTED LOCALLY, NOT CLOSED
+
+Independent Architecture, Network and Security reviews and governed Claude QA
+all returned **approve / approved with suggestions, no blockers** on head
+`b3ca93567abf3254f1baa181e4c2ff6d42454ba2`. PA FIX4 implements exactly four
+bounded corrections on the existing PR #88 branch.
+
+- **FIX4-A `PERSIST002-NET02-CHECKER-SAFETY-01`:** the edge contract checker
+  can no longer overwrite a pre-existing credential at the exact
+  production-compatible runtime path. Creation is exclusive
+  (`writeFileSync(..., { flag: 'wx' })`), a pre-existing path raises a
+  deterministic `EDGE_CREDENTIAL_PRESENT` error with a fixed diagnostic, and
+  cleanup removes the file **only** when this invocation created it. Five
+  discriminating guard assertions cover refusal-to-overwrite, the
+  pre-existing file being left intact, cleanup skipping what it did not
+  create, exclusive creation, and removal after use. The exact production
+  path, 43 bytes, absent newline, mode `0400`, unprivileged checker and
+  unprivileged Caddy are all preserved, and the secret is never printed.
+- **FIX4-B `PERSIST002-NET02-SECRET-CREATE-01`:** the runbook now creates the
+  rollout credential private from its first write (`umask 077` plus
+  `install -m 0600 -o root -g root /dev/null`, then redirect into that inode)
+  instead of relying on a later `chmod`. Measured on Linux: the previous
+  procedure yielded mode `644` under `umask 022`; the corrected procedure
+  yields `root:root 600 43` with no trailing newline.
+- **FIX4-C `PERSIST002-NET02-PROOF-WHITESPACE-01`:** the edge proof is no
+  longer trimmed before verification. A genuine secret padded with ASCII
+  space, NBSP, en space, ideographic space, ZWNBSP or a line separator is now
+  rejected as `edge_proof_malformed`. The edge **peer** keeps its existing
+  trim contract, and a whitespace-only header is still reported as `missing`,
+  so no unrelated public behavior changed.
+- **FIX4-D `PERSIST002-NET02-CI-01`:** the governance record now states the
+  full truth about the `pr-checks.yml` delta — see the task file. In summary:
+  the historical Core failure on `0eef8342…` occurred **only** during
+  edge-contract initialization after tests/build/typecheck/preflight had
+  passed; the root cause was the unprivileged GitHub-hosted runner being
+  unable to create the exact `/run/credentials/caddy.service` path; **no
+  application or Caddy contract source defect was found**; `b3ca9356…` added
+  narrowly scoped provisioning of that one directory with fail-closed
+  pre-existence handling, an `EXIT`-trap cleanup and a credential-removal
+  assertion; checker and Caddy stayed unprivileged; the exact
+  production-compatible path stayed under test; exact-head Core then passed
+  with `runtimeExecuted: true` and 57/57 checks. This CI correction is **PA
+  technically accepted** and **does not authorize merge or deployment**.
+
+**CI contract:** FIX4-A raises the edge-contract assertion count, so
+`.github/workflows/pr-checks.yml` carries a further exact numeric update
+**57 -> 62** and nothing else.
+
+**Explicitly deferred, no scope expansion:** Docker peer-drift silent
+degradation (rollout must re-measure the peer on the final composed topology
+and run a genuine multi-client admission smoke; no new runtime diagnostics
+added); limiter bucket-table exhaustion (capacities, `maxBuckets`, IPv6 /64
+policy and eviction unchanged, no global limiter added); Node-side Docker
+environment secret delivery; secret rotation; broader stale-documentation
+cleanup; and the historically present QA attempt-1 failure comment, which was
+not deleted or rewritten.
+
+**State:** local working-tree changes on the existing PR #88 branch. **No
+merge, no auto-merge, no deployment, no VPS/Contabo access, no image
+publication, no Caddy reload, no real edge secret, no database or schema
+change.** Merge authority is human-only.
 
 Status: `PA SOURCE APPROVED / PUBLICATION AUTHORIZED / AWAITING EXACT-HEAD CI AND INDEPENDENT REVIEWS`.
 

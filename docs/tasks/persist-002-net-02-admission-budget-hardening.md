@@ -570,6 +570,12 @@ source file rather than as `KEY=value`.
 - MOD `.github/workflows/pr-checks.yml` — edge-contract assertion count
   synchronization only (54 -> 57).
 
+  **Superseded / incomplete as written:** a later commit on this branch
+  (`b3ca9356…`) also added CI provisioning of the exact
+  `/run/credentials/caddy.service` path, so `pr-checks.yml` is no longer an
+  assertion-count-only change. See **FIX4-D — PERSIST002-NET02-CI-01** below
+  for the full, accurate record.
+
 ### Status
 
 `PA SOURCE APPROVED / PUBLICATION AUTHORIZED / AWAITING EXACT-HEAD CI AND INDEPENDENT REVIEWS`.
@@ -584,3 +590,147 @@ authorized publication. The implementation is **not** accepted for merge.
 Publication covers the repository only. No merge, deployment, image
 publication, VPS access, Caddy reload on a real host, production secret
 creation/use, or database/schema change is authorized by it.
+
+## PA FIX4 — review hardening
+
+Independent Architecture, Network and Security reviews and governed QA all
+returned **APPROVE / Approved with suggestions, no blockers**. PA FIX4
+implements exactly four bounded corrections. NET-02 remains **OPEN**; merge
+and deployment remain unauthorized.
+
+### FIX4-A — PERSIST002-NET02-CHECKER-SAFETY-01
+
+`external-staging-edge-contract-check.ts` materializes its disposable
+credential at the exact production-compatible runtime path. Previously
+`installDisposableEdgeCredential()` used ordinary write semantics and
+`removeDisposableEdgeCredential()` removed that exact path unconditionally, so
+running the checker as root on a real Caddy host could have overwritten and
+then deleted the live operator credential, causing a fail-closed admission
+outage.
+
+Corrections:
+
+- creation is now **exclusive** (`writeFileSync(..., { flag: 'wx' })`); a
+  pre-existing path raises a deterministic `EDGE_CREDENTIAL_PRESENT`
+  `ContractError` with a fixed diagnostic that never prints the path contents
+  or any secret;
+- ownership is tracked (`ownedCredentialPath`), set only after a successful
+  exclusive create, so a later verification failure still cleans up the file
+  this invocation made;
+- cleanup removes the credential **only** when this invocation created it, on
+  success or failure; a path the checker did not create is never touched.
+
+The exact production-compatible path, 43 bytes, absent newline, mode `0400`
+while Caddy reads it, the unprivileged checker and unprivileged Caddy are all
+preserved. The secret is still never printed.
+
+Five discriminating guard assertions run before the runtime proof, against a
+disposable temporary path, and are reported as contract checks:
+`credentialRefusesToOverwriteExisting`, `preExistingCredentialLeftIntact`,
+`cleanupSkipsCredentialItDidNotCreate`,
+`disposableCredentialCreatedExclusively`,
+`disposableCredentialRemovedAfterUse`. The real
+`/run/credentials/caddy.service/...` contract remains exercised by the Caddy
+runtime proof that follows.
+
+### FIX4-B — PERSIST002-NET02-SECRET-CREATE-01
+
+The runbook previously generated the rollout secret with a plain redirection
+and only afterwards applied `chown`/`chmod`, so under a common `umask 022` the
+file existed world-readable in between. Measured on a Linux host that
+procedure yields mode `644`.
+
+The runbook now creates the target private **before** any secret bytes are
+written (`umask 077` plus
+`install -m 0600 -o root -g root /dev/null <path>`, then redirect into the
+existing private inode), and verifies with `stat -c '%U:%G %a %s'` expecting
+exactly `root:root 600 43`. Measured result of the corrected procedure:
+`root:root 600 43`, no trailing newline, canonical 43-character base64url.
+The value is never printed. Node-side Docker environment delivery is
+unchanged and out of scope.
+
+### FIX4-C — PERSIST002-NET02-PROOF-WHITESPACE-01
+
+Both internal headers previously shared `readSingleInternalHeader()`, which
+applied `raw.trim()`. A genuine proof surrounded by whitespace therefore
+became valid after trimming, contradicting the FIX3 contract that exactly one
+canonical 43-character spelling is authoritative on the wire.
+
+`readSingleInternalHeader()` now takes an explicit
+`InternalHeaderWhitespacePolicy`:
+
+- the edge **proof** uses `'exact'` — the raw string is returned unchanged, so
+  surrounding ASCII space, NBSP, en space, ideographic space, ZWNBSP or line
+  separator survives into the canonical-shape test and is rejected as
+  `edge_proof_malformed`;
+- the edge **peer** keeps `'trim'`, its existing documented contract.
+
+A header carrying only whitespace is still reported as `missing` under both
+policies, so that public behavior is unchanged. `timingSafeEqual`, the
+canonical base64url round-trip, fixed-length digest comparison,
+array/repeated-header rejection and fail-closed behavior are untouched.
+
+### FIX4-D — PERSIST002-NET02-CI-01 (governance reconciliation)
+
+Earlier FIX3 records described the `pr-checks.yml` change as only an
+assertion-count synchronization. That is no longer the whole truth. The
+record is corrected here.
+
+- The historical Core run on `0eef83422cfb021d1ce9deb3cd8f18c81839cc08`
+  failed **only** during edge-contract initialization. Application tests,
+  build, typecheck and the staging/edge preflights had already passed in that
+  same run.
+- Root cause: the GitHub-hosted, unprivileged runner could not create the
+  exact `/run/credentials/caddy.service` path that the checker deliberately
+  exercises. The failure surfaced as the generic
+  `RUNTIME_UNEXPECTED ... during initialization` because the stage had not yet
+  advanced.
+- **No application or Caddy contract source defect was found.**
+- Head `b3ca93567abf3254f1baa181e4c2ff6d42454ba2` added narrowly scoped CI
+  provisioning for that exact directory: fail-closed if it already exists,
+  `sudo install -d -m 0700` owned by the runner, an `EXIT` trap removing only
+  that path, and a post-run assertion that the disposable credential was
+  removed by the checker.
+- The checker and Caddy remained **unprivileged**; `sudo` is used only to
+  create and delete that one directory, never to run repository-controlled
+  code.
+- The exact production-compatible credential path remained under test.
+- Exact-head Core then passed with `runtimeExecuted: true` and 57/57 checks.
+- This CI correction is **PA technically accepted**. It does **not** authorize
+  merge or deployment.
+
+FIX4-A raises the contract assertion count from 57 to **62**, so
+`.github/workflows/pr-checks.yml` carries a further exact numeric contract
+update (57 -> 62) and nothing else.
+
+### Explicitly deferred (not implemented in FIX4)
+
+Recorded so the residual risk is not lost, with no scope expansion:
+
+1. Silent degradation after Docker peer drift — if the real gateway changes
+   and is not trusted, clients collapse onto `direct:`. Safe but
+   operationally degraded. Rollout must re-measure the peer on the final
+   composed topology and include a genuine multi-client admission smoke. No
+   new runtime diagnostics were added.
+2. The 10,000-bucket table can be filled by an attacker controlling many IPs
+   or IPv6 /64s. Bounded-memory by design, not a regression relative to the
+   previous single global bucket, and invalid edge proofs consume no limiter
+   entry. Observability and any secondary tier belong to rollout/future
+   hardening. Capacities, `maxBuckets`, IPv6 /64 policy and eviction are
+   unchanged, and no global limiter was added.
+3. Node-side secret delivery remains the Docker/container environment,
+   explicitly excluded from FIX3 and unchanged here.
+4. Secret rotation procedure — not part of FIX4.
+5. Broader stale-documentation cleanup — only text required for FIX4
+   correctness and governance was changed.
+6. The QA attempt-1 failure comment remains historically present on the PR and
+   was not deleted or rewritten.
+
+### Status
+
+`PA SOURCE APPROVED / PUBLICATION AUTHORIZED / AWAITING EXACT-HEAD CI AND INDEPENDENT REVIEWS`.
+
+- PERSIST002-NET-02 — **OPEN**
+- PUBLIC PERSISTENCE ROLLOUT — **BLOCKED**
+- **NO DEPLOYMENT AUTHORIZED**
+- Merge authority is human-only and is not granted by this correction pass.

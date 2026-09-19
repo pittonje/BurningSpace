@@ -419,31 +419,157 @@ function assertUnrelatedUserDenied(socketPath: string): void {
 }
 
 /**
+ * PA FIX4-A: the path this invocation actually created, or undefined.
+ *
+ * Cleanup consults ONLY this. If the checker were ever mistakenly run on a
+ * real Caddy host, a pre-existing operator credential must survive both the
+ * install attempt and the finally-block cleanup; deleting it would cause a
+ * fail-closed admission outage.
+ */
+let ownedCredentialPath: string | undefined;
+
+/**
  * Materializes the disposable operator credential at the EXACT path systemd
  * would expose for caddy.service, so the runtime proof exercises the real
- * {file.*} source rather than a stand-in. Written 0400, exactly 43 bytes,
- * no trailing newline, then made read-only for the Caddy process.
+ * {file.*} source rather than a stand-in. Written exclusively, 0400, exactly
+ * 43 bytes, no trailing newline.
  *
- * This only ever runs inside the throwaway Linux proof environment; the
- * value is generated per run and never leaves it.
+ * PA FIX4-A: creation is EXCLUSIVE (`flag: 'wx'`). Anything already
+ * occupying the path -- most importantly a real operator credential -- makes
+ * this fail deterministically instead of overwriting it. The diagnostic is a
+ * fixed string: neither the secret nor the file contents are ever printed.
  */
-function installDisposableEdgeCredential(): void {
-  const directory = dirname(EDGE_CREDENTIAL_RUNTIME_PATH);
-  mkdirSync(directory, { recursive: true, mode: 0o700 });
-  writeFileSync(EDGE_CREDENTIAL_RUNTIME_PATH, EDGE_PROOF_SECRET, { encoding: 'utf8', mode: 0o400 });
-  chmodSync(EDGE_CREDENTIAL_RUNTIME_PATH, 0o400);
+function installDisposableEdgeCredential(path: string, secret: string): void {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
 
-  const written = readFileSync(EDGE_CREDENTIAL_RUNTIME_PATH);
+  try {
+    writeFileSync(path, secret, { encoding: 'utf8', mode: 0o400, flag: 'wx' });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      fail(
+        'EDGE_CREDENTIAL_PRESENT',
+        'A credential already occupies the runtime path; refusing to overwrite it.'
+      );
+    }
+    fail('EDGE_CREDENTIAL_FILE', 'The disposable edge credential could not be created exclusively.');
+  }
 
-  if (written.length !== 43 || written.toString('utf8') !== EDGE_PROOF_SECRET) {
+  // Ownership is recorded immediately after a successful exclusive create, so
+  // even a later verification failure still cleans up the file WE made.
+  ownedCredentialPath = path;
+  chmodSync(path, 0o400);
+
+  const written = readFileSync(path);
+
+  if (written.length !== 43 || written.toString('utf8') !== secret) {
     fail('EDGE_CREDENTIAL_FILE', 'The disposable edge credential was not written as exactly 43 bytes without a newline.');
   }
 }
 
+/**
+ * PA FIX4-A: removes the disposable credential ONLY when this invocation
+ * created it. A path this checker did not create is never touched, on
+ * success or on failure.
+ */
 function removeDisposableEdgeCredential(): void {
-  if (!existsSync(EDGE_CREDENTIAL_RUNTIME_PATH)) return;
-  chmodSync(EDGE_CREDENTIAL_RUNTIME_PATH, 0o600);
-  rmSync(EDGE_CREDENTIAL_RUNTIME_PATH, { force: true });
+  const path = ownedCredentialPath;
+
+  if (path === undefined) {
+    return;
+  }
+
+  ownedCredentialPath = undefined;
+
+  if (!existsSync(path)) {
+    return;
+  }
+
+  chmodSync(path, 0o600);
+  rmSync(path, { force: true });
+}
+
+/**
+ * PA FIX4-A discriminating evidence for the credential lifecycle guards.
+ *
+ * These run against a DISPOSABLE temporary path on purpose: they exercise the
+ * guard logic without needing a pre-existing file at the real runtime path.
+ * The production-compatible `/run/credentials/caddy.service/...` contract is
+ * still exercised for real by the Caddy runtime proof that follows.
+ */
+function verifyCredentialLifecycleGuards(): Record<string, boolean> {
+  const work = mkdtempSync(join(tmpdir(), 'burningspace-credential-guard-'));
+  chmodSync(work, 0o700);
+  const guardPath = join(work, 'burningspace-edge-assertion-secret');
+  // Distinct, non-secret stand-in for an operator credential already in place.
+  const foreign = 'F'.repeat(43);
+  const disposable = randomBytes(32).toString('base64url');
+
+  try {
+    // --- a pre-existing credential must not be overwritten ---
+    writeFileSync(guardPath, foreign, { encoding: 'utf8', mode: 0o400 });
+    ownedCredentialPath = undefined;
+
+    let refusedCode = '';
+    try {
+      installDisposableEdgeCredential(guardPath, disposable);
+    } catch (error) {
+      refusedCode = error instanceof ContractError ? error.code : 'UNEXPECTED';
+    }
+
+    if (refusedCode !== 'EDGE_CREDENTIAL_PRESENT') {
+      fail('EDGE_CREDENTIAL_GUARD', 'The checker did not refuse to overwrite a pre-existing credential.');
+    }
+    if (readFileSync(guardPath, 'utf8') !== foreign) {
+      fail('EDGE_CREDENTIAL_GUARD', 'A pre-existing credential was modified by the refused install.');
+    }
+    if (ownedCredentialPath !== undefined) {
+      fail('EDGE_CREDENTIAL_GUARD', 'A refused install must not claim ownership of the credential path.');
+    }
+
+    // --- cleanup must not delete what this invocation did not create ---
+    removeDisposableEdgeCredential();
+
+    if (!existsSync(guardPath) || readFileSync(guardPath, 'utf8') !== foreign) {
+      fail('EDGE_CREDENTIAL_GUARD', 'Cleanup removed a credential this invocation did not create.');
+    }
+
+    // --- an owned credential is created exclusively and then removed ---
+    chmodSync(guardPath, 0o600);
+    rmSync(guardPath, { force: true });
+    installDisposableEdgeCredential(guardPath, disposable);
+
+    if (ownedCredentialPath !== guardPath) {
+      fail('EDGE_CREDENTIAL_GUARD', 'A successful install must record ownership of the credential path.');
+    }
+    if (readFileSync(guardPath).length !== 43) {
+      fail('EDGE_CREDENTIAL_GUARD', 'The disposable credential was not exactly 43 bytes.');
+    }
+
+    removeDisposableEdgeCredential();
+
+    if (existsSync(guardPath)) {
+      fail('EDGE_CREDENTIAL_GUARD', 'The disposable credential this invocation created was not removed.');
+    }
+
+    // Cleanup is idempotent and stays inert once ownership is released.
+    writeFileSync(guardPath, foreign, { encoding: 'utf8', mode: 0o400 });
+    removeDisposableEdgeCredential();
+
+    if (!existsSync(guardPath)) {
+      fail('EDGE_CREDENTIAL_GUARD', 'Cleanup deleted a credential after ownership was already released.');
+    }
+
+    return {
+      credentialRefusesToOverwriteExisting: true,
+      preExistingCredentialLeftIntact: true,
+      cleanupSkipsCredentialItDidNotCreate: true,
+      disposableCredentialCreatedExclusively: true,
+      disposableCredentialRemovedAfterUse: true
+    };
+  } finally {
+    ownedCredentialPath = undefined;
+    rmSync(work, { recursive: true, force: true });
+  }
 }
 
 async function runRuntime(binary: string): Promise<Record<string, boolean>> {
@@ -465,7 +591,10 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
   let stderr = '';
   let stage = 'initialization';
   try {
-    installDisposableEdgeCredential();
+    // PA FIX4-A: the lifecycle guards run first, so a checker that could
+    // clobber a real operator credential fails before anything else happens.
+    const credentialGuards = verifyCredentialLifecycleGuards();
+    installDisposableEdgeCredential(EDGE_CREDENTIAL_RUNTIME_PATH, EDGE_PROOF_SECRET);
     const [clientPort, serverPort, clientUpstreamPort, serverUpstreamPort] = await freePorts(4);
     const ports = {
       adminSocket, clientPort: clientPort!, serverPort: serverPort!,
@@ -711,6 +840,7 @@ async function runRuntime(binary: string): Promise<Record<string, boolean>> {
       if (request && Object.hasOwn(request, 'uri')) fail('LOG_URI', 'Server access log retained the complete request URI.');
     }
     return {
+      ...credentialGuards,
       clientRouting: true, serverRouting: true, exactOrigin: true, hostileOrigin: true,
       absentOrigin: true, hostCoherent: true, forwardedProtoCoherent: true, webSocketUpgrade: true,
       bidirectionalWebSocket: true, queryPassThrough: true, tokenLogSafe: true,
@@ -776,7 +906,7 @@ async function main(): Promise<void> {
   }
   const checks = await runRuntime(binary);
   console.log(JSON.stringify({
-    ok: true, event: 'external_staging_edge_contract_self_tested', tests: 59,
+    ok: true, event: 'external_staging_edge_contract_self_tested', tests: 64,
     runtimeExecuted: true, caddyVersion: '2.11.4', checks
   }));
 }

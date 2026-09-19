@@ -319,16 +319,43 @@ The Node server receives the same value through its existing server
 configuration (`BURNINGSPACE_EDGE_ASSERTION_SECRET`). Both sides must carry
 the identical value.
 
-Generate a rollout secret with, for example — one line, exactly 43 characters,
-no newline:
+#### Generating the rollout secret securely (PA FIX4-B)
+
+The credential file must be `root:root` `0600` **from its first write**. A
+plain shell redirection creates the target using the caller's `umask`, so with
+a common `umask 022` the file exists world-readable for the window between
+creation and a later `chmod` — precisely the host-local exposure this secret
+exists to prevent.
+
+Create the target with restrictive ownership and mode **before** any secret
+bytes are written, then write into it:
 
 ```
-openssl rand 32 | basenc --base64url | tr -d '=' | tr -d '\n' > /etc/caddy/burningspace-edge-assertion-secret
+umask 077
+install -m 0600 -o root -g root /dev/null /etc/caddy/burningspace-edge-assertion-secret
+openssl rand 32 | basenc --base64url | tr -d '=' | tr -d '\n' >/etc/caddy/burningspace-edge-assertion-secret
 ```
 
-then `chown root:root` and `chmod 0600` that file, and verify it is exactly 43
-bytes (`stat -c %s`). Never commit a real secret. Repository examples use
+Run as `root`. `install -m 0600 -o root -g root /dev/null` atomically creates
+an empty file that is already private; the redirection then truncates and
+fills that existing inode without widening its mode, and `umask 077` keeps any
+fallback path restrictive too.
+
+Then verify, without ever printing the value:
+
+```
+stat -c '%U:%G %a %s' /etc/caddy/burningspace-edge-assertion-secret
+```
+
+It must report exactly `root:root 600 43`.
+
+Requirements, restated: exactly 43 bytes; no trailing newline; no `KEY=`
+prefix; the secret is never echoed to a console, a log, a shell history entry
+or a transcript; and a real secret is never committed. Repository examples use
 `none` for both variables.
+
+The Node server must receive the identical value through its existing server
+configuration (`BURNINGSPACE_EDGE_ASSERTION_SECRET`).
 
 ### Operational diagnostics
 

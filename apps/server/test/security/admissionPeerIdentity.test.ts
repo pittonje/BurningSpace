@@ -624,6 +624,84 @@ describe('a non-canonical spelling of the REAL secret is still rejected', () => 
   });
 });
 
+describe('PA FIX4-C: the proof wire spelling is exact, never trimmed', () => {
+  const config = trustedConfig(TRUSTED_PROXY);
+  const canonical = EDGE_SECRET;
+
+  it('accepts the canonical spelling', () => {
+    expect(expectResolved(resolve(config, TRUSTED_PROXY, edgeHeaders(PUBLIC_CLIENT_A, canonical)))).toEqual({
+      peerKey: `edge:${PUBLIC_CLIENT_A}`,
+      source: 'edge'
+    });
+  });
+
+  it.each([
+    ['a leading ASCII space', ` ${canonical}`],
+    ['a trailing ASCII space', `${canonical} `],
+    ['surrounding ASCII spaces', ` ${canonical} `],
+    ['a leading NBSP', `\u00a0${canonical}`],
+    ['a trailing NBSP', `${canonical}\u00a0`],
+    ['a leading en space', `\u2002${canonical}`],
+    ['a trailing ideographic space', `${canonical}\u3000`],
+    ['a leading zero-width no-break space', `\ufeff${canonical}`],
+    ['a trailing line separator', `${canonical}\u2028`]
+  ])('rejects an otherwise valid proof with %s', (_label, proof) => {
+    // The bytes of a genuine secret are present, but the wire spelling is not
+    // the canonical one. Nothing may strip the padding into acceptance.
+    expect(proof).not.toBe(canonical);
+    expect(proof.trim().length).toBeGreaterThan(0);
+    expect(resolve(config, TRUSTED_PROXY, edgeHeaders(PUBLIC_CLIENT_A, proof))).toEqual({
+      kind: 'rejected',
+      reason: 'edge_proof_malformed'
+    });
+  });
+
+  it.each([
+    ['a leading tab', `\t${canonical}`],
+    ['a trailing tab', `${canonical}\t`],
+    ['a trailing carriage return', `${canonical}\r`],
+    ['a trailing newline', `${canonical}\n`]
+  ])('rejects an otherwise valid proof with %s under the control-character policy', (_label, proof) => {
+    expect(resolve(config, TRUSTED_PROXY, edgeHeaders(PUBLIC_CLIENT_A, proof))).toEqual({
+      kind: 'rejected',
+      reason: 'edge_proof_malformed'
+    });
+  });
+
+  it('would have accepted the padded proof if it were trimmed first', () => {
+    // Discrimination guard: the padded values above are genuinely the real
+    // secret, so a reader that trimmed would have authenticated them.
+    const padded = ` ${canonical} `;
+
+    expect(padded.trim()).toBe(canonical);
+    expect(expectResolved(resolve(config, TRUSTED_PROXY, edgeHeaders(PUBLIC_CLIENT_A, padded.trim())))).toEqual({
+      peerKey: `edge:${PUBLIC_CLIENT_A}`,
+      source: 'edge'
+    });
+  });
+
+  it('still reports a whitespace-only proof as missing, not malformed', () => {
+    // Unchanged public behavior: a header carrying nothing is "absent".
+    expect(resolve(config, TRUSTED_PROXY, edgeHeaders(PUBLIC_CLIENT_A, '   '))).toEqual({
+      kind: 'rejected',
+      reason: 'edge_proof_missing'
+    });
+  });
+
+  it('leaves the peer assertion trim contract unchanged', () => {
+    // The peer header keeps tolerating incidental outer whitespace.
+    expect(expectResolved(resolve(config, TRUSTED_PROXY, edgeHeaders(` ${PUBLIC_CLIENT_A} `, canonical)))).toEqual({
+      peerKey: `edge:${PUBLIC_CLIENT_A}`,
+      source: 'edge'
+    });
+    // And an inner-padded peer literal is still malformed, as before.
+    expect(resolve(config, TRUSTED_PROXY, edgeHeaders('198.51. 100.11', canonical))).toEqual({
+      kind: 'rejected',
+      reason: 'edge_assertion_malformed'
+    });
+  });
+});
+
 describe('bounded trusted-edge diagnostics', () => {
   it('emits at most one sanitized line per reason per interval and never the raw IP, header or proof', () => {
     let now = 0;

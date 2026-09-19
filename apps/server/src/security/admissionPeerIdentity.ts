@@ -499,6 +499,21 @@ function rejected(reason: AdmissionEdgeRejectionReason): AdmissionPeerIdentityRe
 }
 
 /**
+ * How a single internal header's outer whitespace is treated.
+ *
+ * PA FIX4-C: the two internal headers deliberately differ.
+ *
+ * - `'trim'` (edge peer): the existing, documented contract. An asserted IP
+ *   literal surrounded by incidental whitespace is tolerated, then parsed
+ *   strictly by `canonicalizeAdmissionAddress`.
+ * - `'exact'` (edge proof): the supplied string must ALREADY be the one
+ *   canonical 43-character base64url spelling. Nothing is stripped first, so
+ *   a valid secret wrapped in spaces, tabs, NBSP or any other whitespace can
+ *   never be normalized into an accepted proof.
+ */
+type InternalHeaderWhitespacePolicy = 'trim' | 'exact';
+
+/**
  * Reads one single-valued internal header.
  *
  * PA FIX2 array contract: an array form is ALWAYS rejected, including a
@@ -510,7 +525,8 @@ function rejected(reason: AdmissionEdgeRejectionReason): AdmissionPeerIdentityRe
 function readSingleInternalHeader(
   headers: IncomingHttpHeaders | undefined,
   name: string,
-  reasons: InternalHeaderReasons
+  reasons: InternalHeaderReasons,
+  whitespace: InternalHeaderWhitespacePolicy
 ): InternalHeaderRead {
   const raw = headers?.[name];
 
@@ -541,13 +557,14 @@ function readSingleInternalHeader(
     return rejected(reasons.repeated);
   }
 
-  const value = raw.trim();
-
-  if (value.length === 0) {
+  // A header carrying nothing but whitespace is "absent" under either policy.
+  if (raw.trim().length === 0) {
     return rejected(reasons.missing);
   }
 
-  return Object.freeze({ ok: true as const, value });
+  // Under 'exact' the raw string is returned UNCHANGED, so any surrounding
+  // whitespace survives into the canonical-shape test and fails there.
+  return Object.freeze({ ok: true as const, value: whitespace === 'trim' ? raw.trim() : raw });
 }
 
 /**
@@ -558,7 +575,9 @@ function readSingleInternalHeader(
  * supplied proof nor the verifier is returned, described or logged.
  */
 function verifyEdgeProof(verifier: Buffer, headers: IncomingHttpHeaders | undefined): AdmissionPeerIdentityRejected | undefined {
-  const supplied = readSingleInternalHeader(headers, ADMISSION_EDGE_PROOF_HEADER, EDGE_PROOF_REASONS);
+  // PA FIX4-C: 'exact' -- the proof is never trimmed, so whitespace can
+  // never be stripped into a valid canonical spelling.
+  const supplied = readSingleInternalHeader(headers, ADMISSION_EDGE_PROOF_HEADER, EDGE_PROOF_REASONS, 'exact');
 
   if (!('ok' in supplied)) {
     return supplied;
@@ -645,7 +664,8 @@ export function resolveAdmissionPeerIdentity(
     return proofRejection;
   }
 
-  const assertion = readSingleInternalHeader(input.headers, ADMISSION_EDGE_PEER_HEADER, EDGE_PEER_REASONS);
+  // Peer assertion keeps its existing documented trim contract.
+  const assertion = readSingleInternalHeader(input.headers, ADMISSION_EDGE_PEER_HEADER, EDGE_PEER_REASONS, 'trim');
 
   if (!('ok' in assertion)) {
     return assertion;
