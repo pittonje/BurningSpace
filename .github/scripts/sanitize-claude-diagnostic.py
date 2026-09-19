@@ -11,9 +11,19 @@ import sys
 from typing import Any
 
 MAX_FILE_BYTES = 1_000_000
-MAX_RECORDS = 200
+# QA-RECOVERY-003: an explicit bounded resource-budget decision (not a
+# measured historical transcript count) -- raised from 200 after a real
+# invocation was confirmed rejected at record_count_limit. Does not
+# guarantee any future invocation stays under this budget.
+MAX_RECORDS = 2000
 MAX_DEPTH = 20
 MAX_FREEFORM_LENGTH = 500
+
+# GitHub Actions run IDs are now well past safe_int's general 10**9
+# default; this trusted, numeric-only field (see main()) gets its own
+# explicit, generous bound instead of raising the default for every other
+# field this module sanitizes.
+MAX_RUN_ID = 2**63 - 1
 
 CATEGORIES = {
     "execution_file_missing",
@@ -316,7 +326,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> int:
     args = parse_args(argv)
     trusted = {
-        "run_id": safe_int(int(args.run_id), 1),
+        "run_id": safe_int(int(args.run_id), 1, MAX_RUN_ID),
         "head_sha": args.head_sha if re.fullmatch(r"[0-9a-f]{40}", args.head_sha) else "unavailable",
         "action_sha": args.action_sha if re.fullmatch(r"[0-9a-f]{40}", args.action_sha) else "unavailable",
         "claude_version": safe_scalar(args.claude_version, SAFE_MODEL_RE),
@@ -341,6 +351,11 @@ def main(argv: list[str]) -> int:
         exit_code = 1
     write_summary(args.summary_file, trusted, fields)
     print(f"Safe Claude diagnostic category: {fields['error category']}")
+    # QA-RECOVERY-003: makes the already-validated, allowlisted subreason
+    # (or "unavailable") visible in ordinary job logs, not only the step
+    # summary -- never the raw exception, a transcript fragment, a path, a
+    # session ID, a token, or any other execution-file content.
+    print(f"Safe Claude diagnostic execution file subreason: {fields['execution file subreason']}")
     return exit_code
 
 

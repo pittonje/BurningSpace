@@ -1,7 +1,7 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-09-18
-Updated by: Implementation engineer — SEC-FIX2: reject secret-bearing database query options (residual PERSIST002-SEC-03), committed and pushed
+Last updated: 2026-09-19
+Updated by: Implementation engineer — QA-RECOVERY-003: bounded QA-diagnostic capacity and run-ID display patch, PA-approved and published (see below)
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -758,10 +758,12 @@ session despite five disclosed attempts, and is recorded here as an
 unexpected, pre-existing environmental limitation rather than retried
 further or forced by altering pool/timeout settings.
 
-This fix is by its own author and is **not** independently verified
-merely because it exists. Core and governed Claude QA for the resulting
-SEC-FIX2 head have not yet been observed. This is **not** independent
-SEC-03 closure or merge approval.
+*(Historical, as of SEC-FIX2 publication; superseded by the QA-RECOVERY-003
+section below.)* This fix was by its own author and was **not**
+independently verified merely because it existed; Core and governed
+Claude QA for the SEC-FIX2 head had not yet been observed then, and it was
+not independent SEC-03 closure or merge approval. Independent SEC-03
+closure was later recorded at `629f165...`.
 
 **PERSIST002-NET-02 (MEDIUM) remains OPEN and continues to explicitly
 BLOCK PUBLIC PERSISTENCE ROLLOUT** (unchanged from SEC-FIX1): its
@@ -773,15 +775,108 @@ see
 [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).
 No quota, proxy-trust, or Caddy change was made.
 
+**Documentation-only scan correction** (commit
+`629f165d9a259df2fb245cefce930d56270c1419`, the reviewed pre-publication
+checkpoint for QA-RECOVERY-003): the
+SEC-FIX2 head's Core run failed the "Scan Phase A files for high-signal
+secret material" step because an illustrative
+`postgres://user:password@host/db` example added to
+`docs/ops/persist-002-staging-db-integration-plan.md` used a hostname the
+scanner does not allow; changed to `127.0.0.1`. No SEC-FIX2 technical
+byte changed.
+
+## QA-RECOVERY-003 (2026-09-19): bounded QA-diagnostic capacity and run-ID display — technical patch PA-reviewed and approved for publication
+
+Three evidence sources are kept separate and must not be conflated:
+
+1. **Core Pull Request Checks** run `35387608566`, job `105738070748`,
+   attempt 1: **SUCCESS** at source head
+   `629f165d9a259df2fb245cefce930d56270c1419` — the test/build/typecheck/
+   diagnostic/Caddy/container-integration evidence for that checkpoint.
+   None of it belongs to the Claude QA run.
+2. **Claude QA Review Pilot** run `35387608535`, job `105738069692`,
+   attempt 1: overall **FAILURE at the diagnostic sanitizer**. The
+   owner-provided Step Summary confirms `execution_file_invalid` /
+   `record_count_limit` (`MAX_RECORDS` was 200) and run ID shown
+   `unavailable` (the run-ID field used `safe_int`'s general `10**9`
+   default — a display defect that did not cause `record_count_limit`).
+   Validation and publication succeeded. The exact historical record
+   count is **unknown** and is not claimed, nor attributed to any other
+   historical QA failure.
+3. **Independent final functional QA:** a separate review returned
+   **APPROVE**, accepted by the Product Architect, at `629f165...`. It is
+   not a result of either workflow job.
+
+**Current dispositions at `629f165...`:** PERSIST002-SEC-03 independently
+**CLOSED**; final independent functional QA **APPROVE**; C-01,
+REVIEW-C01-A, REVIEW-C01-B, PERSIST002-NET-01, PERSIST002-PERS-01,
+PERSIST002-SEC-01 and PERSIST002-SEC-02 remain closed. None of these
+reviews is repeated for this diagnostic-only patch. `629f165...` is the
+reviewed **pre-publication checkpoint**, not the permanent PR head; the
+mandatory automatic QA workflow status was unsatisfied at that checkpoint
+solely because of the sanitizer failure above.
+
+The patch (`.github/scripts/sanitize-claude-diagnostic.py`,
+`.github/scripts/test-claude-qa-audit.py`):
+
+- `MAX_RECORDS` `200 -> 2000` — an explicit bounded resource-budget
+  decision, not a measured historical count and not a guarantee for future
+  runs. `MAX_FILE_BYTES` 1,000,000, `MAX_DEPTH` 20, `MAX_FREEFORM_LENGTH`
+  500 and every UTF-8/duplicate-key/NUL/depth/secret check are unchanged;
+  the whole accepted file is still parsed, and a file over 2000 records
+  still fails closed with `execution_file_invalid` / `record_count_limit`
+  and a nonzero exit.
+- The trusted run-ID field alone gets an explicit `2**63 - 1` bound; the
+  general `safe_int` default and other fields are untouched, and
+  zero/negative/out-of-range IDs stay "unavailable".
+- A fixed-label stdout line surfaces the already-allowlisted subreason
+  (or "unavailable") — never exception text, transcript fragments, paths,
+  session IDs or tokens.
+
+`.github/workflows/claude-qa-review-pilot.yml` is unchanged (blob
+`89ccd3928ee452ebb23ecb632a7d93b6a3d76ddb`); no classifier, routing,
+reviewer-prompt, agent, Action-pin, validator, renderer or publisher file
+is touched.
+
+**Verification:** the Product Architect personally ran the classifier
+suite (29/29, exit 0), the QA audit (89 PASS checks, exit 0) and
+independent synthetic CLI/AST probes (27/27) against the reviewed patch
+(SHA-256 `aad35aa4ef0539e3b4eef1e42d2edf06e7a17622a20019457fdde5e17711fcc9`);
+the PA report SHA-256
+`55a74e73599308458fb907fc9d62ec677702777d5bd0bc65e00c01b66bd29b03` is
+supplied provenance, not recomputed here. Approved Git blobs: sanitizer
+`0b4ff8193b7d198cc05924518bfa5214ad8f704b`, audit
+`af850e7fd907d831b584619713497802d79fcf77`. *(Historical preparation
+evidence:)* the patch was first prepared locally and uncommitted; a
+synthetic negative control showed the original sanitizer rejecting a
+201-record fixture with `record_count_limit` and showing run ID
+`35387608535` as unavailable, while the patched sanitizer accepted it with
+genuine result extraction and displayed the exact ID. This reproduces the
+two diagnosed code paths; it is not a replay of the unavailable
+historical transcript.
+
+**Publication state:** committed and pushed as one commit on top of
+`629f165...`. Exact-new-head Core and governed Claude QA outcomes have
+**not yet been observed** and no success is anticipated. Application tests
+are unchanged; the reviewed Core baseline is 52 files / 516 tests / zero
+skipped, so a Core result must show a completed test summary and any
+discrepancy must be reported rather than inferred from a green step.
+
+**Still open, unchanged:** QA-01 (test-completeness hardening, deferred
+separate work); QA-02 (review-artifact archival) and QA-03 (final
+evidence reconciliation); **PERSIST002-NET-02 (MEDIUM/OPEN)**, which
+blocks public persistence rollout — see
+[`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md);
+the final Product Architect merge approval and the human merge. Missing
+original review reports are not reconstructed and their hashes are not
+claimed as independently verified.
+
 ## Current next safe action
 
-The next action is: **independent delta verification of the residual
-PERSIST002-SEC-03** (query-parameter rejection) for the SEC-FIX2 head,
-then final QA. PERSIST002-SEC-01, PERSIST002-SEC-02, C-01, REVIEW-C01-A,
-REVIEW-C01-B, PERSIST002-NET-01, and PERSIST002-PERS-01 are already
-closed and are **not** part of that next action. Obtaining/inspecting
-Core Pull Request Checks and governed Claude QA for the resulting
-SEC-FIX2 head remains to be done. Product Architect final acceptance and
-human merge remain outstanding. Public persistence rollout additionally
-remains blocked on the NET-02 gate above regardless of merge status — see
-[`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md).
+Inspect the exact-new-head Core and governed Claude QA outcomes for the
+QA-RECOVERY-003 commit, then complete the remaining evidence
+reconciliation (QA-02/QA-03) and the Product Architect merge decision.
+No SEC-03 or functional-QA review starts again; PERSIST002-SEC-01/02/03,
+C-01, REVIEW-C01-A/B, PERSIST002-NET-01 and PERSIST002-PERS-01 are closed.
+Human merge remains outstanding, and public persistence rollout stays
+blocked on the NET-02 gate regardless of merge status.
