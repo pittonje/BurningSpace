@@ -272,6 +272,7 @@ The repository-stage closure conditions are satisfied:
 - implementation publication;
 - exact-head Core SUCCESS;
 - governed QA;
+- independent QA review;
 - independent Architecture review;
 - independent Network review;
 - independent Security review;
@@ -753,6 +754,7 @@ PERSIST002-NET-02 is closed at the repository stage through PR [#88](https://git
 
 - Core Pull Request Checks: run `35466241776`, **SUCCESS**, bound to the approved source head
 - Governed Claude QA: run `35466241823`, **SUCCESS**, disposition **Approved with suggestions**, blockers: **None**, bound to the approved source head
+- Independent QA closure review: **APPROVE WITH SUGGESTIONS**, blockers: **None**; independently verified the approved source head, exact-head Core/governed-QA evidence, acceptance/test discrimination coverage and source/merge tree equivalence
 - Architecture delta review: **APPROVE WITH SUGGESTIONS**, blockers: **None**
 - Network delta review: **APPROVE WITH SUGGESTIONS**, blockers: **None**
 - Security delta review: **APPROVE WITH SUGGESTIONS**, blockers: **None**

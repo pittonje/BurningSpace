@@ -51,7 +51,7 @@ PERSIST-002 — Durable World & Identity Foundation: **PA ACCEPTED / MERGED** (2
 - **Open obligations:**
   - **QA-01 — OPEN / DEFERRED:** test-completeness hardening; non-blocking for the completed source merge.
   - **QA-02 — OPEN / DEFERRED:** original-review archival; missing original review reports remain missing and are not reconstructed, and supplied report/patch hashes are not claimed as independently recomputed.
-  - **PERSIST002-NET-02 — MERGED / CLOSED.** PR [#88](https://github.com/pittonje/BurningSpace/pull/88) was human-merged after exact-head Core and governed QA success, Architecture/Network/Security delta approvals with no blockers, and Product Architect acceptance. The approved source head, merge commit, and tree provenance are recorded in the final closure below and in the task file. This closes only the repository-stage NET-02 task; **PUBLIC PERSISTENCE ROLLOUT — BLOCKED** and **DEPLOYMENT — NOT AUTHORIZED** remain in force.
+  - **PERSIST002-NET-02 — MERGED / CLOSED.** PR [#88](https://github.com/pittonje/BurningSpace/pull/88) was human-merged after exact-head Core and governed QA success, independent QA closure review, Architecture/Network/Security delta approvals with no blockers, and Product Architect acceptance. The approved source head, merge commit, and tree provenance are recorded in the final closure below and in the task file. This closes only the repository-stage NET-02 task; **PUBLIC PERSISTENCE ROLLOUT — BLOCKED** and **DEPLOYMENT — NOT AUTHORIZED** remain in force.
 - **Execution limitations, kept explicit:** (1) a supplemental temporary tsconfig reported a `process.send` typing error; an identical baseline run was not established, so it is not claimed to be pre-existing (standard typechecks passed); (2) a complete local default-forks run at the final source HEAD is not claimed — the 52/516 completed run is remote Core evidence; (3) SOURCE-TEXT-FIX1's local validation used owned disposable databases inside the existing `deploy-postgres-1`, not a newly created isolated container, and its cleanup/container-state statements are supplied local evidence, not GitHub verification.
 - **Repository state vs deployed state:** persistence is implemented and merged in the repository. The last verified staging deployment is the earlier non-persistent runtime described under "Current state" above; this reconciliation does not inspect or update staging, and no deployment, image publication or VPS access is authorized by it.
 
@@ -1206,6 +1206,7 @@ PERSIST002-NET-02 — **MERGED / CLOSED**.
 - Merged at: `2026-09-19T20:33:09Z`
 - Core Pull Request Checks: run `35466241776`, **SUCCESS**, bound to the approved source head
 - Governed Claude QA: run `35466241823`, **SUCCESS**, **Approved with suggestions**, blockers: **None**, bound to the approved source head
+- Independent QA closure review: **APPROVE WITH SUGGESTIONS**, blockers: **None**; closure condition satisfied
 - Independent delta reviews: Architecture **APPROVE WITH SUGGESTIONS**, Network **APPROVE WITH SUGGESTIONS**, Security **APPROVE WITH SUGGESTIONS**; blockers: **None**
 - Product Architect final disposition: **APPROVED FOR HUMAN MERGE**
 - Human merge: **completed**
