@@ -4,7 +4,7 @@ Owner: Product Architect
 Risk: HIGH — network / security admission boundary
 Base: `3aab85dbc21e01cf0689a1f9bb2dc59d2e64cb96` (`origin/main`, merge commit of PR #87)
 Branch: `security/persist-002-net-02-admission-budget-hardening`
-Status: **IMPLEMENTED LOCALLY / AWAITING PA DELTA INSPECTION, PUBLIC ROLLOUT STILL BLOCKED**
+Status: **MERGED / CLOSED — REPOSITORY STAGE ONLY; PUBLIC ROLLOUT STILL BLOCKED**
 
 ## Authority
 
@@ -18,6 +18,11 @@ it creates no new accepted decision record.
 - Architecture: [Persistent World and Durable Identity Architecture](../architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md)
 - Rollout gate: [PERSIST-002 staging database integration plan](../ops/persist-002-staging-db-integration-plan.md)
 - Edge contract: [Public Arena Caddy edge runbook](../ops/public-arena-caddy-edge-runbook.md)
+
+The dated FIX1-FIX4 sections below preserve historical checkpoint wording and
+evidence. Their OPEN, awaiting, and not-authorized statements describe those
+earlier checkpoints; the current repository-stage status is recorded in the
+final closure section.
 
 ## Problem
 
@@ -262,15 +267,15 @@ acceptance.
 
 ## Closure conditions
 
-PERSIST002-NET-02 is **NOT CLOSED**. It closes only after:
+The repository-stage closure conditions are satisfied:
 
 - implementation publication;
 - exact-head Core SUCCESS;
 - governed QA;
+- independent QA review;
 - independent Architecture review;
 - independent Network review;
 - independent Security review;
-- independent QA review;
 - PA acceptance;
 - human merge.
 
@@ -728,9 +733,55 @@ Recorded so the residual risk is not lost, with no scope expansion:
 
 ### Status
 
-`PA SOURCE APPROVED / PUBLICATION AUTHORIZED / AWAITING EXACT-HEAD CI AND INDEPENDENT REVIEWS`.
+`PERSIST002-NET-02 — MERGED / CLOSED`.
 
-- PERSIST002-NET-02 — **OPEN**
-- PUBLIC PERSISTENCE ROLLOUT — **BLOCKED**
-- **NO DEPLOYMENT AUTHORIZED**
-- Merge authority is human-only and is not granted by this correction pass.
+## Final repository-stage closure
+
+PERSIST002-NET-02 is closed at the repository stage through PR [#88](https://github.com/pittonje/BurningSpace/pull/88).
+
+### Merge provenance
+
+- Approved exact source head: `75b74b0ea12d2fbc4899d4ded22920c3700249db`
+- Merge commit / current `main`: `360958d31db08ad7c141a2a44b69f92744606456`
+- Expected merge parents: `afb61276e0ad75b5a3964183e9b316b97eaa7e33` and `75b74b0ea12d2fbc4899d4ded22920c3700249db`
+- Source-head tree: `44e211ef14ede17d545734ee616cc809da0347c5`
+- Merge-commit tree: `44e211ef14ede17d545734ee616cc809da0347c5`
+- Tree equivalence: approved source head == merge commit
+- PR state: **CLOSED / MERGED**
+- Merged at: `2026-09-19T20:33:09Z`
+
+### Accepted final evidence
+
+- Core Pull Request Checks: run `35466241776`, **SUCCESS**, bound to the approved source head
+- Governed Claude QA: run `35466241823`, **SUCCESS**, disposition **Approved with suggestions**, blockers: **None**, bound to the approved source head
+- Independent QA closure review: **APPROVE WITH SUGGESTIONS**, blockers: **None**; independently verified the approved source head, exact-head Core/governed-QA evidence, acceptance/test discrimination coverage and source/merge tree equivalence
+- Architecture delta review: **APPROVE WITH SUGGESTIONS**, blockers: **None**
+- Network delta review: **APPROVE WITH SUGGESTIONS**, blockers: **None**
+- Security delta review: **APPROVE WITH SUGGESTIONS**, blockers: **None**
+- Product Architect final disposition: **APPROVED FOR HUMAN MERGE**
+- Human merge: **completed**
+
+The accepted Core and governed QA runs are exact-head evidence for the
+approved source head. The merge commit itself was not rerun through PR CI;
+tree equivalence establishes that it contains the exact approved source tree.
+No unavailable review IDs, timestamps, or hashes are inferred here.
+
+### Rollout boundary
+
+**PERSIST002-NET-02 — MERGED / CLOSED** records implementation and repository
+closure only. **PUBLIC PERSISTENCE ROLLOUT — BLOCKED.** **DEPLOYMENT — NOT
+AUTHORIZED.** This record grants no authority for VPS/Contabo access, image
+publication, real edge secret creation or use, Caddy reload, PostgreSQL
+activation, persistence deployment, schema/migration execution, or external
+staging mutation.
+
+The deferred rollout findings remain separate and unchanged: Docker peer drift
+must be re-measured on the final composed topology; a genuine multi-client
+admission smoke is required before an authorized rollout; 10,000-bucket
+observability/future hardening remains deferred; Node-side Docker environment
+secret handling remains deferred; secret rotation remains deferred; and other
+previously recorded rollout items remain out of scope. No rollout task is
+started by this closure.
+
+The next safe action is to prepare a separate rollout/deployment readiness gate
+for Product Architect review, without executing deployment.
