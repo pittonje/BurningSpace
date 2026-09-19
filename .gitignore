@@ -20,3 +20,9 @@ pnpm-debug.log*
 /artifacts/archives/
 deploy/external-staging-plan.json
 deploy/edge/caddy/edge-plan.json
+deploy/external-staging-persistence-plan.json
+deploy/private/
+*.credential
+*.pgpass
+*.dump
+*.manifest.json

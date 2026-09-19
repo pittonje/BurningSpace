@@ -1,12 +1,13 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { RolloutError, validatePersistentPlan, type PersistentPlan } from './persistent-rollout-contract.js';
 
 type Mode = 'template' | 'phase-a' | 'phase-b';
 type RollbackMode = 'previous-approved-release' | 'bootstrap-no-previous-release';
 
-interface DeploymentPlan {
-  schemaVersion: number;
+interface LegacyDeploymentPlan {
+  schemaVersion: 2;
   environmentId: string;
   environmentClass: string;
   alphaNonPersistent: boolean;
@@ -29,6 +30,9 @@ interface DeploymentPlan {
   externalExecutionAuthorized: boolean;
   publicProductionLaunchAuthorized: boolean;
 }
+
+type DeploymentPlan = LegacyDeploymentPlan;
+type DeploymentPlanUnion = LegacyDeploymentPlan | PersistentPlan;
 
 interface ValidationOptions {
   mode: Mode;
@@ -372,6 +376,11 @@ function validate(env: Record<string, string>, rawPlan: unknown, options: Valida
     fail('PLAN_SHAPE', 'Deployment plan must be one JSON object.');
   }
   const planObject = rawPlan as Record<string, unknown>;
+  if ((rawPlan as DeploymentPlanUnion).schemaVersion === 3) {
+    const persistent = validatePersistentPlan(env, rawPlan, options.mode, options.composeModel);
+    if (options.mode !== 'template') (options.checkRepository ?? repositoryCheck)(undefined, persistent.targetCommit, options.mode);
+    return;
+  }
   assertSafeInventory(env, planObject);
   const rollbackMode = requireString(planObject.rollbackMode, 'ROLLBACK_MODE');
   if (rollbackMode !== 'previous-approved-release' && rollbackMode !== 'bootstrap-no-previous-release') {
@@ -902,6 +911,7 @@ function readComposeStdin(): unknown {
 }
 
 function toSafeError(error: unknown): { code: string; message: string } {
+  if (error instanceof RolloutError) return { code: error.code, message: error.message };
   if (error instanceof SafeValidationError) return { code: error.code, message: error.message.slice(0, 300) };
   return { code: 'UNEXPECTED', message: 'Unexpected bounded preflight failure.' };
 }
