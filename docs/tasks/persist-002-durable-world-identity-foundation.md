@@ -4,6 +4,7 @@ Owner: Product Architect
 Risk: HIGH — authentication / persistence / runtime authority
 Base: `98bda8f5bed41112f5687eb4ef2fd52a0c82950a` (`origin/main`, merge commit of PR #85)
 Branch: `feat/persist-002-durable-world-identity-foundation`
+Status: **PA ACCEPTED / MERGED** (PR #86, 2026-09-19) — see "Status" below
 
 ## Authority
 
@@ -170,6 +171,29 @@ Do not claim battle-state durability.
 
 ## Status
 
+### Current status (post-merge reconciliation, 2026-09-19)
+
+PERSIST-002 — Durable World & Identity Foundation: **PA ACCEPTED / MERGED** (2026-09-19). **Repository implementation complete; no persistence deployment is authorized.**
+
+- **Merge provenance:** PR [#86](https://github.com/pittonje/BurningSpace/pull/86), human-merged by `pittonje` at 2026-09-19T05:13:39Z. Merge commit on `main`: `0c988f69ddac99e167e48255b05b1e7822d03fa5`; parents: base `98bda8f5bed41112f5687eb4ef2fd52a0c82950a` and approved source HEAD `098362b189f95cb8662bf70861d5eb665213a503`.
+- **Tree equivalence:** the approved source HEAD, the historical CI PR-merge checkout `e0754b073629484c1177bb1b532e95637a8dc398` (parents: the same base and source HEAD; a CI artifact, not the commit on `main`) and the actual merge commit all have Git tree `12d9152708891972999ef654882680c7f86a6bef`.
+- **Accepted evidence checkpoint** (historical checks at source HEAD `098362b...`; they are not fresh checks of the merge commit or of any later documentation commit):
+  - Core Pull Request Checks run `35419305467` / job `105833832318` / attempt 1: **SUCCESS** — completed remote suite **52 files / 516 tests / zero skipped**; classifier 29 OK; QA audit 89 PASS / 0 FAIL; standard build/typecheck and integration checks succeeded.
+  - Governed Claude QA run `35419305462` / job `105833832325` / attempt 1: **SUCCESS** — published comment `5739111798`; Blockers: None; **Approved with suggestions**; the reviewer disclosed static-only inspection.
+- **Dispositions:** **QA-03 (final evidence reconciliation) — ACCEPTED / CLOSED** by the Product Architect. The earlier Architecture, Network, Persistence and Security closures (C-01, REVIEW-C01-A/B, NET-01, PERS-01, SEC-01/02/03) remain closed at their actual historical checkpoints; independent functional QA remains a separate accepted review. None of those reports is relabelled as a new review of `main` or of this documentation change.
+- **Open obligations:**
+  - **QA-01 — OPEN / DEFERRED:** test-completeness hardening; non-blocking for the completed source merge.
+  - **QA-02 — OPEN / DEFERRED:** original-review archival; missing original review reports remain missing and are not reconstructed, and supplied report/patch hashes are not claimed as independently recomputed.
+  - **PERSIST002-NET-02 — MEDIUM / OPEN / BLOCKS PUBLIC PERSISTENCE ROLLOUT.** Public rollout requires an implemented admission-budget mitigation, spoof-resistance and multi-client-budget tests, explicit Security/Ops acceptance, and a separate Product Architect deployment authorization (see [`docs/ops/persist-002-staging-db-integration-plan.md`](../ops/persist-002-staging-db-integration-plan.md)). Merging PR #86 or the documentation PR that records this state is **not** deployment permission.
+- **Execution limitations, kept explicit:** (1) a supplemental temporary tsconfig reported a `process.send` typing error; an identical baseline run was not established, so it is not claimed to be pre-existing (standard typechecks passed); (2) a complete local default-forks run at the final source HEAD is not claimed — the 52/516 completed run is remote Core evidence; (3) SOURCE-TEXT-FIX1's local validation used owned disposable databases inside the existing `deploy-postgres-1`, not a newly created isolated container, and its cleanup/container-state statements are supplied local evidence, not GitHub verification.
+- **Repository state vs deployed state:** persistence is implemented and merged in the repository. The last verified staging deployment is the earlier non-persistent runtime described under "Current state" above; this reconciliation does not inspect or update staging, and no deployment, image publication or VPS access is authorized by it.
+
+The dated sections below are the historical, pre-merge record of how each fix was made and reviewed. Wording in them such as "open", "pending", "not yet observed" or "awaiting merge" describes their own checkpoint and is superseded by this status.
+
+### Historical pre-merge status record
+
+*(The all-caps paragraph and the sections below are the pre-merge record as of their own checkpoints and are retained as history.)*
+
 **IMPLEMENTATION PUSHED AS PR #86 (OPEN). CORE PR CHECKS: SUCCESS AT
 IMPLEMENTATION CHECKPOINT `0dba3e74562b3d0e395a5cad2a29732512e68515`, AGAIN
 AT QA-RECOVERY-001 HEAD `f146a3f2480525f13ae6691bd1fa75cb96927a8f`, AND
@@ -233,8 +257,8 @@ All seven implementation packets plus four bounded post-implementation
 corrections (FIX1–FIX4) are pushed as local sequential commits on
 `feat/persist-002-durable-world-identity-foundation`
 ([PR #86](https://github.com/pittonje/BurningSpace/pull/86), OPEN, not
-merged, no auto-merge). Nothing merged, no staging deployment, no
-VPS/Contabo contact, no image publication.
+merged, no auto-merge; historical pre-merge wording — PR #86 was later human-merged, see the current status above). No staging deployment, no
+VPS/Contabo contact and no image publication occurred as part of this implementation.
 
 Local acceptance evidence gathered (Packet 7):
 
@@ -1237,8 +1261,7 @@ against real disposable PostgreSQL 6/6 passed, 0 skipped;
 `npx tsc -p apps/server/scripts/tsconfig.external-staging.json --noEmit`,
 `npx tsc -p apps/server/scripts/tsconfig.persistence-tools.json --noEmit`
 and `npm run typecheck` clean (a temporary tsconfig covering the two
-changed files reported only the pre-existing `process.send` typing error on
-an untouched line of the test's telemetry-filter block); `public-arena-smoke.ts`
+changed files reported only a `process.send` typing error on an untouched line of the test's telemetry-filter block; an identical baseline run was not established, so it is not claimed to be pre-existing); `public-arena-smoke.ts`
 against an owned local production-mode server on a disposable database
 completed with the hostile-Origin check, and a smoke Origin containing
 U+0001 was rejected with the same "exact HTTP or HTTPS origin" error; the
@@ -1249,17 +1272,14 @@ remains required. The QA-RECOVERY-003 files are unchanged
 `test-claude-qa-audit.py` `af850e7fd907d831b584619713497802d79fcf77`, and
 the workflow `89ccd3928ee452ebb23ecb632a7d93b6a3d76ddb`).
 
-Exact-new-head automatic Core and governed QA outcomes for the
-correction commit are **not yet observed**. The earlier independent
+*(At publication time; the later observed outcomes and the merge are recorded in the post-merge status.)* Exact-new-head automatic Core and governed QA outcomes for the correction commit were **not yet observed** then. The earlier independent
 acceptances and closures stand; the binary-diff observation alone does not
 invalidate them or show that earlier reviewers did not read these files.
-Still open, unchanged: QA-01 (deferred test-completeness hardening), QA-02
+Still open at that time (current state: see the post-merge status): QA-01 (deferred test-completeness hardening), QA-02
 (original-review archival), QA-03 (final evidence reconciliation),
 PERSIST002-NET-02 (MEDIUM/OPEN, blocks public persistence rollout), the
 final PA merge approval and human merge.
 
-Next safe action: inspect the exact-new-head automatic Core and governed
-QA outcomes for the SOURCE-TEXT-FIX1 commit (Core must show a completed
-test summary), then complete the remaining evidence reconciliation
-(QA-02/QA-03) and the Product Architect merge decision. No closed review
-starts again.
+Next safe action (post-merge): the immediate next step for the post-merge documentation reconciliation is Product Architect inspection of its published PR and the applicable automatic checks. No closed review starts again.
+
+The subsequent public persistence rollout remains gated by **PERSIST002-NET-02** (implemented admission-budget mitigation, spoof-resistance and multi-client-budget tests, Security/Ops acceptance, separate PA deployment authorization). Nothing in this reconciliation authorizes mitigation implementation, deployment, image publication or VPS access.
