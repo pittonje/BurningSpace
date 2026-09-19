@@ -119,7 +119,11 @@ export function validatePersistentPlan(env: Record<string, string>, raw: unknown
   return p;
 }
 
-function networks(s: Obj): string { return Object.keys(object(s.networks)).sort().join(','); }
+function networks(s: Obj): string {
+  const n = object(s.networks);
+  requireRollout(Object.values(n).every(value => value === null || (typeof value === 'object' && Object.keys(value).length === 0)), 'COMPOSE_NETWORK_ATTACHMENT');
+  return Object.keys(n).sort().join(',');
+}
 function hardening(s: Obj, cpu: number, mem: number, readonly: boolean): void {
   const allowed = ['image', 'cpus', 'mem_limit', 'logging', 'environment', 'ports', 'networks', 'init', 'read_only', 'tmpfs', 'restart', 'stop_grace_period', 'healthcheck', 'volumes', 'privileged', 'entrypoint', 'command'];
   requireRollout(Object.keys(s).every(k => allowed.includes(k)), 'COMPOSE_FIELD');
@@ -135,15 +139,21 @@ export function validatePersistentCompose(raw: unknown, p: PersistentPlan, inven
   requireRollout(m.name === 'burningspace-staging', 'COMPOSE_PROJECT');
   if (services['persistence-tools']) validateToolsCompose(object(services['persistence-tools']), p);
   keys(services, services['persistence-tools'] ? ['client', 'server', 'postgres', 'persistence-tools'] : ['client', 'server', 'postgres']); keys(nets, ['burningspace', 'burningspace_db']);
-  for (const n of Object.keys(nets)) requireRollout(nets[n].name === `burningspace-staging_${n}` && nets[n].driver === 'bridge' && nets[n].external !== true && (n !== 'burningspace_db' || nets[n].internal === true), 'COMPOSE_NETWORK');
+  for (const n of Object.keys(nets)) requireRollout(Object.keys(nets[n]).every(k => ['name', 'driver', 'external', 'internal', 'ipam'].includes(k)) &&
+    (nets[n].ipam === undefined || Object.keys(object(nets[n].ipam)).length === 0) && nets[n].name === `burningspace-staging_${n}` && nets[n].driver === 'bridge' && nets[n].external !== true && (n !== 'burningspace_db' || nets[n].internal === true), 'COMPOSE_NETWORK');
   const volume = object(m.volumes); keys(volume, ['burningspace-db-data']);
-  requireRollout(volume['burningspace-db-data'].name === 'burningspace-staging_burningspace-db-data' && !volume['burningspace-db-data'].external && !volume['burningspace-db-data'].driver_opts, 'COMPOSE_VOLUME');
+  const dbVolume = object(volume['burningspace-db-data']);
+  requireRollout(Object.keys(dbVolume).every(k => ['name', 'driver', 'external'].includes(k)) && dbVolume.name === 'burningspace-staging_burningspace-db-data' && !dbVolume.external && (dbVolume.driver === undefined || dbVolume.driver === 'local'), 'COMPOSE_VOLUME');
   for (const name of ['server', 'client'] as const) {
     const s = object(services[name]); hardening(s, name === 'server' ? 1 : .25, name === 'server' ? 1024 ** 3 : 256 * 1024 ** 2, true);
     requireRollout(s.image === (name === 'server' ? p.targetServerImage : p.targetClientImage) && !s.depends_on && (!s.volumes || s.volumes.length === 0) &&
       networks(s) === (name === 'server' ? 'burningspace,burningspace_db' : 'burningspace'), 'COMPOSE_RUNTIME');
     requireRollout(s.ports?.length === 1 && s.ports[0].host_ip === '127.0.0.1' && Number(s.ports[0].published) === (name === 'server' ? p.serverBindPort : p.clientBindPort) &&
       s.ports[0].target === (name === 'server' ? 2567 : 8080) && s.ports[0].protocol === 'tcp', 'COMPOSE_PORT');
+    const expectedHealth = name === 'server'
+      ? ['CMD', 'node', '-e', "fetch('http://127.0.0.1:2567/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      : ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1'];
+    requireRollout(JSON.stringify(s.healthcheck?.test) === JSON.stringify(expectedHealth) && s.healthcheck.disable !== true && s.restart === 'unless-stopped', 'COMPOSE_HEALTHCHECK');
   }
   requireRollout(!services.client.environment || Object.keys(services.client.environment).length === 0, 'CLIENT_ENV');
   const server = object(services.server.environment);
@@ -152,6 +162,8 @@ export function validatePersistentCompose(raw: unknown, p: PersistentPlan, inven
   requireRollout(server.PORT === '2567', 'EFFECTIVE_ENV');
   const pg = object(services.postgres); hardening(pg, 1, 1024 ** 3, false);
   requireRollout(pg.image === p.postgresImage && networks(pg) === 'burningspace_db' && (!pg.ports || pg.ports.length === 0) && !pg.depends_on, 'COMPOSE_DB');
+  requireRollout(pg.tmpfs === undefined && pg.restart === 'unless-stopped' && pg.healthcheck?.disable !== true &&
+    JSON.stringify(pg.healthcheck?.test) === JSON.stringify(['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']), 'COMPOSE_DB_HEALTHCHECK');
   requireRollout(pg.volumes?.length === 2 && pg.volumes.some((v: Obj) => v.type === 'volume' && v.source === 'burningspace-db-data' && v.target === '/var/lib/postgresql/data' && !v.read_only) &&
     pg.volumes.some((v: Obj) => v.type === 'bind' && resolve(v.source) === resolve(deploymentRoot, 'postgres/init/001-burningspace-roles.sh') && v.target === '/docker-entrypoint-initdb.d/001-burningspace-roles.sh' && v.read_only === true), 'COMPOSE_DB_MOUNT');
   const e = object(pg.environment); keys(e, ['POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD', 'BURNINGSPACE_MIGRATOR_PASSWORD', 'BURNINGSPACE_RUNTIME_PASSWORD', 'BURNINGSPACE_BACKUP_PASSWORD']);

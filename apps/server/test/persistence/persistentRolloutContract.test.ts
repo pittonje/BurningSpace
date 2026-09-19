@@ -16,6 +16,10 @@ function fixture() {
     postgres: { ...hard, image: p.postgresImage, networks: { burningspace_db: null }, environment: { POSTGRES_DB: 'burningspace', POSTGRES_USER: 'burningspace_admin', POSTGRES_PASSWORD: 'template', BURNINGSPACE_MIGRATOR_PASSWORD: 'template', BURNINGSPACE_RUNTIME_PASSWORD: 'template', BURNINGSPACE_BACKUP_PASSWORD: 'template' }, volumes: [ { type: 'volume', source: 'burningspace-db-data', target: '/var/lib/postgresql/data' }, { type: 'bind', source: '/deploy/postgres/init/001-burningspace-roles.sh', target: '/docker-entrypoint-initdb.d/001-burningspace-roles.sh', read_only: true } ] }
   }, networks: { burningspace: { name: 'burningspace-staging_burningspace', driver: 'bridge' }, burningspace_db: { name: 'burningspace-staging_burningspace_db', driver: 'bridge', internal: true } }, volumes: { 'burningspace-db-data': { name: 'burningspace-staging_burningspace-db-data' } } };
   m.services.postgres.volumes[1].source = resolve('deploy/postgres/init/001-burningspace-roles.sh');
+  for (const s of Object.values(m.services) as any[]) s.restart = 'unless-stopped';
+  m.services.server.healthcheck = { test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:2567/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"] };
+  m.services.client.healthcheck = { test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1'] };
+  m.services.postgres.healthcheck = { test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}'] };
   return { p, env, m };
 }
 describe('persistent rollout contract', () => {
@@ -30,6 +34,12 @@ describe('persistent rollout contract', () => {
     (f: any) => { f.m.services.postgres.ports = [{ target: 5432 }]; },
     (f: any) => { f.m.services.postgres.networks.burningspace = null; },
     (f: any) => { f.m.services.postgres.volumes[0].source = 'other'; },
+    (f: any) => { f.m.services.postgres.tmpfs = ['/var/lib/postgresql/data']; },
+    (f: any) => { f.m.services.postgres.healthcheck.test = ['CMD-SHELL', 'unapproved-command']; },
+    (f: any) => { f.m.services.server.healthcheck.test = ['CMD-SHELL', 'unapproved-command']; },
+    (f: any) => { f.m.volumes['burningspace-db-data'].driver = 'unapproved-driver'; },
+    (f: any) => { f.m.networks.burningspace_db.driver_opts = { option: 'unapproved' }; },
+    (f: any) => { f.m.services.server.networks.burningspace_db = { aliases: ['postgres'] }; },
     (f: any) => { f.m.services.client.volumes = [{ source: '/var/run/docker.sock' }]; },
     (f: any) => { f.m.services.server.build = '.'; }, (f: any) => { f.m.services.server.privileged = true; },
     (f: any) => { f.m.services.server.ports[0].host_ip = '0.0.0.0'; }

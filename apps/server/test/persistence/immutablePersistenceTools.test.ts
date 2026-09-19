@@ -19,11 +19,27 @@ it.skipIf(!image)('runs immutable native operations, same-cluster isolated resto
   const checked = async (args: string[], input?: string) => { const r = await invoke(args, input); expect(r.exitCode, r.stderr + r.stdout).toBe(0); return r; };
   const target = `bs_rehearsal_${randomBytes(12).toString('hex')}`;
   const wrapper = `import {writeFile} from 'node:fs/promises';
+    import {statSync,readFileSync} from 'node:fs';
+    import childProcess from 'node:child_process';
+    import {syncBuiltinESMExports} from 'node:module';
     import {runOperation} from '/app/ops/apps/server/scripts/persistence-operator.js';
     let text=''; for await (const chunk of process.stdin) text+=chunk;
     const {operation,target,files}=JSON.parse(text);
+    const passwords=Object.values(files).flatMap(value=>value.split('\\n').filter(line=>line.includes('postgres://')).map(line=>decodeURIComponent(new URL(line.slice(line.indexOf('=')+1)).password)));
+    const originalSpawn=childProcess.spawn;
+    let nativeInvocations=0;
+    childProcess.spawn=(command,args,options)=>{
+      if(command==='docker')throw Error('NESTED_DOCKER');
+      for(const password of passwords)if(JSON.stringify(args).includes(password)||JSON.stringify(options.env||{}).includes(password))throw Error('SECRET_ARGV');
+      if(args.includes('--dbname')){
+        nativeInvocations++;
+        const passfile=options.env.PGPASSFILE;
+        if(!passfile||(statSync(passfile).mode&511)!==384||!passwords.some(password=>readFileSync(passfile,'utf8').includes(password)))throw Error('PGPASS_CHANNEL');
+      }
+      return originalSpawn(command,args,options);
+    };syncBuiltinESMExports();
     for(const [name,value] of Object.entries(files)) await writeFile('/run/private/'+name+'.env',value,{flag:'wx',mode:0o600});
-    try { console.log(JSON.stringify({ok:true,...await runOperation(operation,target)})); }
+    try { const evidence=await runOperation(operation,target);console.log(JSON.stringify({ok:true,...evidence,nativeInvocations})); }
     catch { console.log(JSON.stringify({ok:false,code:'OPERATION_REJECTED'})); process.exitCode=1; }`;
   const op = (operation: string, files: Record<string, string>, name?: string) => invoke(['run', '--rm', '-i', '--network', id, '--read-only', '--tmpfs', '/tmp', '--tmpfs', '/run/private:uid=1000,gid=1000,mode=0700', '-v', `${id}:/work`, '--entrypoint', 'node', image!, '--input-type=module', '-e', wrapper], JSON.stringify({ operation, target: name, files }));
   const migrator = { migrator: `BURNINGSPACE_MIGRATION_DATABASE_URL=${url('migrator')}` };
@@ -42,11 +58,13 @@ it.skipIf(!image)('runs immutable native operations, same-cluster isolated resto
     expect((await op('check-runtime', { 'runtime-db': `BURNINGSPACE_DATABASE_URL=${url('runtime')}` })).exitCode).toBe(0);
     expect((await op('check-backup', backup)).exitCode).toBe(0);
     expect((await op('status', { ...migrator, ...admin })).exitCode).toBe(1);
-    expect((await op('backup', { ...migrator, ...backup })).exitCode).toBe(0);
+    const dump = await op('backup', { ...migrator, ...backup });
+    expect(dump.exitCode).toBe(0); expect(JSON.parse(dump.stdout).nativeInvocations).toBe(1);
     expect((await op('restore-prepare', admin, target)).exitCode).toBe(0);
     const restore = { migrator: `BURNINGSPACE_MIGRATION_DATABASE_URL=${url('migrator', target)}` };
     const result = await op('restore-verify', restore, target);
     expect(result.exitCode, result.stdout + result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout).nativeInvocations).toBe(2);
     expect((await op('restore-verify', restore, target)).exitCode).toBe(1);
     expect((await op('restore-cleanup', admin, 'burningspace')).exitCode).toBe(1);
     expect((await op('restore-cleanup', admin, target)).exitCode).toBe(0);

@@ -1,6 +1,6 @@
 # PERSIST002-ROLLOUT-01 — Persistent staging rollout readiness
 
-Status: DESIGN PA ACCEPTED / IMPLEMENTATION AUTHORIZED. Public persistence rollout
+Status: IMPLEMENTATION COMPLETE / REVIEW PENDING (design PA accepted). Public persistence rollout
 BLOCKED; deployment NOT AUTHORIZED. NET-02 is MERGED / CLOSED. Public staging
 continues to run the earlier non-persistent runtime.
 
@@ -68,4 +68,118 @@ deployment-GO work. Repository tests cannot substitute for live evidence.
   Linux container. CI runs the POSIX test normally. External smoke self-tests:
   3 pass; external script typecheck passes. Credential provisioning creates the
   private file before the single issuance request and never prints credentials.
-- R4: pending.
+- R4: operator sequence and current-state reconciliation implemented; local
+  validation passed. Historical FIX/failed-QA/OPS-002 evidence remains
+  intact. Final validation also required updating the existing secret-transport
+  fixture to the new marked restore target, enforcing LF for unchanged systemd
+  assets, and closing Compose override holes (healthcheck commands, ephemeral
+  DB storage, network attachments/options and volume drivers). These are bounded
+  corrections within the accepted rollout contract, not runtime/trust changes.
+
+## Commit file inventory
+
+### R1 — 70d9b02
+
+- .github/workflows/pr-checks.yml
+- .gitignore
+- apps/server/scripts/external-staging-preflight.ts
+- apps/server/scripts/persistent-rollout-contract.ts
+- apps/server/test/persistence/persistentRolloutContract.test.ts
+- deploy/external-staging-persistence-plan.example.json
+- deploy/external-staging-persistence.env.example
+- deploy/staging.db.env.example
+- docs/handoffs/CURRENT.md
+- docs/tasks/persist-002-rollout-01-staging-readiness.md
+
+### R2 — b8b4a39
+
+- .dockerignore
+- .gitattributes
+- .github/workflows/pr-checks.yml
+- .github/workflows/publish-staging-images.yml
+- .gitignore
+- apps/server/package.json
+- apps/server/scripts/backup-dump.ts
+- apps/server/scripts/backup-restore-verify.ts
+- apps/server/scripts/db-privilege-check.ts
+- apps/server/scripts/external-staging-preflight.ts
+- apps/server/scripts/persistence-operator.ts
+- apps/server/scripts/persistence-tooling.ts
+- apps/server/scripts/persistent-rollout-contract.ts
+- apps/server/scripts/private-operator-input.ts
+- apps/server/scripts/restore-target.ts
+- apps/server/scripts/tsconfig.operator-build.json
+- apps/server/scripts/tsconfig.persistence-tools.json
+- apps/server/test/persistence/backupRestore.test.ts
+- apps/server/test/persistence/immutablePersistenceTools.test.ts
+- apps/server/test/persistence/persistentRolloutContract.test.ts
+- deploy/docker-compose.staging.db.yml
+- deploy/docker-compose.staging.tools.yml
+- deploy/server.Dockerfile
+- docs/handoffs/CURRENT.md
+- docs/tasks/persist-002-rollout-01-staging-readiness.md
+
+### R3 — 3ce7a96
+
+- .github/workflows/pr-checks.yml
+- apps/server/scripts/external-staging-admission-smoke.ts
+- apps/server/scripts/external-staging-smoke.ts
+- apps/server/scripts/private-smoke-credential.ts
+- apps/server/scripts/tsconfig.external-staging.json
+- apps/server/test/persistence/admissionBudgetIsolation.test.ts
+- apps/server/test/persistence/rolloutEvidence.test.ts
+- docs/handoffs/CURRENT.md
+- docs/tasks/persist-002-rollout-01-staging-readiness.md
+
+### R4 — readiness gate and final validation corrections
+
+- .gitattributes
+- PROJECT_CONTEXT.md
+- apps/server/scripts/persistent-rollout-contract.ts
+- apps/server/test/persistence/immutablePersistenceTools.test.ts
+- apps/server/test/persistence/persistenceToolingSecretTransport.test.ts
+- apps/server/test/persistence/persistentRolloutContract.test.ts
+- docs/handoffs/CURRENT.md
+- docs/ops/persist-002-staging-db-integration-plan.md
+- docs/ops/public-arena-caddy-edge-runbook.md
+- docs/ops/public-arena-external-staging-runbook.md
+- docs/ops/public-arena-staging-runbook.md
+- docs/tasks/persist-002-durable-world-identity-foundation.md
+- docs/tasks/persist-002-rollout-01-staging-readiness.md
+
+## Additional support files and justification
+
+- .dockerignore: keep private credentials, dump/manifest files and local compiled tools out of build contexts.
+- .gitattributes: preserve canonical LF bytes for SQL and systemd fixtures; migration and drop-in Git blobs are unchanged.
+- apps/server/scripts/persistent-rollout-contract.ts: isolate strict v3 validation so v2 validation remains intact.
+- apps/server/scripts/private-operator-input.ts: shared bounded private projection reader.
+- apps/server/scripts/persistence-operator.ts and tsconfig.operator-build.json: compile and dispatch the authorized immutable operations.
+- apps/server/scripts/restore-target.ts: marked target creation, freshness/isolation checks and explicit safe cleanup.
+- apps/server/scripts/private-smoke-credential.ts: exclusive private credential provisioning and reads.
+- apps/server/test/persistence/persistentRolloutContract.test.ts, immutablePersistenceTools.test.ts and rolloutEvidence.test.ts: focused contract, native-container and evidence/permission coverage.
+- apps/server/test/persistence/persistenceToolingSecretTransport.test.ts: adapt the existing secret-transport regression to the mandatory same-cluster marked target.
+
+## Final local validation (2026-09-20)
+
+- Node 22.23.2, default Vitest pool, isolated disposable PostgreSQL plus rebuilt local tools image: **57 files passed; 706 tests passed; one POSIX-only test skipped on Windows**. That permission test and the other three evidence tests subsequently passed in Linux (4/4).
+- Workspace build and typecheck, both operator/external script configs and operator build: PASS. Existing client large-chunk warning remains.
+- Legacy preflight 56 self-tests; v3 contract 24 focused cases; legacy and persistent runtime+tools rendered Compose models: PASS.
+- Edge preflight 108 self-tests and template: PASS. Pinned official Caddy 2.11.4 archive SHA-256 verified; real disposable Linux contract: **64 checks PASS**, including secret/log canaries. No host Caddy service was touched.
+- Full local CI Compose composition (base/build/integration): server/client built; migration, grants and privilege one-shots exited zero; readiness and external-style loopback gameplay/reconnect smoke passed; server ran as node with baked migration asset; graceful stop exited zero; disposable stack removed.
+- Backup/restore round trip, canonical authority/state/count/credential/constraint/target negatives and legacy secret-transport tests: PASS in the full suite.
+- Immutable native tools: migration/status/grants/bootstrap/three role checks/backup/restore/cleanup PASS. Instrumented real child processes prove no nested Docker, no secret in argv/environment, and private 0600 PGPASSFILE carrying the password. Output canaries pass.
+- Protocol compatibility, movement/combat/client-callback diagnostics: PASS.
+- PR classifier: 29 tests PASS; governed-QA routing audit: PASS. High-signal secret scan: 41 files PASS. Diff whitespace check: PASS.
+- Earlier attempts are not hidden: Node 24 default-pool IPC failure and native thread-pool crash prompted the supported Node 22 rerun. Full validation exposed one legacy restore fixture still using the old target, corrected here. A run overlapping the final Compose validator edits was discarded; the frozen-code Node 22 run above is the accepted local result.
+- No gameplay/identity/limiter/Caddy trust code or SQL migration content changed. No VPS, staging DB, public rollout probes, DNS/TLS changes, publication workflow or deployment was executed.
+
+## Gates still required
+
+1. Exact final PR-head Core SUCCESS and governed QA.
+2. Independent consolidated Architecture/Network/Security/Ops/QA review, then PA disposition and human merge consideration. No independent agents were invoked during implementation.
+3. Separate deployment GO binding environment, toolchain, operator private locations, immutable image provenance and stop-and-preserve recovery.
+4. Actual final-topology Node socket observation through controlled real Caddy; real source-address evidence proving distinct effective admission keys.
+5. Live A/B/spoof and host-loopback invalid-proof/log correlation, no durable rows from the invalid-body probes, retained credential provisioning and multiplayer smoke.
+6. Live PG private-network/volume/role evidence, migration/schema/domain/world readiness, quiesced backup, isolated same-cluster restore verification and explicit cleanup.
+
+Existing deferred QA-01/QA-02 archival/completeness work and edge-secret rotation remain outside this task. Fresh-auth diagnostic evidence remains INCONCLUSIVE by design; the bounded guest protocol is the acceptance path. Repository evidence does not pre-write deployed success.

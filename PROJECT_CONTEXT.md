@@ -104,8 +104,9 @@ Exact immutable image digests and execution provenance are recorded in the
 [OPS-002 completion record](docs/tasks/ops-002-public-arena-external-staging-deployment.md#2026-09-13--phase-b-execution-closure).
 
 This is non-persistent Public Arena staging, not production or campaign MVP.
-Server/world state remains in-memory and may reset on restart; world/player
-campaign persistence and durable identity are not implemented. Campaign
+The deployed server/world state remains in-memory and may reset on restart.
+Durable world/guest identity and writer fencing are implemented and merged in
+the repository (PERSIST-002); they are not deployed. Campaign
 systems remain future incremental work. MOBILE-001A/B/C are merged; MOBILE-001C
 entered main through PR #84. The human PA confirms its bounded client-only
 staging update and successful real-phone usability test. These are supplied
@@ -118,8 +119,11 @@ and fenced session/world lifecycle. See
 [Persistent World and Identity Architecture](docs/architecture/PERSISTENT_WORLD_IDENTITY_ARCHITECTURE.md).
 The registry now has 39 accepted decisions under explicit delegated PA authority;
 independent Architecture/Security review APPROVED and PERSIST-001 acceptance is
-complete. PERSIST-001 is MERGED / CLOSED, and PERSIST-002 is open as the active
-bounded runtime implementation task. Use
+complete. PERSIST-001 and PERSIST-002 are MERGED / CLOSED; PERSIST002-NET-02 is
+also MERGED / CLOSED. PERSIST002-ROLLOUT-01 is the active repository readiness
+task: explicit persistent v3 contract, immutable role-scoped DB operations,
+isolated restore rehearsal and bounded rollout evidence. Public persistence
+rollout remains BLOCKED and deployment NOT AUTHORIZED. Use
 [CURRENT](docs/handoffs/CURRENT.md) for exact task/review state and deferred mobile
 UX. Local GameScene remains preserved non-authoritative prototype material.
 
@@ -130,7 +134,7 @@ DOCARCH-005 — Role and Model Portability remains deferred. Use
 
 - Branch protection and possible CI-004 remain dedicated CI work.
 - AGENT-004 and detailed role/model portability remain deferred to DOCARCH-005.
-- Persistence/database implementation remains future PERSIST-002 work after architecture acceptance; broad accounts remain deferred.
+- Persistence rollout awaits ROLLOUT-01 review, PA disposition and a separate deployment GO; broad accounts and campaign systems remain deferred.
 - Exact unresolved balance parameters remain outside the accepted mechanics until separately approved.
 
 ## Safe resumption
