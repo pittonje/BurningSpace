@@ -317,15 +317,17 @@ jobs:
             "summary" concise: it must be no longer than 1500 characters.
             A review whose "summary" is not under 2000 characters is
             rejected outright and no review is published, so stay well
-            within the 1500-character target. Every field must be
-            single-line plain text with no embedded newline characters.
+            within the 1500-character target. "reviewed_commit" must be
+            exactly the supplied 40-character SHA with no other characters.
+            Every field must be single-line plain text with no embedded
+            newline characters.
             Return only the JSON object - no Markdown code fences and no
             other text.
           claude_args: |
             --agent qa-reviewer
             --allowedTools "Read,Grep,Glob,Bash(gh pr view:*),Bash(gh pr diff:*)"
             --disallowedTools "Write,Edit,NotebookEdit"
-            --json-schema '{"type":"object","additionalProperties":false,"required":["blockers","important_suggestions","minor_suggestions","approval_status","reviewed_commit","summary"],"properties":{"blockers":{"type":"array","items":{"type":"string"}},"important_suggestions":{"type":"array","items":{"type":"string"}},"minor_suggestions":{"type":"array","items":{"type":"string"}},"approval_status":{"type":"string"},"reviewed_commit":{"type":"string"},"summary":{"type":"string","maxLength":1500}}}'
+            --json-schema '{"type":"object","additionalProperties":false,"required":["blockers","important_suggestions","minor_suggestions","approval_status","reviewed_commit","summary"],"properties":{"blockers":{"type":"array","maxItems":20,"items":{"type":"string","minLength":1,"maxLength":500}},"important_suggestions":{"type":"array","maxItems":20,"items":{"type":"string","minLength":1,"maxLength":500}},"minor_suggestions":{"type":"array","maxItems":20,"items":{"type":"string","minLength":1,"maxLength":500}},"approval_status":{"type":"string","minLength":1,"maxLength":100},"reviewed_commit":{"type":"string","minLength":40,"maxLength":40},"summary":{"type":"string","maxLength":1500}}}'
 
       - name: Summarize safe Claude invocation diagnostic
         if: always() && steps.routing.outputs.qa_required != 'false'
