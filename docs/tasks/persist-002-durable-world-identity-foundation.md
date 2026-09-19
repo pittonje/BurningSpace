@@ -1172,7 +1172,7 @@ result extraction and displayed the exact ID; this reproduces the two
 diagnosed code paths and is not a replay of the unavailable historical
 transcript.
 
-**Publication state:** committed and pushed as one commit on top of
+**Publication state (at publication time; the exact-head outcomes are recorded in the SOURCE-TEXT-FIX1 entry):** committed and pushed as one commit on top of
 `629f165...`. Exact-new-head Core and governed Claude QA outcomes have
 **not yet been observed** and no success is anticipated here. Application
 tests are unchanged; the reviewed Core baseline is 52 files / 516 tests /
@@ -1186,7 +1186,80 @@ blocks public persistence rollout; the final Product Architect merge
 approval and the human merge. Missing original review reports are not
 reconstructed and their hashes are not claimed as independently verified.
 
-Next safe action: inspect the exact-new-head Core and governed QA
-outcomes, then complete the remaining evidence reconciliation (QA-02/QA-03)
-and the Product Architect merge decision. No SEC-03 or functional-QA
-review starts again.
+**SOURCE-TEXT-FIX1 (2026-09-19) — visible escapes for embedded control characters.**
+
+**Exact-head outcomes at `f8a9ab48373101158ad4e6585f755303c68c4ba7`
+(QA-RECOVERY-003 as published):**
+
+- Core Pull Request Checks run `35418072318`: **SUCCESS**; the completed
+  application suite reported **52 files / 516 tests passed**.
+- Claude QA Review Pilot run `35418072316`, job `105830449356`, attempt 1:
+  the diagnostic sanitizer step **SUCCEEDED** (the QA-RECOVERY-003
+  capacity/run-ID correction worked on a real run). The overall workflow
+  nevertheless **FAILED** because the reviewer's own output was rejected by
+  the unchanged validator: `blockers[0]` exceeds the 500-character item
+  limit (failure comment `5738973423`). That output is unvalidated and is
+  **not** an accepted QA approval; the validator and the failed review were
+  not edited or weakened.
+
+**Separately verified source issue.** The unvalidated reviewer output
+pointed at raw control characters in two source files, and the Product
+Architect independently inspected the source. Byte-level inventory at
+`f8a9ab48...`: `apps/server/test/persistence/worldDiscoveryOrigin.test.ts`
+line 199 had one raw NUL (U+0000) immediately before `unreachable` in a
+`?? '...unreachable'` fallback string; `apps/server/scripts/public-arena-smoke.ts`
+line 49 had raw U+0000, U+001F and U+007F inside the Origin-validation
+regex character class. No other raw control bytes, non-ASCII bytes, CRLF or
+lone CR were present in either file. Because of the raw NUL, Git treated
+both files as binary against the PR base (numstat `-`/`-`, no textual
+diff).
+
+**Representation-only correction** (blobs before: `worldDiscoveryOrigin.test.ts`
+`77a39232f62c1e638186fdd71cbd99667836d011`, `public-arena-smoke.ts`
+`3e1be0b9abee5211359a2008fb235be8d6bf764f`): the NUL became the visible
+escape `\u0000` (the string still starts with a NUL followed by
+`unreachable`), and the class became `/[\u0000-\u001f\u007f]/u` (same
+matched set, same `u` flag). Nothing else changed: no reformatting, no
+line-ending or Unicode rewrite, no test/assertion/timeout/cleanup change,
+no Origin-policy, authentication, rate-limit or runtime change, and no
+`.gitattributes`/textconv override. Both files now contain no raw control
+bytes and compare against the PR base as text (numstat 261/0 and 66/19).
+
+**Equivalence evidence (temporary local probe, not committed):** the old
+and new fallback strings have identical length (12) and identical character
+codes; the old and new regexes agree for every ASCII code point 0..127 (the
+matched set is exactly U+0000..U+001F plus U+007F) and for 11 representative
+valid/invalid Origin strings; regex flags are identical (`u`). The
+`RegExp.source` text differs by design; behavior was compared.
+
+**Validation (local, loopback only):** `worldDiscoveryOrigin.test.ts`
+against real disposable PostgreSQL 6/6 passed, 0 skipped;
+`npx tsc -p apps/server/scripts/tsconfig.external-staging.json --noEmit`,
+`npx tsc -p apps/server/scripts/tsconfig.persistence-tools.json --noEmit`
+and `npm run typecheck` clean (a temporary tsconfig covering the two
+changed files reported only the pre-existing `process.send` typing error on
+an untouched line of the test's telemetry-filter block); `public-arena-smoke.ts`
+against an owned local production-mode server on a disposable database
+completed with the hostile-Origin check, and a smoke Origin containing
+U+0001 was rejected with the same "exact HTTP or HTTPS origin" error; the
+unchanged Phase A scanner passed over its 30 files; `git diff --check`
+clean. A full local rerun was not performed; the normal remote Core run
+remains required. The QA-RECOVERY-003 files are unchanged
+(`sanitize-claude-diagnostic.py` `0b4ff8193b7d198cc05924518bfa5214ad8f704b`,
+`test-claude-qa-audit.py` `af850e7fd907d831b584619713497802d79fcf77`, and
+the workflow `89ccd3928ee452ebb23ecb632a7d93b6a3d76ddb`).
+
+Exact-new-head automatic Core and governed QA outcomes for the
+correction commit are **not yet observed**. The earlier independent
+acceptances and closures stand; the binary-diff observation alone does not
+invalidate them or show that earlier reviewers did not read these files.
+Still open, unchanged: QA-01 (deferred test-completeness hardening), QA-02
+(original-review archival), QA-03 (final evidence reconciliation),
+PERSIST002-NET-02 (MEDIUM/OPEN, blocks public persistence rollout), the
+final PA merge approval and human merge.
+
+Next safe action: inspect the exact-new-head automatic Core and governed
+QA outcomes for the SOURCE-TEXT-FIX1 commit (Core must show a completed
+test summary), then complete the remaining evidence reconciliation
+(QA-02/QA-03) and the Product Architect merge decision. No closed review
+starts again.
