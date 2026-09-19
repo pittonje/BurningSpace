@@ -57,4 +57,15 @@ deployment-GO work. Repository tests cannot substitute for live evidence.
   tools model passes. Classifier and QA-routing audits pass.
   Additional packaging fix: SQL checkout uses LF so its bytes match the canonical
   migration checksum on Windows and Linux; the SQL Git blob is unchanged.
-- R3–R4: pending.
+- R3: bounded A/B/spoof and separate host-local proof phases implemented, with
+  strict evidence correlation to final-container socket observation and fixed
+  edge-proof log reasons. Fresh-auth evidence is explicitly INCONCLUSIVE.
+  Guest diagnostic sends only `{}` and creates zero durable rows. Real server +
+  PostgreSQL admission suite: 31 tests pass using Vitest threads on this Windows
+  Node 24 host (default fork run encountered an IPC channel failure).
+  Evidence unit cases: 3 pass; POSIX credential test is skipped on Windows and
+  exclusive 0600 creation/read/overwrite refusal was separately verified in a
+  Linux container. CI runs the POSIX test normally. External smoke self-tests:
+  3 pass; external script typecheck passes. Credential provisioning creates the
+  private file before the single issuance request and never prints credentials.
+- R4: pending.

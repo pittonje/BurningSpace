@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { IdentityGuestIntent } from '@burningspace/shared';
 import { startProductionServer, type ProductionServerHandle } from '../../src/index.js';
 import { generateCredential } from '../../src/persistence/credential.js';
+import { runAdmissionPhase, probeGuest, type AdmissionConfig } from '../../scripts/external-staging-admission-smoke.js';
 import {
   ADMISSION_EDGE_PEER_HEADER,
   ADMISSION_EDGE_PROOF_HEADER
@@ -217,7 +218,7 @@ const openProxies: EdgeProxy[] = [];
  * disposable PostgreSQL database, real /identity/guest and world-discovery
  * HTTP routes, real durable BattleRoom.onAuth. No admission bypass.
  */
-async function bootHarness(trustedEdgePeers?: string, edgeSecret: string = EDGE_SECRET): Promise<Harness> {
+async function bootHarness(trustedEdgePeers?: string, edgeSecret: string = EDGE_SECRET, allowedOrigin?: string): Promise<Harness> {
   const database = await createBootstrappedTestDatabase();
   const logLines: string[] = [];
   let guestClock = 0;
@@ -230,6 +231,7 @@ async function bootHarness(trustedEdgePeers?: string, edgeSecret: string = EDGE_
       environment: {
         NODE_ENV: 'test',
         DATABASE_URL: database.databaseUrl,
+        ...(allowedOrigin ? { BURNINGSPACE_ALLOWED_ORIGINS: allowedOrigin } : {}),
         ...(trustedEdgePeers === undefined
           ? {}
           : {
@@ -342,6 +344,21 @@ async function attemptJoin(
 describe.skipIf(!databaseAvailable)(
   'PERSIST002-NET-02 admission budget isolation (real server + real PostgreSQL + real proxy peer)',
   () => {
+    it('freezes invalid-body ordering and the bounded rollout protocol with zero durable guests', async () => {
+      const harness = await bootHarness('127.0.0.1', EDGE_SECRET, 'https://arena.example.invalid');
+      const edgeA = await proxy(harness.server.url, PUBLIC_CLIENT_A);
+      const edgeB = await proxy(harness.server.url, PUBLIC_CLIENT_B);
+      const config: AdmissionConfig = { runId: randomBytes(16).toString('hex'), targetCommit: 'a'.repeat(40), environmentId: 'local-test', topologyId: 'test-topology', edgeConfigId: 'test-edge', serverOrigin: 'https://api.example.invalid', allowedOrigin: 'https://arena.example.invalid', sourceAddress: PUBLIC_CLIENT_A, nodePeer: '127.0.0.1' };
+      const at = (url: string) => (_origin: string, allowed: string, headers: import('node:http').OutgoingHttpHeaders) => probeGuest(url, allowed, headers);
+      await runAdmissionPhase(config, 'a-exhaust', undefined, at(edgeA.url));
+      await runAdmissionPhase({ ...config, sourceAddress: PUBLIC_CLIENT_B }, 'b-isolation', undefined, at(edgeB.url));
+      await runAdmissionPhase(config, 'a-spoof', undefined, at(edgeA.url));
+      await runAdmissionPhase({ ...config, serverOrigin: harness.server.url, sourceAddress: '198.51.100.254' }, 'local-proof', EDGE_SECRET);
+      for (const table of ['players', 'player_credentials', 'world_memberships', 'active_session_leases']) expect(await countRows(harness.database.databaseUrl, table)).toBe(0);
+      const logs = harness.logLines.join('\n');
+      for (const reason of ['edge_proof_missing', 'edge_proof_malformed', 'edge_proof_rejected']) expect(logs).toContain(reason);
+      expect(logs).not.toContain(EDGE_SECRET);
+    }, 60_000);
     /**
      * PERSIST002-NET02-EDGE-AUTH-01 -- the discriminating regression.
      *

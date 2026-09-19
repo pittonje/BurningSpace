@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { provisionPrivateSmokeCredential, readPrivateSmokeCredential } from './private-smoke-credential.js';
 import { connect as connectTcp, type Socket } from 'node:net';
 import { connect as connectTls, type TLSSocket } from 'node:tls';
 import type { MapSchema } from '@colyseus/schema';
@@ -27,6 +28,7 @@ interface SmokeEnvironment {
    * logged, echoed, or included in any error message.
    */
   BURNINGSPACE_SMOKE_CREDENTIAL?: string;
+  BURNINGSPACE_SMOKE_CREDENTIAL_FILE?: string;
 }
 
 interface ParticipantSchema { profileReady: boolean; }
@@ -530,7 +532,11 @@ async function run(environment: SmokeEnvironment): Promise<void> {
     fail('ORIGIN_CONTRACT', 'External allowed Origin must equal the client origin and hostile Origin must differ.');
   }
   const timeoutMs = parseTimeout(environment.BURNINGSPACE_EXTERNAL_SMOKE_TIMEOUT_MS);
-  const providedCredential = environment.BURNINGSPACE_SMOKE_CREDENTIAL?.trim() || undefined;
+  if (environment.BURNINGSPACE_SMOKE_CREDENTIAL && environment.BURNINGSPACE_SMOKE_CREDENTIAL_FILE) fail('CREDENTIAL_CONFLICT', 'Use exactly one private credential input.');
+  const providedCredential = environment.BURNINGSPACE_SMOKE_CREDENTIAL_FILE
+    ? await readPrivateSmokeCredential(environment.BURNINGSPACE_SMOKE_CREDENTIAL_FILE)
+    : environment.BURNINGSPACE_SMOKE_CREDENTIAL?.trim() || undefined;
+  if (!allowLoopbackHttp && !providedCredential) fail('CREDENTIAL_REQUIRED', 'External smoke requires a retained private credential.');
 
   await checkClient(client, timeoutMs);
   await checkJsonEndpoint(server, '/health', timeoutMs);
@@ -559,7 +565,16 @@ async function run(environment: SmokeEnvironment): Promise<void> {
 }
 
 const selfTest = process.argv.slice(2).includes('--self-test');
-const operation = selfTest ? runSmokeSelfTests() : run(process.env);
+async function provision(): Promise<void> {
+  const path = process.argv[process.argv.indexOf('--provision-credential') + 1];
+  if (!path || process.argv.length !== 4 || process.env.BURNINGSPACE_SMOKE_CREDENTIAL || process.env.BURNINGSPACE_SMOKE_CREDENTIAL_FILE) fail('PROVISION_INPUT', 'Provisioning requires one exclusive private output path.');
+  const server = exactOrigin(process.env.BURNINGSPACE_EXTERNAL_SMOKE_SERVER_ORIGIN, 'server origin');
+  const allowed = exactOrigin(process.env.BURNINGSPACE_EXTERNAL_SMOKE_ALLOWED_ORIGIN, 'allowed browser Origin');
+  if (server.protocol !== 'https:' || allowed.protocol !== 'https:') fail('TLS_REQUIRED', 'Credential provisioning requires HTTPS.');
+  await provisionPrivateSmokeCredential(path, async () => (await createGuestIdentity(server, allowed.origin, 5000)).credential);
+  console.log(JSON.stringify({ ok: true, event: 'smoke_credential_provisioned', issuedGuests: 1, privateFile: true, credentialPrinted: false }));
+}
+const operation = selfTest ? runSmokeSelfTests() : process.argv.includes('--provision-credential') ? provision() : run(process.env);
 operation.then(
   () => {
     if (selfTest) console.log(JSON.stringify({
@@ -572,7 +587,7 @@ operation.then(
     }));
   },
   (error: unknown) => {
-    console.error(JSON.stringify({ ok: false, event: 'external_staging_smoke_failed', error: safeError(error) }));
+    console.error(JSON.stringify({ ok: false, event: 'external_staging_smoke_failed', error: error instanceof SmokeError ? safeError(error) : { code: 'PRIVATE_OR_OPERATION_FAILURE', message: 'Smoke operation failed.' } }));
     process.exitCode = 1;
   }
 );

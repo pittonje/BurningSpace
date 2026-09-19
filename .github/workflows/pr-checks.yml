@@ -103,6 +103,7 @@ jobs:
         run: |
           npx tsx apps/server/scripts/external-staging-preflight.ts --self-test
           npx vitest run apps/server/test/persistence/persistentRolloutContract.test.ts
+          npx vitest run apps/server/test/persistence/rolloutEvidence.test.ts
           BURNINGSPACE_EDGE_ASSERTION_SECRET=none \
           BURNINGSPACE_OPERATION_INPUT_DIR=/tmp/bs-operation \
           BURNINGSPACE_OPERATION_WORK_DIR=/tmp/bs-work \
@@ -321,6 +322,8 @@ jobs:
             'deploy/docker-compose.staging.build.yml',
             'apps/server/scripts/external-staging-preflight.ts',
             'apps/server/scripts/external-staging-smoke.ts',
+            'apps/server/scripts/external-staging-admission-smoke.ts',
+            'apps/server/scripts/private-smoke-credential.ts',
             'apps/server/scripts/external-staging-edge-preflight.ts',
             'apps/server/scripts/external-staging-edge-contract-check.ts',
             'apps/server/scripts/tsconfig.external-staging.json',
