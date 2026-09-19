@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { resolve as resolvePath } from 'node:path';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, open } from 'node:fs/promises';
+import { requireRollout } from './persistent-rollout-contract.js';
 import { Client } from 'pg';
 import {
   POSTGRES_17_IMAGE,
@@ -91,14 +92,14 @@ interface WorldRow {
  * Real snapshot-consistency fence:
  *
  * 1. connect (this IS the "operator-capable safe connection" -- the
- *    read-only burningspace_backup role is sufficient and preferred);
+ *    migrator holds the row-lock fence; backup is SELECT-only for pg_dump);
  * 2. verify the canonical world has NO live unexpired writer (refuses to
  *    back up a running, non-quiesced application);
  * 3. BEGIN ISOLATION LEVEL REPEATABLE READ;
  * 4. lock the canonical world row FOR SHARE -- this blocks any concurrent
  *    writer-claim/gameplay-authority transaction (all of which take
  *    FOR UPDATE on this exact row) for as long as this transaction is open,
- *    without requiring any write privilege of our own;
+ *    using the migrator's row-lock privilege;
  * 5. pg_export_snapshot() inside that same transaction;
  * 6. collect manifest metadata using the SAME transaction's consistent view;
  * 7. run pg_dump --snapshot=<id> through a SEPARATE session while this
@@ -107,9 +108,12 @@ interface WorldRow {
  */
 export async function performQuiescedBackup(options: PerformBackupOptions): Promise<PerformBackupResult> {
   const createdAtUtc = new Date().toISOString();
-  await mkdir(options.outputDir, { recursive: true });
+  requireRollout(/^[a-zA-Z0-9_-]{1,100}\.dump$/u.test(options.dumpFilename), 'BACKUP_FILENAME');
+  await mkdir(options.outputDir, { recursive: true, mode: 0o700 });
   const dumpPath = resolvePath(options.outputDir, options.dumpFilename);
   const manifestPath = `${dumpPath}.manifest.json`;
+  // Reserve exclusively with private permissions before pg_dump opens the file.
+  await (await open(dumpPath, 'wx', 0o600)).close();
 
   const client = new Client({ connectionString: options.fenceUrl, connectionTimeoutMillis: CONNECT_TIMEOUT_MILLIS });
   await client.connect();
@@ -179,6 +183,7 @@ export async function performQuiescedBackup(options: PerformBackupOptions): Prom
           .then((result) => result.rows[0]!.server_major),
         resolvePgToolMajorVersion('pg_dump')
       ]);
+      requireRollout(postgresServerMajor === 17 && pgDumpMajor === 17, 'BACKUP_PG_VERSION');
 
       await runPgDumpSnapshot({ sourceUrl: options.dumpUrl, snapshotId, outputPath: dumpPath });
 
@@ -222,7 +227,7 @@ export async function performQuiescedBackup(options: PerformBackupOptions): Prom
         backupMode: 'quiesced-exported-snapshot'
       };
 
-      await writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+      await writeFile(manifestPath, JSON.stringify(manifest, null, 2), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
       await client.query('COMMIT');
 
       return { manifest, dumpPath, manifestPath };
@@ -285,7 +290,7 @@ async function main(): Promise<number> {
     printResult({
       ok: false,
       errorType: error instanceof PersistenceToolError ? 'backup' : 'unexpected',
-      message: error instanceof Error ? error.message : String(error)
+      message: 'Backup operation failed.'
     });
     return 1;
   }
@@ -297,7 +302,7 @@ if (isMainModule()) {
       process.exitCode = exitCode;
     })
     .catch((error: unknown) => {
-      printResult({ ok: false, errorType: 'fatal', message: error instanceof Error ? error.message : String(error) });
+      printResult({ ok: false, errorType: 'fatal', message: 'Backup operation failed.' });
       process.exitCode = 1;
     });
 }

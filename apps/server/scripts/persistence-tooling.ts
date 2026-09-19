@@ -1,7 +1,13 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, basename } from 'node:path';
+
+let nativeTools = false;
+/** Only the immutable operator dispatcher selects native execution. Local legacy tests retain Docker. */
+export function useNativePgTools(): void { nativeTools = true; }
 
 /**
  * Shared, dependency-free (node:child_process / node:crypto / node:fs / pg
@@ -33,17 +39,21 @@ export interface CommandResult {
 export function runCommand(
   command: string,
   args: readonly string[],
-  options: { readonly input?: string } = {}
+  options: { readonly input?: string; readonly env?: NodeJS.ProcessEnv } = {}
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], env: options.env, windowsHide: true });
+    const deadline = setTimeout(() => child.kill('SIGKILL'), 180_000);
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
 
-    child.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
-    child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
-    child.on('error', (error) => reject(error));
+    let bytes = 0;
+    const collect = (chunks: Buffer[], chunk: Buffer) => { bytes += chunk.length; if (bytes > 65_536) child.kill('SIGKILL'); else chunks.push(chunk); };
+    child.stdout.on('data', (chunk: Buffer) => collect(stdoutChunks, chunk));
+    child.stderr.on('data', (chunk: Buffer) => collect(stderrChunks, chunk));
+    child.on('error', () => { clearTimeout(deadline); reject(new PersistenceToolError('Tool process could not start.')); });
     child.on('close', (exitCode) => {
+      clearTimeout(deadline);
       resolve({
         exitCode: exitCode ?? -1,
         stdout: Buffer.concat(stdoutChunks).toString('utf8'),
@@ -292,6 +302,18 @@ async function runPgTool(
   buildToolArgs: (dbUrl: string) => readonly string[]
 ): Promise<CommandResult> {
   rejectSecretBearingQueryParameters(hostUrl);
+  if (nativeTools) {
+    const { dbUrl, pgpassFileContent } = toPasswordFreeConnection(hostUrl);
+    const dir = await mkdtemp(`${tmpdir()}/bs-pgpass-`);
+    try {
+      const file = `${dir}/password`;
+      await writeFile(file, pgpassFileContent ?? '', { flag: 'wx', mode: 0o600 });
+      const [command, ...args] = buildToolArgs(dbUrl);
+      if (!command || !['pg_dump', 'pg_restore', 'psql'].includes(command)) throw new PersistenceToolError('Unsupported native tool.');
+      // Do not pass operator credentials through inherited process environment.
+      return await runCommand(command, args, { env: { PATH: process.env.PATH, LANG: 'C', PGPASSFILE: file, PGCONNECT_TIMEOUT: '5' } });
+    } finally { await rm(dir, { recursive: true, force: true }); }
+  }
   const access = resolveContainerDatabaseAccess(hostUrl);
   const { dbUrl, pgpassFileContent } = toPasswordFreeConnection(access.dbUrl);
 
@@ -371,14 +393,14 @@ export async function runPgDumpSnapshot(options: PgDumpSnapshotOptions): Promise
       '--snapshot',
       options.snapshotId,
       '--file',
-      `/work/${fileName}`,
+      nativeTools ? options.outputPath : `/work/${fileName}`,
       '--dbname',
       dbUrl
     ]
   );
 
   if (result.exitCode !== 0) {
-    throw new PersistenceToolError(`pg_dump failed (exit ${result.exitCode}): ${result.stderr.slice(0, 2000)}`);
+    throw new PersistenceToolError('pg_dump failed.');
   }
 }
 
@@ -399,11 +421,11 @@ export async function runPgRestore(options: PgRestoreOptions): Promise<void> {
     '--no-privileges',
     '--dbname',
     dbUrl,
-    `/work/${fileName}`
+    nativeTools ? options.dumpPath : `/work/${fileName}`
   ]);
 
   if (result.exitCode !== 0) {
-    throw new PersistenceToolError(`pg_restore failed (exit ${result.exitCode}): ${result.stderr.slice(0, 2000)}`);
+    throw new PersistenceToolError('pg_restore failed.');
   }
 }
 
@@ -418,16 +440,16 @@ export async function runPsqlFile(options: { readonly targetUrl: string; readonl
     '--dbname',
     dbUrl,
     '--file',
-    `/work/${fileName}`
+    nativeTools ? options.sqlPath : `/work/${fileName}`
   ]);
 
   if (result.exitCode !== 0) {
-    throw new PersistenceToolError(`psql script failed (exit ${result.exitCode}): ${result.stderr.slice(0, 2000)}`);
+    throw new PersistenceToolError('psql script failed.');
   }
 }
 
 export async function resolvePgToolMajorVersion(tool: 'pg_dump' | 'pg_restore'): Promise<number> {
-  const result = await runCommand('docker', ['run', '--rm', POSTGRES_17_IMAGE, tool, '--version']);
+  const result = nativeTools ? await runCommand(tool, ['--version']) : await runCommand('docker', ['run', '--rm', POSTGRES_17_IMAGE, tool, '--version']);
   if (result.exitCode !== 0) {
     throw new PersistenceToolError(`Failed to resolve ${tool} version.`);
   }

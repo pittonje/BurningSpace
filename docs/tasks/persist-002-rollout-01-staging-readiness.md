@@ -45,4 +45,16 @@ deployment-GO work. Repository tests cannot substitute for live evidence.
   17 tests pass; external-tool TypeScript and diff checks pass. Compose template
   validation is repeated after the R2 overlay is available. Dependencies installed
   with the existing lockfile; no dependency versions changed.
-- R2–R4: pending.
+- R2: separate compiled tools target, native PostgreSQL 17 utilities, private
+  per-operation projections, immutable publication metadata and internal-network
+  tools overlay implemented. Restore requires a fresh marked database denied to
+  the runtime role; cleanup is explicit and refuses source/unknown targets.
+  Real PostgreSQL backup/restore tests pass, including authority, state, count,
+  constraint and target negatives. Disposable immutable-container test passes
+  migration/status/grants/bootstrap/three role checks/backup/restore/cleanup and
+  output secret-canary checks. Workspace build/typecheck and both script configs
+  pass. V2 56 self-tests and v3 18 focused cases pass; full rendered v3 runtime +
+  tools model passes. Classifier and QA-routing audits pass.
+  Additional packaging fix: SQL checkout uses LF so its bytes match the canonical
+  migration checksum on Windows and Linux; the SQL Git blob is unchanged.
+- R3–R4: pending.

@@ -28,6 +28,12 @@ claude-qa-full-38.log
 *.swp
 *.swo
 *~
+ops
+deploy/private
+*.credential
+*.pgpass
+*.dump
+*.manifest.json
 tmp
 temp
 **/tmp

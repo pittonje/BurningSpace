@@ -1237,7 +1237,9 @@ Architect authorization.
 
 Active task: [PERSIST002-ROLLOUT-01](../tasks/persist-002-rollout-01-staging-readiness.md).
 Branch `ops/persist002-rollout-01-readiness`, exact base
-`ac5ddaac7f70f261fe8357e3fa448ef61c7e56ad`. R1 contract implemented; R2–R4 pending.
+`ac5ddaac7f70f261fe8357e3fa448ef61c7e56ad`. R1 contract and R2 immutable operations
+implemented and locally verified; R3–R4 pending. See the task for validation and
+the SQL LF packaging correction (canonical migration blob unchanged).
 NET-02 remains MERGED / CLOSED. Deployment NOT AUTHORIZED; public persistence
 rollout BLOCKED. Public staging remains the earlier non-persistent runtime.
 Reviewers are declared in the task and deferred until all four packets per the

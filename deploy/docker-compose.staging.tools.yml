@@ -1,0 +1,34 @@
+# Apply after base + DB. No deployment authorization; run --rm --no-deps only.
+name: burningspace-staging
+services:
+  persistence-tools:
+    image: ${BURNINGSPACE_PERSISTENCE_TOOLS_IMAGE:?immutable tools image required}
+    profiles: [operator]
+    networks: [burningspace_db]
+    user: "1000:1000"
+    init: true
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: "1.00"
+    mem_limit: 512m
+    pids_limit: 64
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    volumes:
+      - type: bind
+        source: ${BURNINGSPACE_OPERATION_INPUT_DIR:?private per-operation projection directory required}
+        target: /run/private
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${BURNINGSPACE_OPERATION_WORK_DIR:?private backup work directory required}
+        target: /work
+        bind:
+          create_host_path: false

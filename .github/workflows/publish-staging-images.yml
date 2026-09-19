@@ -31,6 +31,7 @@ jobs:
           readonly registry="ghcr.io"
           readonly server_repository="ghcr.io/pittonje/burningspace-deploy-server"
           readonly client_repository="ghcr.io/pittonje/burningspace-deploy-client"
+          readonly tools_repository="ghcr.io/pittonje/burningspace-persistence-tools"
           readonly vite_server_url="https://game-server.burningforge.dev"
           readonly platform="linux/amd64"
           readonly release_tag="sha-${GITHUB_SHA}"
@@ -38,10 +39,12 @@ jobs:
           readonly client_tag="${client_repository}:${release_tag}"
           readonly server_metadata="${RUNNER_TEMP}/server-build-metadata.json"
           readonly client_metadata="${RUNNER_TEMP}/client-build-metadata.json"
+          readonly tools_metadata="${RUNNER_TEMP}/tools-build-metadata.json"
           readonly release_evidence="${RUNNER_TEMP}/phaseb-image-release.json"
           export DOCKER_CONFIG="${RUNNER_TEMP}/burningspace-docker-config"
           server_published=false
           client_published=false
+          tools_published=false
 
           cleanup_credentials() {
             docker logout "$registry" >/dev/null 2>&1 || true
@@ -60,6 +63,7 @@ jobs:
               echo "- Target commit: \`${GITHUB_SHA}\`"
               echo "- Server published: \`${server_published}\`"
               echo "- Client published: \`${client_published}\`"
+              echo "- Persistence tools published: \`${tools_published}\`"
               echo '- Package visibility was not changed; PRIVATE policy requires provider verification after publication.'
             } >>"$GITHUB_STEP_SUMMARY"
             exit "$status"
@@ -108,6 +112,19 @@ jobs:
           readonly client_immutable="${client_repository}@${client_digest}"
           docker buildx imagetools inspect "$client_immutable"
 
+          docker buildx build \
+            --platform "$platform" --file deploy/server.Dockerfile \
+            --target persistence-tools \
+            --build-arg "BURNINGSPACE_TOOLS_COMMIT=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --tag "${tools_repository}:${release_tag}" \
+            --metadata-file "$tools_metadata" --push .
+          tools_published=true
+          tools_digest="$(jq -er '."containerimage.digest"' "$tools_metadata")"
+          [[ "$tools_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          readonly tools_immutable="${tools_repository}@${tools_digest}"
+          docker buildx imagetools inspect "$tools_immutable"
+
           jq -n \
             --arg repository "pittonje/BurningSpace" \
             --arg targetCommit "$GITHUB_SHA" \
@@ -118,11 +135,20 @@ jobs:
             --arg clientRepository "$client_repository" \
             --arg clientDigest "$client_digest" \
             --arg clientImmutableReference "$client_immutable" \
+            --arg toolsRepository "$tools_repository" \
+            --arg toolsDigest "$tools_digest" \
+            --arg toolsImmutableReference "$tools_immutable" \
             --arg viteServerUrl "$vite_server_url" \
             '{
               repository: $repository,
               targetCommit: $targetCommit,
               platform: $platform,
+              persistenceTools: {
+                repository: $toolsRepository,
+                digest: $toolsDigest,
+                immutableReference: $toolsImmutableReference,
+                sourceCommit: $targetCommit
+              },
               server: {
                 repository: $serverRepository,
                 digest: $serverDigest,
@@ -141,6 +167,7 @@ jobs:
             --arg platform "$platform" \
             --arg serverRepository "$server_repository" \
             --arg clientRepository "$client_repository" \
+            --arg toolsRepository "$tools_repository" \
             --arg viteServerUrl "$vite_server_url" \
             '.repository == "pittonje/BurningSpace" and
              .targetCommit == $sha and
@@ -152,7 +179,11 @@ jobs:
              (.client.digest | test("^sha256:[0-9a-f]{64}$")) and
              .client.immutableReference == ($clientRepository + "@" + .client.digest) and
              .client.viteServerUrl == $viteServerUrl and
-             (keys | sort) == ["client", "platform", "repository", "server", "targetCommit"]' \
+             .persistenceTools.repository == $toolsRepository and
+             (.persistenceTools.digest | test("^sha256:[0-9a-f]{64}$")) and
+             .persistenceTools.immutableReference == ($toolsRepository + "@" + .persistenceTools.digest) and
+             .persistenceTools.sourceCommit == $sha and
+             (keys | sort) == ["client", "persistenceTools", "platform", "repository", "server", "targetCommit"]' \
             "$release_evidence" >/dev/null
 
           echo '--- BEGIN PHASE B IMAGE RELEASE JSON ---'

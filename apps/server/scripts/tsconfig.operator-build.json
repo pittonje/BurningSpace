@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "rootDir": "../../..", "outDir": "../../../ops", "noEmit": false },
+  "include": ["persistence-operator.ts"]
+}

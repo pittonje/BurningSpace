@@ -45,17 +45,17 @@ export function validateConnection(value: unknown, role: string, database: strin
   validateSecret(password);
   return url;
 }
-export type Projection = 'bootstrap' | 'migrator' | 'runtime' | 'backup' | 'admin';
+export type Projection = 'bootstrap' | 'migrator' | 'runtime' | 'backup' | 'admin' | 'runtime-db';
 export function validateProjection(kind: Projection, raw: unknown, database = 'burningspace'): Record<string, string> {
   const env = object(raw);
   const fields: Record<Projection, string[]> = {
     bootstrap: ['BURNINGSPACE_DB_ADMIN_PASSWORD', 'BURNINGSPACE_DB_MIGRATOR_PASSWORD', 'BURNINGSPACE_DB_RUNTIME_PASSWORD', 'BURNINGSPACE_DB_BACKUP_PASSWORD'],
     migrator: ['BURNINGSPACE_MIGRATION_DATABASE_URL'], runtime: ['BURNINGSPACE_DATABASE_URL', 'BURNINGSPACE_EDGE_ASSERTION_SECRET'],
-    backup: ['BURNINGSPACE_BACKUP_DATABASE_URL'], admin: ['BURNINGSPACE_ADMIN_DATABASE_URL']
+    backup: ['BURNINGSPACE_BACKUP_DATABASE_URL'], admin: ['BURNINGSPACE_ADMIN_DATABASE_URL'], 'runtime-db': ['BURNINGSPACE_DATABASE_URL']
   };
   keys(env, fields[kind]);
   for (const field of fields[kind]) {
-    if (field.endsWith('_URL')) validateConnection(env[field], `burningspace_${kind}`, database);
+    if (field.endsWith('_URL')) validateConnection(env[field], `burningspace_${kind === 'runtime-db' ? 'runtime' : kind}`, database);
     else validateSecret(env[field]);
   }
   if (kind === 'runtime') requireRollout(/^[A-Za-z0-9_-]{43}$/u.test(env.BURNINGSPACE_EDGE_ASSERTION_SECRET) &&
@@ -79,7 +79,7 @@ const runtimeDefaults = {
   BURNINGSPACE_PROFILE_RATE_BURST: '8', BURNINGSPACE_PROFILE_RATE_PER_SECOND: '1',
   BURNINGSPACE_INPUT_RATE_BURST: '80', BURNINGSPACE_INPUT_RATE_PER_SECOND: '40'
 };
-export function validatePersistentPlan(env: Record<string, string>, raw: unknown, mode: 'template' | 'phase-a' | 'phase-b', model: unknown): PersistentPlan {
+export function validatePersistentPlan(env: Record<string, string>, raw: unknown, mode: 'template' | 'phase-a' | 'phase-b', model: unknown, deploymentRoot = resolve('deploy')): PersistentPlan {
   const p = object(raw) as unknown as PersistentPlan;
   keys(object(p), ['schemaVersion', 'deploymentProfile', 'environmentId', 'environmentClass', 'publicClientOrigin', 'publicServerOrigin', 'allowedOrigins', 'serverBindHost', 'serverBindPort', 'clientBindHost', 'clientBindPort', 'targetCommit', 'targetServerImage', 'targetClientImage', 'persistenceToolsImage', 'postgresImage', 'worldSlug', 'expectedSchemaVersion', 'expectedDomainVersion', 'migrationAuthority', 'edgeConfigId', 'deploymentGoReference', 'externalExecutionAuthorized', 'publicProductionLaunchAuthorized', 'recoveryMode']);
   keys(env, [...Object.keys(bindings), ...Object.keys(runtimeDefaults), 'NODE_ENV', 'BURNINGSPACE_ALLOWED_ORIGINS', 'VITE_BURNINGSPACE_SERVER_URL', 'BURNINGSPACE_TRUSTED_EDGE_PEERS', 'BURNINGSPACE_DB_NAME', 'BURNINGSPACE_DB_ADMIN_USER']);
@@ -115,26 +115,26 @@ export function validatePersistentPlan(env: Record<string, string>, raw: unknown
     requireRollout(peers.length >= 1 && peers.length <= 4 && peers.every(x => isIP(x) !== 0) && new Set(peers).size === peers.length, 'TRUSTED_PEER');
   }
   if (mode === 'phase-b') requireRollout(p.deploymentGoReference !== 'NOT-AUTHORIZED' && !p.deploymentGoReference.endsWith('.invalid'), 'GO_REQUIRED');
-  validatePersistentCompose(model, p, env, mode === 'template');
+  validatePersistentCompose(model, p, env, mode === 'template', deploymentRoot);
   return p;
 }
 
 function networks(s: Obj): string { return Object.keys(object(s.networks)).sort().join(','); }
 function hardening(s: Obj, cpu: number, mem: number, readonly: boolean): void {
-  const allowed = ['image', 'cpus', 'mem_limit', 'logging', 'environment', 'ports', 'networks', 'init', 'read_only', 'tmpfs', 'restart', 'stop_grace_period', 'healthcheck', 'volumes', 'privileged'];
+  const allowed = ['image', 'cpus', 'mem_limit', 'logging', 'environment', 'ports', 'networks', 'init', 'read_only', 'tmpfs', 'restart', 'stop_grace_period', 'healthcheck', 'volumes', 'privileged', 'entrypoint', 'command'];
   requireRollout(Object.keys(s).every(k => allowed.includes(k)), 'COMPOSE_FIELD');
   for (const forbidden of ['build', 'privileged', 'network_mode', 'pid', 'ipc', 'devices', 'cap_add', 'container_name', 'volumes_from', 'entrypoint', 'command', 'env_file', 'secrets', 'configs']) {
-    requireRollout(s[forbidden] === undefined || (forbidden === 'privileged' && s[forbidden] === false), 'COMPOSE_ESCAPE');
+    requireRollout(s[forbidden] === undefined || (['entrypoint', 'command'].includes(forbidden) && s[forbidden] === null) || (forbidden === 'privileged' && s[forbidden] === false), 'COMPOSE_ESCAPE');
   }
   requireRollout(Number(s.cpus) === cpu && Number(s.mem_limit) === mem && s.logging?.driver === 'json-file' &&
     s.logging.options?.['max-size'] === '10m' && String(s.logging.options?.['max-file']) === '3', 'COMPOSE_LIMITS');
   if (readonly) requireRollout(s.read_only === true && s.init === true && JSON.stringify(s.tmpfs) === '["/tmp"]', 'COMPOSE_HARDENING');
 }
-export function validatePersistentCompose(raw: unknown, p: PersistentPlan, inventory: Record<string, string>, template: boolean): void {
+export function validatePersistentCompose(raw: unknown, p: PersistentPlan, inventory: Record<string, string>, template: boolean, deploymentRoot = resolve('deploy')): void {
   const m = object(raw); const services = object(m.services); const nets = object(m.networks);
   requireRollout(m.name === 'burningspace-staging', 'COMPOSE_PROJECT');
-  // Tools are run separately with the same checked base+DB model and bounded overlay.
-  keys(services, ['client', 'server', 'postgres']); keys(nets, ['burningspace', 'burningspace_db']);
+  if (services['persistence-tools']) validateToolsCompose(object(services['persistence-tools']), p);
+  keys(services, services['persistence-tools'] ? ['client', 'server', 'postgres', 'persistence-tools'] : ['client', 'server', 'postgres']); keys(nets, ['burningspace', 'burningspace_db']);
   for (const n of Object.keys(nets)) requireRollout(nets[n].name === `burningspace-staging_${n}` && nets[n].driver === 'bridge' && nets[n].external !== true && (n !== 'burningspace_db' || nets[n].internal === true), 'COMPOSE_NETWORK');
   const volume = object(m.volumes); keys(volume, ['burningspace-db-data']);
   requireRollout(volume['burningspace-db-data'].name === 'burningspace-staging_burningspace-db-data' && !volume['burningspace-db-data'].external && !volume['burningspace-db-data'].driver_opts, 'COMPOSE_VOLUME');
@@ -153,12 +153,28 @@ export function validatePersistentCompose(raw: unknown, p: PersistentPlan, inven
   const pg = object(services.postgres); hardening(pg, 1, 1024 ** 3, false);
   requireRollout(pg.image === p.postgresImage && networks(pg) === 'burningspace_db' && (!pg.ports || pg.ports.length === 0) && !pg.depends_on, 'COMPOSE_DB');
   requireRollout(pg.volumes?.length === 2 && pg.volumes.some((v: Obj) => v.type === 'volume' && v.source === 'burningspace-db-data' && v.target === '/var/lib/postgresql/data' && !v.read_only) &&
-    pg.volumes.some((v: Obj) => v.type === 'bind' && resolve(v.source) === resolve('deploy/postgres/init/001-burningspace-roles.sh') && v.target === '/docker-entrypoint-initdb.d/001-burningspace-roles.sh' && v.read_only === true), 'COMPOSE_DB_MOUNT');
+    pg.volumes.some((v: Obj) => v.type === 'bind' && resolve(v.source) === resolve(deploymentRoot, 'postgres/init/001-burningspace-roles.sh') && v.target === '/docker-entrypoint-initdb.d/001-burningspace-roles.sh' && v.read_only === true), 'COMPOSE_DB_MOUNT');
   const e = object(pg.environment); keys(e, ['POSTGRES_DB', 'POSTGRES_USER', 'POSTGRES_PASSWORD', 'BURNINGSPACE_MIGRATOR_PASSWORD', 'BURNINGSPACE_RUNTIME_PASSWORD', 'BURNINGSPACE_BACKUP_PASSWORD']);
   requireRollout(e.POSTGRES_DB === inventory.BURNINGSPACE_DB_NAME && e.POSTGRES_USER === inventory.BURNINGSPACE_DB_ADMIN_USER, 'EFFECTIVE_DB');
   if (!template) {
     validateProjection('bootstrap', { BURNINGSPACE_DB_ADMIN_PASSWORD: e.POSTGRES_PASSWORD, BURNINGSPACE_DB_MIGRATOR_PASSWORD: e.BURNINGSPACE_MIGRATOR_PASSWORD, BURNINGSPACE_DB_RUNTIME_PASSWORD: e.BURNINGSPACE_RUNTIME_PASSWORD, BURNINGSPACE_DB_BACKUP_PASSWORD: e.BURNINGSPACE_BACKUP_PASSWORD });
     validateProjection('runtime', { BURNINGSPACE_DATABASE_URL: server.DATABASE_URL, BURNINGSPACE_EDGE_ASSERTION_SECRET: server.BURNINGSPACE_EDGE_ASSERTION_SECRET });
     requireRollout(decodeURIComponent(new URL(server.DATABASE_URL).password) === e.BURNINGSPACE_RUNTIME_PASSWORD, 'PRIVATE_CONFLICT');
+  }
+}
+
+function validateToolsCompose(s: Obj, p: PersistentPlan): void {
+  const allowed = ['image', 'profiles', 'networks', 'user', 'init', 'read_only', 'tmpfs', 'cap_drop', 'security_opt', 'cpus', 'mem_limit', 'pids_limit', 'restart', 'logging', 'volumes', 'command', 'entrypoint'];
+  requireRollout(Object.keys(s).every(k => allowed.includes(k)) && s.image === p.persistenceToolsImage && networks(s) === 'burningspace_db' &&
+    s.user === '1000:1000' && s.init === true && s.read_only === true && JSON.stringify(s.tmpfs) === '["/tmp"]' &&
+    JSON.stringify(s.cap_drop) === '["ALL"]' && JSON.stringify(s.security_opt) === '["no-new-privileges:true"]' &&
+    s.command == null && s.entrypoint == null && Number(s.cpus) === 1 && Number(s.mem_limit) === 512 * 1024 ** 2 && s.pids_limit === 64 && s.restart === 'no' &&
+    s.logging?.driver === 'json-file' && s.logging.options?.['max-size'] === '10m' && String(s.logging.options?.['max-file']) === '3', 'TOOLS_MODEL');
+  requireRollout(s.volumes?.length === 2, 'TOOLS_MOUNT');
+  for (const target of ['/run/private', '/work']) {
+    const mount = s.volumes.find((v: Obj) => v.target === target);
+    requireRollout(mount?.type === 'bind' && typeof mount.source === 'string' && mount.source.length > 5 &&
+      !/(docker\.sock|\.git)(\/|$)/u.test(mount.source) && resolve(mount.source) !== resolve('.') &&
+      mount.bind?.create_host_path !== true && (target !== '/run/private' || mount.read_only === true), 'TOOLS_MOUNT');
   }
 }

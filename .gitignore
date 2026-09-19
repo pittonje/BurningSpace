@@ -26,3 +26,4 @@ deploy/private/
 *.pgpass
 *.dump
 *.manifest.json
+/ops/

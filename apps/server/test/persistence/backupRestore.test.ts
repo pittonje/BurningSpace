@@ -1,5 +1,7 @@
 import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { randomBytes } from 'node:crypto';
+import { prepareRehearsal } from '../../scripts/restore-target.js';
 import { join, resolve as resolvePath } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -24,6 +26,13 @@ import { createTestGuestIdentity, joinCanonicalBattleRoom } from '../support/tes
 const TEST_TIMEOUT_MS = 120_000;
 const REPO_ROOT = resolvePath(process.cwd());
 const GRANTS_SQL_PATH = resolvePath(REPO_ROOT, 'deploy/postgres/apply-runtime-grants.sql');
+
+async function rehearsal(source: RoleSeparatedPostgres): Promise<RoleSeparatedPostgres> {
+  const name = `bs_rehearsal_${randomBytes(12).toString('hex')}`;
+  await prepareRehearsal(source.adminUrl, name, 'burningspace');
+  const targetUrl = (value: string) => { const url = new URL(value); url.pathname = `/${name}`; return url.toString(); };
+  return { ...source, migratorUrl: targetUrl(source.migratorUrl), runtimeUrl: targetUrl(source.runtimeUrl), backupUrl: targetUrl(source.backupUrl), stop: async () => {} };
+}
 
 const PM2_TELEMETRY_FILTER_MARKER = Symbol.for(
   'burningspace.test.pm2-telemetry-worker-filter'
@@ -198,20 +207,27 @@ describe('backup / restore end-to-end (real Docker, real PostgreSQL, real pg_dum
       const verifiedManifest: BackupManifest = await verifyDumpIntegrity(dumpPath, manifestPath);
       expect(verifiedManifest.dumpSha256).toBe(manifest.dumpSha256);
 
-      // 8. Fresh, isolated target PostgreSQL (its OWN role-init, no shared state with source).
-      target = await startRoleSeparatedPostgres();
+      // 8. Fresh marked non-serving database in the same cluster.
+      target = await rehearsal(source);
 
       // 9. Restore + generic verification (schema/counts/world identity/FKs/constraints).
       const restoreResult = await restoreAndVerify({
         dumpPath,
         manifestPath,
         targetMigratorUrl: target.migratorUrl,
+        sourceDatabase: 'burningspace',
         grantsSqlPath: grantsSqlWorkPath
       });
       expect(restoreResult.world.worldId).toBe(bootstrap.world.worldId);
       expect(restoreResult.schemaMigrations.checksumsMatch).toBe(true);
       expect(restoreResult.foreignKeyConsistency).toBe(true);
       expect(restoreResult.expectedConstraintsPresent).toBe(true);
+
+      await expect(restoreAndVerify({ dumpPath, manifestPath, targetMigratorUrl: target.migratorUrl, sourceDatabase: 'burningspace', grantsSqlPath: grantsSqlWorkPath })).rejects.toThrow();
+      await expect(restoreAndVerify({ dumpPath, manifestPath, targetMigratorUrl: source.migratorUrl, sourceDatabase: 'burningspace', grantsSqlPath: grantsSqlWorkPath })).rejects.toThrow();
+      // Test-only promotion in this disposable cluster to preserve the historical
+      // credential recovery integration proof. Real rehearsal never grants this.
+      await withDirectConnection(source.adminUrl, c => c.query(`GRANT CONNECT ON DATABASE "${new URL(target!.runtimeUrl).pathname.slice(1)}" TO burningspace_runtime`));
 
       // 10. Boot an ACTUAL Packet-6 production server against the restored DB.
       targetServer = await startProductionServer({
@@ -300,6 +316,7 @@ describe('backup / restore end-to-end (real Docker, real PostgreSQL, real pg_dum
           dumpPath,
           manifestPath,
           targetMigratorUrl: target.migratorUrl,
+          sourceDatabase: 'burningspace',
           grantsSqlPath: grantsSqlWorkPath
         })
       ).rejects.toThrow(PersistenceToolError);
@@ -314,4 +331,36 @@ describe('backup / restore end-to-end (real Docker, real PostgreSQL, real pg_dum
     },
     TEST_TIMEOUT_MS
   );
+
+  it('fails closed on altered authority, world state, counts and credential evidence without changing source', async () => {
+    source = await startRoleSeparatedPostgres();
+    await runMigrations(source.migratorUrl);
+    await withDirectConnection(source.migratorUrl, c => bootstrapWorld(c, 'public-arena'));
+    workDir = await mkdtemp(join(tmpdir(), 'bs-restore-negative-'));
+    const grants = join(workDir, 'grants.sql');
+    await writeFile(grants, await readFile(GRANTS_SQL_PATH));
+    await runPsqlFile({ targetUrl: source.migratorUrl, sqlPath: grants });
+    const backup = await performQuiescedBackup({ fenceUrl: source.migratorUrl, dumpUrl: source.backupUrl, worldSlug: 'public-arena', outputDir: workDir, dumpFilename: 'negative.dump' });
+    const mutations = [
+      (m: any) => { m.migration.migrations[0].checksumHex = '0'.repeat(64); },
+      (m: any) => { m.world.domainVersion = 2; },
+      (m: any) => { m.world.worldId = '00000000-0000-4000-8000-000000000000'; },
+      (m: any) => { m.world.stateRevision = '99'; },
+      (m: any) => { m.counts.players += 1; },
+      (m: any) => { m.credentialState.revoked += 1; }
+    ];
+    for (const mutate of mutations) {
+      target = await rehearsal(source);
+      const changed = structuredClone(backup.manifest); mutate(changed);
+      await writeFile(backup.manifestPath, JSON.stringify(changed));
+      await expect(restoreAndVerify({ dumpPath: backup.dumpPath, manifestPath: backup.manifestPath, targetMigratorUrl: target.migratorUrl, sourceDatabase: 'burningspace', grantsSqlPath: grants })).rejects.toThrow();
+      await prepareRehearsal(source.adminUrl, new URL(target.migratorUrl).pathname.slice(1), 'burningspace', true);
+    }
+    expect((await withDirectConnection(source.migratorUrl, c => c.query('SELECT state_revision, domain_version FROM worlds'))).rows).toEqual([{ state_revision: '0', domain_version: 1 }]);
+    // A canonical ledger alone is insufficient: a missing constraint must fail.
+    await withDirectConnection(source.migratorUrl, c => c.query('ALTER TABLE worlds DROP CONSTRAINT worlds_world_slug_unique'));
+    const damaged = await performQuiescedBackup({ fenceUrl: source.migratorUrl, dumpUrl: source.backupUrl, worldSlug: 'public-arena', outputDir: workDir, dumpFilename: 'constraint.dump' });
+    target = await rehearsal(source);
+    await expect(restoreAndVerify({ dumpPath: damaged.dumpPath, manifestPath: damaged.manifestPath, targetMigratorUrl: target.migratorUrl, sourceDatabase: 'burningspace', grantsSqlPath: grants })).rejects.toThrow('expected constraint');
+  }, TEST_TIMEOUT_MS);
 });

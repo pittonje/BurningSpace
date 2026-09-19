@@ -14,7 +14,7 @@ name: burningspace-staging
 
 services:
   postgres:
-    image: postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675
+    image: ${BURNINGSPACE_POSTGRES_IMAGE:-postgres:17@sha256:67f41722b7a8cbdb868a44a4995c846eddfdc2973bccb291ce937dce88ad5675}
     environment:
       POSTGRES_DB: ${BURNINGSPACE_DB_NAME:?set BURNINGSPACE_DB_NAME}
       POSTGRES_USER: ${BURNINGSPACE_DB_ADMIN_USER:?set BURNINGSPACE_DB_ADMIN_USER}

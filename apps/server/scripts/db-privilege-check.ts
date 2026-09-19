@@ -36,7 +36,7 @@ async function expectSuccess(
     return { name, ok: true };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => undefined);
-    return { name, ok: false, detail: error instanceof Error ? error.message.slice(0, 200) : 'unknown error' };
+    return { name, ok: false, detail: 'Expected operation failed.' };
   }
 }
 
@@ -58,12 +58,12 @@ async function expectPermissionDenied(
     return {
       name,
       ok: false,
-      detail: `expected SQLSTATE 42501, got: ${error instanceof Error ? error.message.slice(0, 200) : 'unknown error'}`
+      detail: 'Expected permission denial was not observed.'
     };
   }
 }
 
-async function checkRuntime(url: string): Promise<ProbeResult[]> {
+export async function checkRuntime(url: string): Promise<ProbeResult[]> {
   const client = new Client({ connectionString: url, connectionTimeoutMillis: CONNECT_TIMEOUT_MILLIS });
   await client.connect();
   const results: ProbeResult[] = [];
@@ -133,7 +133,7 @@ async function checkRuntime(url: string): Promise<ProbeResult[]> {
   return results;
 }
 
-async function checkBackup(url: string): Promise<ProbeResult[]> {
+export async function checkBackup(url: string): Promise<ProbeResult[]> {
   const client = new Client({ connectionString: url, connectionTimeoutMillis: CONNECT_TIMEOUT_MILLIS });
   await client.connect();
   const results: ProbeResult[] = [];
@@ -174,7 +174,7 @@ async function checkBackup(url: string): Promise<ProbeResult[]> {
   return results;
 }
 
-async function checkMigrator(url: string): Promise<ProbeResult[]> {
+export async function checkMigrator(url: string): Promise<ProbeResult[]> {
   const client = new Client({ connectionString: url, connectionTimeoutMillis: CONNECT_TIMEOUT_MILLIS });
   await client.connect();
   const results: ProbeResult[] = [];
@@ -246,7 +246,7 @@ async function main(): Promise<number> {
     printResult({
       ok: false,
       errorType: 'unexpected',
-      message: error instanceof Error ? error.message : String(error)
+      message: 'Privilege verification failed.'
     });
     return 1;
   }
@@ -258,7 +258,7 @@ if (isMainModule()) {
       process.exitCode = exitCode;
     })
     .catch((error: unknown) => {
-      printResult({ ok: false, errorType: 'fatal', message: error instanceof Error ? error.message : String(error) });
+      printResult({ ok: false, errorType: 'fatal', message: 'Privilege verification failed.' });
       process.exitCode = 1;
     });
 }

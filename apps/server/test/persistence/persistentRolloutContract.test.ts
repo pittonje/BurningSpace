@@ -44,4 +44,30 @@ describe('persistent rollout contract', () => {
     }
     expect(() => validateProjection('migrator', { BURNINGSPACE_MIGRATION_DATABASE_URL: url, DATABASE_URL: url })).toThrow();
   });
+  it('binds real effective credentials and rejects shell overrides, sentinels and reused role passwords', () => {
+    const f = fixture();
+    f.p.targetCommit = randomBytes(20).toString('hex');
+    f.env.BURNINGSPACE_TARGET_COMMIT = f.p.targetCommit;
+    f.p.publicClientOrigin = f.env.BURNINGSPACE_PUBLIC_CLIENT_ORIGIN = f.env.BURNINGSPACE_ALLOWED_ORIGINS = 'https://arena.test.invalid.example';
+    f.p.allowedOrigins = [f.p.publicClientOrigin];
+    f.p.publicServerOrigin = f.env.BURNINGSPACE_PUBLIC_SERVER_ORIGIN = f.env.VITE_BURNINGSPACE_SERVER_URL = 'https://api.test.invalid.example';
+    f.p.edgeConfigId = f.env.BURNINGSPACE_EDGE_CONFIG_ID = 'reviewed-edge-1';
+    for (const [field, key] of [['targetServerImage', 'BURNINGSPACE_SERVER_IMAGE'], ['targetClientImage', 'BURNINGSPACE_CLIENT_IMAGE'], ['persistenceToolsImage', 'BURNINGSPACE_PERSISTENCE_TOOLS_IMAGE']] as const) f.p[field] = f.env[key] = `ghcr.io/example/${field.toLowerCase()}@sha256:${randomBytes(32).toString('hex')}`;
+    f.m.services.server.image = f.p.targetServerImage; f.m.services.client.image = f.p.targetClientImage;
+    f.env.BURNINGSPACE_TRUSTED_EDGE_PEERS = '127.0.0.1';
+    const server = f.m.services.server.environment;
+    server.BURNINGSPACE_ALLOWED_ORIGINS = f.p.publicClientOrigin;
+    server.BURNINGSPACE_TRUSTED_EDGE_PEERS = f.env.BURNINGSPACE_TRUSTED_EDGE_PEERS;
+    server.BURNINGSPACE_EDGE_ASSERTION_SECRET = randomBytes(32).toString('base64url');
+    const pg = f.m.services.postgres.environment;
+    for (const key of ['POSTGRES_PASSWORD', 'BURNINGSPACE_MIGRATOR_PASSWORD', 'BURNINGSPACE_RUNTIME_PASSWORD', 'BURNINGSPACE_BACKUP_PASSWORD']) pg[key] = randomBytes(32).toString('hex');
+    server.DATABASE_URL = `postgres://burningspace_runtime:${pg.BURNINGSPACE_RUNTIME_PASSWORD}@postgres:5432/burningspace`;
+    expect(validatePersistentPlan(f.env, f.p, 'phase-a', f.m)).toBe(f.p);
+    for (const mutation of [
+      (m: any) => { m.services.server.environment.BURNINGSPACE_EDGE_ASSERTION_SECRET = 'none'; },
+      (m: any) => { m.services.postgres.environment.POSTGRES_PASSWORD = pg.BURNINGSPACE_RUNTIME_PASSWORD; },
+      (m: any) => { m.services.server.environment.DATABASE_URL += '?sslpassword=hidden'; },
+      (m: any) => { m.services.server.environment.BURNINGSPACE_INPUT_RATE_BURST = '90'; }
+    ]) { const model = structuredClone(f.m); mutation(model); expect(() => validatePersistentPlan(f.env, f.p, 'phase-a', model)).toThrow(); }
+  });
 });
