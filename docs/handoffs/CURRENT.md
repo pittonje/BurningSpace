@@ -1,25 +1,32 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-20
-Updated by: Codex — PERSIST002-ROLLOUT-01 readiness implementation
+Updated by: Codex — PERSIST002-ROLLOUT-01 post-merge governance reconciliation
 
-## Active repository task — PERSIST002-ROLLOUT-01
+## PERSIST002-ROLLOUT-01 — MERGED / CLOSED
 
 See [the rollout readiness task](../tasks/persist-002-rollout-01-staging-readiness.md).
-Base: ac5ddaac7f70f261fe8357e3fa448ef61c7e56ad; branch:
-ops/persist002-rollout-01-readiness. R1 contract, R2 immutable operations, R3
-bounded evidence/provisioning and R4 operational reconciliation are complete.
-Local Node 22 suite: 57 files, 706 passing tests, one Windows POSIX-permission
-skip independently passing in Linux. Build/typecheck, v2/v3 preflights, 64-check
-real disposable Caddy contract, full disposable persistent Compose lifecycle,
-backup/restore and native argv/PGPASSFILE canaries pass. See the task's complete
-validation record and file inventory. Implementation awaits PR review; it does
-not establish deployed persistence or live admission evidence.
-No independent agents/reviewers were invoked during the four packets, as required
-by the implementation authorization. Next gates are exact-head Core, governed QA,
-independent consolidated Architecture/Network/Security/Ops/QA review and PA
-disposition. Public persistence rollout remains BLOCKED; deployment NOT AUTHORIZED.
-The historical checkpoints below keep their original evidence/status wording.
+Repository rollout readiness is complete; [PR #92](https://github.com/pittonje/BurningSpace/pull/92)
+was human-merged on 2026-09-20 following PA authorization for the exact source head.
+
+- Approved source head: `ec3d0ffc93669a419c854066af0a2ed87fa2b399`.
+- Merge commit: `cb1d713d09db2ae19d6c95ea6dc9a9593953f4e1`.
+- Merge parents, in order: `ac5ddaac7f70f261fe8357e3fa448ef61c7e56ad`, then `ec3d0ffc93669a419c854066af0a2ed87fa2b399`.
+- Source and merge tree: `a9cba7959f23b7dbc979783bd548478642dd33e9`; tree equivalence **PASS**.
+- Final local source evidence: Node 22, **60 files / 727 passing tests**, 21 Windows POSIX-only skips all separately passed in Linux.
+- Exact-source [Core run 35481899311](https://github.com/pittonje/BurningSpace/actions/runs/35481899311): **SUCCESS**.
+- Exact-source [governed Claude QA run 35481899305](https://github.com/pittonje/BurningSpace/actions/runs/35481899305): **SUCCESS**, Approved with suggestions, blockers: None.
+- Independent consolidated senior review and targeted Security/Network/QA FIX2 review completed; senior M-1 is CLOSED, with no remaining blockers, HIGH or MEDIUM findings in the targeted review. These are supplied independent review/PA evidence, separate from automated Core/governed QA runs.
+- PA exact-head merge authorization and human merge: **completed**. No deployment occurred.
+
+**PUBLIC PERSISTENCE ROLLOUT — BLOCKED. DEPLOYMENT — NOT AUTHORIZED.**
+The deployed server remains the previously verified non-persistent runtime.
+The current next safe action is to prepare a separate persistence Deployment-GO
+gate/packet; this reconciliation does not authorize that gate or its execution.
+Historical checkpoints below retain their original wording and checkpoint-specific
+SHA/main references; this closure supersedes their outstanding ROLLOUT-01 repository
+review/merge gates. Recorded source-head CI is not relabelled as fresh CI for this
+docs-only reconciliation.
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -1248,8 +1255,10 @@ environment secret handling, and secret rotation.
 
 ## Current next safe action
 
-Complete ROLLOUT-01 review and Product Architect disposition using the active
-task above. Do not execute deployment; any later rollout needs a separate GO.
+Prepare a separate persistence Deployment-GO gate/packet. ROLLOUT-01 repository
+review and merge gates are satisfied. This reconciliation does not authorize
+Deployment GO or deployment; public persistence rollout remains BLOCKED.
+
 # Historical ROLLOUT-01 R1–R3 checkpoint (2026-09-20)
 
 Active task: [PERSIST002-ROLLOUT-01](../tasks/persist-002-rollout-01-staging-readiness.md).
