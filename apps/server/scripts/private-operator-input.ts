@@ -18,23 +18,33 @@ export async function assertPrivateDirectory(path: string, writable = false): Pr
   }
 }
 
-export async function readPrivateProjection(path: string): Promise<Record<string, string>> {
+export async function readPrivateFile(path: string, minBytes: number, maxBytes: number): Promise<Buffer> {
+  requireRollout(Number.isSafeInteger(minBytes) && Number.isSafeInteger(maxBytes) &&
+    minBytes > 0 && minBytes <= maxBytes && maxBytes <= 8192, 'PRIVATE_FILE_SIZE');
   await assertPrivateDirectory(dirname(path));
   const uid = requirePrivatePlatform(process.platform, process.getuid?.());
   const stat = await lstat(path);
   requireRollout(stat.isFile() && !stat.isSymbolicLink(), 'PRIVATE_FILE');
   // Recheck the opened file, and refuse symlink replacement between lstat/open.
   const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-  let contents: string;
   try {
     const opened = await file.stat();
-    requireRollout(opened.isFile() && opened.size > 0 && opened.size <= 8192 &&
+    requireRollout(opened.isFile() && opened.size >= minBytes && opened.size <= maxBytes &&
       (opened.mode & 0o077) === 0 && opened.uid === uid, 'PRIVATE_FILE');
-    const buffer = Buffer.alloc(8193);
-    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-    requireRollout(bytesRead > 0 && bytesRead <= 8192, 'PRIVATE_FILE');
-    contents = buffer.subarray(0, bytesRead).toString('utf8');
+    const buffer = Buffer.alloc(maxBytes + 1);
+    let bytesRead = 0;
+    while (bytesRead < buffer.length) {
+      const chunk = await file.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);
+      if (chunk.bytesRead === 0) break;
+      bytesRead += chunk.bytesRead;
+    }
+    requireRollout(bytesRead >= minBytes && bytesRead <= maxBytes, 'PRIVATE_FILE');
+    return buffer.subarray(0, bytesRead);
   } finally { await file.close(); }
+}
+
+export async function readPrivateProjection(path: string): Promise<Record<string, string>> {
+  const contents = (await readPrivateFile(path, 1, 8192)).toString('utf8');
   const result: Record<string, string> = {};
   for (const line of contents.split(/\r?\n/u)) {
     if (!line || line.startsWith('#')) continue;

@@ -256,3 +256,48 @@ Next gates: fresh exact-head Core, fresh exact-head governed QA, bounded Copilot
 FIX1 delta verification, Claude clean-session senior consolidated review, then
 PA disposition. PUBLIC PERSISTENCE ROLLOUT remains BLOCKED. DEPLOYMENT remains
 NOT AUTHORIZED. These corrections are not deployed.
+
+## REVIEW-FIX2 — senior M-1 raw proof input (2026-09-20)
+
+Starting live PR #92: OPEN, non-draft, clean worktree, head
+b8a05f8da437ab5ec8f509d0dc2ddc13538ba29b. Base/live main remained
+ac5ddaac7f70f261fe8357e3fa448ef61c7e56ad. This is one additional commit;
+existing history remains intact. Security, Network and QA delta review is
+required; Architecture routing remains in force. Gameplay/Visual are inapplicable.
+
+M-1 correction: extract the existing hardened projection read into a bounded
+shared private-file primitive, then use it for the actual raw admission proof.
+The immediate parent requires POSIX, invoking-UID ownership, private mode and
+no symlink. Open uses O_RDONLY | O_NOFOLLOW | O_NONBLOCK; fstat requires a regular,
+private invoking-UID file, and the same descriptor supplies all bytes. The proof
+requires both descriptor size and actual read length exactly 43, then the unchanged
+canonical base64url check. Filesystem errors are sanitized; no proof is logged
+or included in evidence. Projections retain their 1–8192 byte contract.
+
+Dedicated raw-proof tests cover valid private input; win32/missing UID; broad
+parent/file modes; parent/file symlinks; foreign parent/file ownership; 42/44-byte
+files; malformed/noncanonical values; mode replacement before open; symlink
+replacement before open; pathname replacement after open; length changes after
+fstat; and error canaries. These exercise the raw-proof reader directly.
+
+The existing evidence and real admission isolation tests retain the public/local
+phase sequences, proof-log correlation, zero durable guest behavior, canonical
+LOCAL_DISTINCT_KEY, freshAuth INCONCLUSIVE and bounded request/time behavior.
+No senior LOW/NOTE fixes, workflow, Dockerfile, runtime, schema or Caddy changes.
+
+Local validation: all 19 raw-proof tests passed in Linux, plus all seven private
+input and four rollout evidence tests. Real admission isolation: 31 passed.
+Rebuilt immutable tools integration and secret canaries passed. Full Node 22
+suite with disposable PostgreSQL/tools: **60 files passed, 727 tests passed,
+21 POSIX-only skips on Windows**; all skipped cases passed separately in Linux
+(including the two-test PGDG suite). Workspace build/typecheck, external/operator
+script typechecks and dedicated proof-test typecheck passed. Preflight self-tests
+56, edge self-tests 108, smoke self-tests three and persistence contract 36 passed.
+The 41-file secret scan, supplemental four-file FIX2 scan and git diff --check
+passed. No test failures; existing client bundle-size warning remains.
+PR body metadata will be updated after push with FIX1/FIX2 and the final head,
+without another docs commit.
+Next gates: fresh exact-head Core and governed QA, bounded Copilot FIX2 delta
+review, targeted Claude Security/Network/QA FIX2 delta review, and PA final merge
+disposition. PUBLIC PERSISTENCE ROLLOUT remains BLOCKED; DEPLOYMENT remains
+NOT AUTHORIZED. No deployment or real-environment operations occurred.

@@ -5,7 +5,8 @@ import { readFileSync, lstatSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { canonicalizeAdmissionAddress } from '../src/security/admissionPeerIdentity.js';
-import { requireRollout } from './persistent-rollout-contract.js';
+import { requireRollout, RolloutError } from './persistent-rollout-contract.js';
+import { readPrivateFile } from './private-operator-input.js';
 
 export type Phase = 'a-exhaust' | 'b-isolation' | 'a-spoof' | 'local-proof';
 export interface AdmissionConfig {
@@ -37,6 +38,16 @@ export function validateAdmissionConfig(c: AdmissionConfig, local = false): void
   admissionKey(c.sourceAddress); admissionKey(c.nodePeer);
 }
 export interface ProbeResponse { status: number; error: string; }
+function requireCanonicalProof(proof: string | undefined): asserts proof is string {
+  requireRollout(proof && /^[A-Za-z0-9_-]{43}$/u.test(proof) && Buffer.from(proof, 'base64url').toString('base64url') === proof, 'PRIVATE_PROOF');
+}
+export async function readPrivateAdmissionProof(path: string): Promise<string> {
+  let proof: string;
+  try { proof = (await readPrivateFile(path, 43, 43)).toString('utf8'); }
+  catch { throw new RolloutError('PRIVATE_PROOF_FILE'); }
+  requireCanonicalProof(proof);
+  return proof;
+}
 export type GuestProbe = (origin: string, allowed: string, headers: OutgoingHttpHeaders) => Promise<ProbeResponse>;
 /** One request, no retries, no redirects, invalid body only, hard response/deadline caps. */
 export const probeGuest: GuestProbe = (origin, allowed, headers) => new Promise((done, reject) => {
@@ -79,7 +90,7 @@ export async function runAdmissionPhase(config: AdmissionConfig, phase: Phase, p
     await attempt(429, { Forwarded: 'for=198.51.100.203' });
     await attempt(429, { 'X-BurningSpace-Edge-Peer': ['198.51.100.204', '198.51.100.205'], 'X-BurningSpace-Edge-Proof': ['invalid', 'invalid'] });
   } else if (phase === 'local-proof') {
-    requireRollout(proof && /^[A-Za-z0-9_-]{43}$/u.test(proof) && Buffer.from(proof, 'base64url').toString('base64url') === proof, 'PRIVATE_PROOF');
+    requireCanonicalProof(proof);
     let wrong = randomBytes(32).toString('base64url'); if (wrong === proof) wrong = randomBytes(32).toString('base64url');
     const peer = { 'X-BurningSpace-Edge-Peer': config.sourceAddress };
     await attempt(429, peer);
@@ -143,8 +154,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     let proof: string | undefined;
     if (phase === 'local-proof') {
       requireRollout(proofPath, 'PRIVATE_PROOF_FILE');
-      const stat = lstatSync(proofPath); requireRollout(stat.isFile() && !stat.isSymbolicLink() && stat.size === 43 && process.platform !== 'win32' && (stat.mode & 0o077) === 0, 'PRIVATE_PROOF_FILE');
-      proof = readFileSync(proofPath, 'utf8');
+      proof = await readPrivateAdmissionProof(proofPath);
     } else requireRollout(!proofPath, 'ARGUMENTS');
     console.log(JSON.stringify(await runAdmissionPhase(readJson(configPath), phase as Phase, proof)));
   }).catch(() => { console.error(JSON.stringify({ ok: false, event: 'rollout_admission_inconclusive', code: 'EVIDENCE_REJECTED' })); process.exitCode = 1; });
