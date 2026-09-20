@@ -1,7 +1,7 @@
 # PERSIST-002 Deployment-GO packet and procedure specification
 
 G1 specification for [PERSIST002-ROLLOUT-02](../tasks/persist-002-rollout-02-deployment-go-preparation.md).
-**G1 IMPLEMENTED / REVIEW PENDING. ROLLOUT-02 OPEN.**
+**G1 REVIEW-FIX1 IMPLEMENTED / DELTA REVIEW PENDING. ROLLOUT-02 OPEN.**
 **PUBLIC PERSISTENCE ROLLOUT — BLOCKED. DEPLOYMENT — NOT AUTHORIZED.**
 This is a value-free contract, not a real packet, survey authorization,
 Publication GO, Deployment GO or executable schema. Persistence is NOT DEPLOYED;
@@ -175,7 +175,7 @@ require a self-referential hash. G5 binds exact bytes/serialization.
 | decision.deploymentGoId / deploymentIssuedAtUtc / executionWindow / deploymentDecisionReference / packetSha256 | B | Explicit PA Decision B and sealed envelope bytes | I |
 | owners.operator / abortOwner / recoveryOwner / sensitiveArtifactCustodian / acceptanceOwner | B | Named PA-approved accountable identities and role categories; same person may hold several | I |
 | host.identityReference / architecture / sshTrustReference / locationEvidenceReference / baselineReference / baselineObservedAtUtc / freshnessRule | B | Authorized G2 observations; public host-key trust reference is not a private SSH configuration | I |
-| host.toolchainBindings[] {tool, version, sourceReference, capabilityEvidenceReference} | B | G2 host and approved POSIX workstation capabilities; G5 binds verified dependencies | I |
+| host.toolchainBindings[] {tool, version, sourceReference, capabilityEvidenceReference} | B | G2 host and approved POSIX workstation capabilities; G5 binds verified dependencies for every phase-14 source runner, including reviewed harness/command-packet identity and deterministic egress dependency where needed; both runners ready before phase A | I |
 | release.targetCommit / workflowPath / repositories / platform / expectedClientServerOrigin | A | Exact current main at Decision A; reviewed publication workflow and intended public origin | I |
 | release.runReference / runId / attempt / workflowHead / publicationEvidenceReference | P | Actual authorized run and bounded captured metadata | I |
 | release.images.{server,client,persistenceTools}.{immutableReference,ociRevision} | P | Workflow output plus registry manifest/config evidence; revision equals targetCommit | I |
@@ -427,7 +427,7 @@ not an exception allowing general config retries.
 | 11 Checkpoint 1 rehearsal / 10 | OP restore-prepare with admin; restore-verify with target migrator; restore-cleanup with admin | Fresh marked isolated same-cluster target, full verification and explicit successful cleanup | Prepare/restore/cleanup failure or unknown state: S2, R0; no FORCE, auto-drop or source restore |
 | 12 Candidate pair / 11, active edge and containment | CANDIDATE approved server/client pair; runtime DB + real edge proof, broader host Compose resolution | Correct images, loopback bindings, final two-network server topology, containment remains effective | Start/restart-loop/config mismatch: S3, R0; no old-image fallback |
 | 13 Readiness/final peer / 12 | HEALTH, PEER; only pre-authorized observed-peer correction may stop/update/revalidate/recreate server; same secret | Ready true plus final netns real-Caddy peer equals trusted binding; latest container/PID and config evidence | Mismatch stops server: S3; bounded derived transition only if sealed, else PA. Ambiguity R-READ within bound; never none |
-| 14 Public A/B/spoof / 13, quiet/refilled keys | ADMISSION phases, invalid body only; no secret | Exact arrays/timing and independently observed different effective public keys, same final topology/run | Wrong/ambiguous attribution or timing: S3; no automatic repeat. A new bounded diagnostic attempt needs explicit packet authority and known no-issuance outcome |
+| 14 Public A/B/spoof / 13, quiet/refilled keys, both source runners concurrently ready with bound harnesses; recorded pre-attempt approved-edge observations prove distinct canonical effective keys | ADMISSION phases, invalid body only; no secret; G5-bound preparation completes before timed A begins | Exact arrays/timing and independently observed different effective public keys, same final topology/run; actual live bundle validation remains mandatory | Unproven readiness/distinction: STOP before timed attempt, no try-and-see. Wrong/ambiguous attribution or timing: S3; no automatic repeat. A new bounded diagnostic attempt needs explicit packet authority and known no-issuance outcome |
 | 15 Local proof/logs / 14 and same topology | Approved local forwarding, ADMISSION local-proof and validate; raw private proof file | Exact local array, required fixed log reasons, correlated bundle PASS; quota not spent by invalid proofs | Missing sampled log, invalid proof result or inconsistent bundle: S3; R-READ for validator only; fresh live attempt requires explicit bound/quiet conditions |
 | 16 Retained guest/smoke / 15 | PROVISION once then SMOKE; exclusive retained credential file | One intended durable issuance, file safely retained; allowed gameplay/movement/reconnect and hostile rejection PASS | Empty/reserved file, lost issuance response or assertion failure: S3, R0; no automatic new guest. Known pre-invocation harness failure may use R-READ |
 | 17 Checkpoint 2 / 16 with durable identity/membership | STOP-SERVER, OP backup in second fresh work dir, restore-prepare/verify/cleanup against second fresh target; migrator + backup, then admin/target migrator/admin | Graceful quiescence; second protected dump/manifest includes smoke data; full second rehearsal and explicit cleanup PASS | Any backup/rehearsal/capacity uncertainty: S3, R0; no one-checkpoint downgrade; PA disposition |
@@ -543,13 +543,50 @@ Do not redesign the merged diagnostic. Expected machine sequences are:
 | local-proof | 429,429,429,429,400,400,400,429 |
 
 Operators establish actual Caddy-observed public addresses and genuinely
-different effective keys (IPv4 address or IPv6 /64), actual final Node peer,
-container/topology/edge IDs, run ID, target/environment and timestamps. Two
-physical machines are not required; two sources sharing one effective NAT key
-do not qualify. Do not choose a provider merely to satisfy a machine count.
+different effective keys, actual final Node peer, container/topology/edge IDs,
+run ID, target/environment and timestamps. Two physical machines are not
+inherently required, but **A and B source environments must be concurrently ready
+before the bounded live attempt**. Acceptable planned topology uses two
+coordinated runner/operator environments with distinct active egresses, or one
+physical host only with two simultaneously active independent egress paths and
+a separately reviewed deterministic mechanism routing/binding each runner
+environment to its intended egress.
 
-The merged limits remain: per-phase at most 12 seconds; A then B then spoof
-within 20 seconds; per-request deadline 1500 ms and response cap 512 bytes;
+The merged admission harness has **no source-interface/localAddress selector**.
+Sequentially reconfiguring or switching a single egress/interface during the
+A -> B -> spoof sequence is **not an accepted execution topology**. G1 introduces
+no networking implementation or VPN/provider/firewall software prescription.
+G5 binds the exact source-runner topology and verified dependency. Every source
+runner must have the bounded admission harness available and bound to the
+reviewed source and command packet through `host.toolchainBindings[]`. When two
+runner environments are used, **both must be ready before phase A starts**;
+clock/timestamp correlation and the existing timing limits remain required.
+
+Before consuming the phase-14 timed window, ROLLOUT-03 must execute the exact
+G5-bound observational procedure and record that both intended sources are
+concurrently ready, each has been observed through the approved public edge
+observation path, and their canonical effective admission budget keys differ.
+IPv4 requires different canonical IPv4 addresses; IPv6 requires different
+canonical IPv6 /64 admission budgets. IPv4-mapped IPv6 follows runtime
+canonicalization and is not a separate key from its underlying IPv4 address.
+Two sources sharing one effective NAT key do not qualify. If distinctness cannot
+be proved before the attempt, **STOP; do not try and see**. G1 invents no specific
+host command for this preparation.
+
+Pre-attempt evidence prepares the bounded attempt; it does not replace
+`DISTINCT_KEYS`, `LOCAL_DISTINCT_KEY`, the bundle validator or final acceptance.
+The actual live A/B/spoof bundle remains required acceptance evidence.
+
+Operator-controlled public source addresses and canonical-key evidence are
+**NON-SECRET, RESTRICTED OPERATIONAL / NETWORK-LOCATION EVIDENCE**. Retain only
+the minimum needed to independently verify admission key distinction, in approved
+rollout evidence custody under normal evidence retention/disposition rules.
+These values are not credentials or secrets. Do not expose them in public PR
+text or unrelated logs/artifacts, and do not redact them so aggressively that
+`DISTINCT_KEYS` cannot be independently verified.
+
+The merged limits remain: per-phase at most 12 seconds; strictly ordered A then B
+then spoof within 20 seconds; per-request deadline 1500 ms and response cap 512 bytes;
 peer observation/local-proof correlation within ten minutes of A. Bind quiet and
 refill assumptions, actual real-Caddy correlation, and local log reason records
 for edge_proof_missing, edge_proof_malformed and edge_proof_rejected within the
@@ -651,7 +688,8 @@ and status wording, baseline-vs-target distinction, no secrets/invented live
 values/digests, and separate ROLLOUT-03 execution ownership. No runtime test or
 infrastructure check is required/permitted by this documentation packet.
 
-Next gates: exact-head Core, governed QA, independent consolidated
-Architecture/Network/Security/Ops-QA review, then PA G1 disposition and human
+Following the supplied consolidated review and REVIEW-FIX1, next gates are fresh
+exact-head Core, governed QA, targeted Network/Ops-QA FIX1 delta review, then PA
+final G1 disposition and human
 merge. Only after G1 merge request bounded G2 read-only provider/host survey
 authorization. G1, its commit, its PR and task completion issue neither GO.

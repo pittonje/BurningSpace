@@ -1,17 +1,19 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-20
-Updated by: Codex — PERSIST002-ROLLOUT-02 G1 specification
+Updated by: Codex — PERSIST002-ROLLOUT-02 G1 REVIEW-FIX1
 
 ## PERSIST002-ROLLOUT-02 — OPEN
 
-**G1 IMPLEMENTED / REVIEW PENDING.**
+**G1 REVIEW-FIX1 IMPLEMENTED / DELTA REVIEW PENDING.**
 Task: [Persistence Deployment-GO Preparation](../tasks/persist-002-rollout-02-deployment-go-preparation.md).
 Specification: [Deployment-GO packet and procedure](../ops/persist-002-deployment-go-packet.md).
 Branch: `ops/persist002-rollout-02-go-preparation`.
 G1 baseline: `de5e39721eb1806f080e59f400836c4f25447c8a`; this is not the future
-publication target. Resolve the branch's actual PR/head/check state live; G1
-delivery is one docs-only commit and one PR, with no merge or auto-merge.
+publication target. Resolve PR #94's actual head/check state live. Initial G1
+was one docs-only commit; REVIEW-FIX1 adds one docs-only commit on
+`bf71e367cb33d2313b1f2d994abeb56585d8b7d0` to that same PR, with no history
+rewrite, merge or auto-merge.
 
 G1 records the human PA's accepted operator-only containment, edge-first
 maintenance, real trusted-peer/proof bootstrap, preserved failed PG init,
@@ -30,13 +32,23 @@ movement afterward never silently substitutes the published candidate.
 ROLLOUT-03 alone owns deployment execution after separate explicit Decision B.
 ROLLOUT-02 completion does not grant deployment authority.
 
-Required next gates: exact-head Core, governed QA, independent consolidated
-Architecture/Network/Security/Ops-QA review, PA G1 disposition and human merge.
-Implementation is not independent review; no review agents were invoked in G1.
-Local docs-only validation passed: exact four-file scope, diff whitespace,
+Supplied consolidated Architecture/Network/Security/Ops-QA review on the initial
+G1 head: APPROVE WITH SUGGESTIONS, no blockers/HIGH, one MEDIUM M-1.
+REVIEW-FIX1 corrects concurrent source readiness, pre-attempt distinct-key proof,
+both runner harness bindings and restricted non-secret source-address custody;
+the older ROLLOUT-01 next-action heading is marked historical. No runtime/tooling
+fix is required. Delta review remains pending, with no survey or either GO.
+Required next gates: fresh exact-head Core, governed QA, targeted Network/Ops-QA
+FIX1 delta review, PA final G1 disposition and human merge.
+Implementation is not independent review; no review agents were invoked.
+Initial G1 local docs-only validation passed: four-file scope, diff whitespace,
 34 added local links, source-fact transcription, phase/state coverage and
 authority/secret/live-value scans with manual review. No runtime tests or remote
-review result is claimed by this checkpoint.
+CI result is claimed for the new FIX1 head by this checkpoint.
+FIX1 local validation passed: exactly three authorized docs, diff whitespace,
+all 43 local links, admission prerequisite/bundle/source-custody assertions,
+historical heading and authority/status/added-value checks. PROJECT_CONTEXT is
+unchanged; no runtime tests were required or run.
 **After G1 merge, request bounded G2 read-only provider/host survey authorization.**
 No survey or either GO is granted by G1. No publication, provider/host access,
 secret generation, DB, Caddy or public probe occurred in G1.
@@ -1297,7 +1309,7 @@ composed-topology Docker peer re-measurement, genuine multi-client admission
 smoke, 10,000-bucket observability/future hardening, Node-side Docker
 environment secret handling, and secret rotation.
 
-## Current next safe action
+## Historical ROLLOUT-01 next safe action
 
 Prepare a separate persistence Deployment-GO gate/packet. ROLLOUT-01 repository
 review and merge gates are satisfied. This reconciliation does not authorize

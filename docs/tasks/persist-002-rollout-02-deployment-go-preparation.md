@@ -1,6 +1,6 @@
 # PERSIST002-ROLLOUT-02 — Persistence Deployment-GO Preparation
 
-Status: **OPEN**. G1: **IMPLEMENTED / REVIEW PENDING**.
+Status: **OPEN**. G1: **REVIEW-FIX1 IMPLEMENTED / DELTA REVIEW PENDING**.
 **PUBLIC PERSISTENCE ROLLOUT — BLOCKED. DEPLOYMENT — NOT AUTHORIZED.**
 Persistence is merged but NOT DEPLOYED; staging remains the earlier verified
 NON-PERSISTENT runtime. This task records no fresh infrastructure observations.
@@ -163,9 +163,41 @@ secret hash, invented live address or future image digest; blocked/not-authorize
 status and separate ROLLOUT-03 ownership are explicit. Runtime tests were not run
 for this docs-only packet. No remote CI or independent review PASS is claimed.
 
-G1 is implemented, not independently approved. Exact-head Core, governed QA,
-independent consolidated Architecture/Network/Security/Ops-QA review and PA G1
-disposition remain required before human merge. After G1 merge, the next safe
+## G1 REVIEW-FIX1
+
+The supplied independent consolidated Architecture/Network/Security/Ops-QA
+review of `bf71e367cb33d2313b1f2d994abeb56585d8b7d0` returned **APPROVE WITH
+SUGGESTIONS**: blockers none, HIGH none, one MEDIUM M-1 (Network/Ops-QA).
+M-1 is corrected in the specification by concurrent-source readiness and
+recorded pre-attempt distinct-key evidence before the ordered 20-second window.
+Sequential single-egress switching is not an accepted planned topology; actual
+bundle validation and final acceptance remain mandatory.
+
+Adjacent L-1/L-2/L-3 corrections are included: the stale CURRENT heading is
+historical, source addresses are restricted non-secret network-location evidence,
+and both runner harnesses/dependencies bind to the reviewed source/command packet
+and must be ready before phase A. No runtime/tooling fix is required;
+**C — REPOSITORY FIX REQUIRED: None**. No source selector, attestation/SBOM or
+workflow concurrency change is included.
+
+FIX1 permits exactly one new docs-only commit on the reviewed head and updates
+only this task, the packet specification and CURRENT, on existing PR #94. The
+initial G1 one-commit/four-file validation above remains historical evidence;
+FIX1's surface is three files. No history rewrite, new PR or manual workflow
+rerun. Review delta remains pending after this commit; implementation is not
+independent delta approval. No survey, Publication GO or Deployment GO is granted.
+
+FIX1 local docs-only validation: `git diff --check` PASS; exactly the three
+authorized files; all 43 local links resolve. Phase-14 readiness/pre-attempt
+proof, sequential-switch prohibition, both runner bindings, canonical key rules,
+mandatory live bundle validation, restricted non-secret evidence classification
+and historical heading checks PASS. Authority/status and added-value scans plus
+manual review found no issued authority, real source address, secret, future
+digest or invented host value. PROJECT_CONTEXT is unchanged; no runtime tests.
+
+Fresh exact-head Core, governed QA, targeted Network/Ops-QA FIX1 delta review
+and PA final G1 disposition remain required before human merge. After G1 merge,
+the next safe
 action is to **request bounded G2 read-only provider/host survey authorization**.
 
 ROLLOUT-02 completion requires G2-G5 evidence and an explicit recorded G6
