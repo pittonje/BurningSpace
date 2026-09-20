@@ -22,7 +22,63 @@ function fixture() {
   m.services.postgres.healthcheck = { test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}'] };
   return { p, env, m };
 }
+function realFixture() {
+  const f = fixture();
+  f.p.targetCommit = randomBytes(20).toString('hex');
+  f.env.BURNINGSPACE_TARGET_COMMIT = f.p.targetCommit;
+  f.p.publicClientOrigin = f.env.BURNINGSPACE_PUBLIC_CLIENT_ORIGIN = f.env.BURNINGSPACE_ALLOWED_ORIGINS = 'https://arena.test.invalid.example';
+  f.p.allowedOrigins = [f.p.publicClientOrigin];
+  f.p.publicServerOrigin = f.env.BURNINGSPACE_PUBLIC_SERVER_ORIGIN = f.env.VITE_BURNINGSPACE_SERVER_URL = 'https://api.test.invalid.example';
+  f.p.edgeConfigId = f.env.BURNINGSPACE_EDGE_CONFIG_ID = 'reviewed-edge-1';
+  for (const [field, key] of [['targetServerImage', 'BURNINGSPACE_SERVER_IMAGE'], ['targetClientImage', 'BURNINGSPACE_CLIENT_IMAGE'], ['persistenceToolsImage', 'BURNINGSPACE_PERSISTENCE_TOOLS_IMAGE']] as const) f.p[field] = f.env[key] = `ghcr.io/example/${field.toLowerCase()}@sha256:${randomBytes(32).toString('hex')}`;
+  f.m.services.server.image = f.p.targetServerImage; f.m.services.client.image = f.p.targetClientImage;
+  f.env.BURNINGSPACE_TRUSTED_EDGE_PEERS = '127.0.0.1';
+  const server = f.m.services.server.environment;
+  server.BURNINGSPACE_ALLOWED_ORIGINS = f.p.publicClientOrigin;
+  server.BURNINGSPACE_TRUSTED_EDGE_PEERS = f.env.BURNINGSPACE_TRUSTED_EDGE_PEERS;
+  server.BURNINGSPACE_EDGE_ASSERTION_SECRET = randomBytes(32).toString('base64url');
+  const pg = f.m.services.postgres.environment;
+  for (const key of ['POSTGRES_PASSWORD', 'BURNINGSPACE_MIGRATOR_PASSWORD', 'BURNINGSPACE_RUNTIME_PASSWORD', 'BURNINGSPACE_BACKUP_PASSWORD']) pg[key] = randomBytes(32).toString('hex');
+  server.DATABASE_URL = `postgres://burningspace_runtime:${pg.BURNINGSPACE_RUNTIME_PASSWORD}@postgres:5432/burningspace`;
+  return f;
+}
 describe('persistent rollout contract', () => {
+  it.each(['none', 'caddy.internal.example', '127.0.0.1,', '127.0.0.1,127.0.0.1'])('reaches the phase-a TRUSTED_PEER guard for %s', peers => {
+    const f = realFixture();
+    expect(validatePersistentPlan(f.env, f.p, 'phase-a', f.m)).toBe(f.p);
+    f.env.BURNINGSPACE_TRUSTED_EDGE_PEERS = peers;
+    f.m.services.server.environment.BURNINGSPACE_TRUSTED_EDGE_PEERS = peers;
+    expect(() => validatePersistentPlan(f.env, f.p, 'phase-a', f.m)).toThrow(expect.objectContaining({ code: 'TRUSTED_PEER' }));
+    // The rest of this same model passes when real-mode peer validation is absent.
+    expect(validatePersistentPlan(f.env, f.p, 'template', f.m)).toBe(f.p);
+  });
+
+  it.each([
+    ['user', 'TOOLS_MODEL', (s: any) => { s.user = '0:0'; }],
+    ['network', 'TOOLS_MODEL', (s: any) => { s.networks = { burningspace: null }; }],
+    ['capabilities', 'TOOLS_MODEL', (s: any) => { delete s.cap_drop; }],
+    ['no-new-privileges', 'TOOLS_MODEL', (s: any) => { s.security_opt = []; }],
+    ['writable input', 'TOOLS_MOUNT', (s: any) => { s.volumes[0].read_only = false; }],
+    ['auto-created input', 'TOOLS_MOUNT', (s: any) => { s.volumes[0].bind.create_host_path = true; }],
+    ['docker socket', 'TOOLS_MOUNT', (s: any) => { s.volumes[0].source = '/var/run/docker.sock'; }],
+    ['repository mount', 'TOOLS_MOUNT', (s: any) => { s.volumes[1].source = resolve('.'); }]
+  ] as const)('rejects tools %s mutation through the full contract', (_label, code, mutate) => {
+    const f = fixture();
+    const tools = {
+      image: f.p.persistenceToolsImage, profiles: ['operator'], networks: { burningspace_db: null },
+      user: '1000:1000', init: true, read_only: true, tmpfs: ['/tmp'], cap_drop: ['ALL'],
+      security_opt: ['no-new-privileges:true'], cpus: 1, mem_limit: 512 * 1024 ** 2,
+      pids_limit: 64, restart: 'no', logging: structuredClone(f.m.services.server.logging),
+      volumes: [
+        { type: 'bind', source: '/private/operation-input', target: '/run/private', read_only: true, bind: { create_host_path: false } },
+        { type: 'bind', source: '/private/operation-work', target: '/work', bind: { create_host_path: false } }
+      ]
+    };
+    f.m.services['persistence-tools'] = tools;
+    expect(validatePersistentPlan(f.env, f.p, 'template', f.m)).toBe(f.p);
+    mutate(tools);
+    expect(() => validatePersistentPlan(f.env, f.p, 'template', f.m)).toThrow(expect.objectContaining({ code }));
+  });
   it('accepts only the documentation template without asserting live authorization', () => { const { p, env, m } = fixture(); expect(validatePersistentPlan(env, p, 'template', m)).toBe(p); expect(() => validatePersistentPlan(env, p, 'phase-b', m)).toThrow(); });
   it.each([
     (f: any) => { f.p.alphaNonPersistent = false; }, (f: any) => { f.p.surprise = true; },
@@ -55,23 +111,8 @@ describe('persistent rollout contract', () => {
     expect(() => validateProjection('migrator', { BURNINGSPACE_MIGRATION_DATABASE_URL: url, DATABASE_URL: url })).toThrow();
   });
   it('binds real effective credentials and rejects shell overrides, sentinels and reused role passwords', () => {
-    const f = fixture();
-    f.p.targetCommit = randomBytes(20).toString('hex');
-    f.env.BURNINGSPACE_TARGET_COMMIT = f.p.targetCommit;
-    f.p.publicClientOrigin = f.env.BURNINGSPACE_PUBLIC_CLIENT_ORIGIN = f.env.BURNINGSPACE_ALLOWED_ORIGINS = 'https://arena.test.invalid.example';
-    f.p.allowedOrigins = [f.p.publicClientOrigin];
-    f.p.publicServerOrigin = f.env.BURNINGSPACE_PUBLIC_SERVER_ORIGIN = f.env.VITE_BURNINGSPACE_SERVER_URL = 'https://api.test.invalid.example';
-    f.p.edgeConfigId = f.env.BURNINGSPACE_EDGE_CONFIG_ID = 'reviewed-edge-1';
-    for (const [field, key] of [['targetServerImage', 'BURNINGSPACE_SERVER_IMAGE'], ['targetClientImage', 'BURNINGSPACE_CLIENT_IMAGE'], ['persistenceToolsImage', 'BURNINGSPACE_PERSISTENCE_TOOLS_IMAGE']] as const) f.p[field] = f.env[key] = `ghcr.io/example/${field.toLowerCase()}@sha256:${randomBytes(32).toString('hex')}`;
-    f.m.services.server.image = f.p.targetServerImage; f.m.services.client.image = f.p.targetClientImage;
-    f.env.BURNINGSPACE_TRUSTED_EDGE_PEERS = '127.0.0.1';
-    const server = f.m.services.server.environment;
-    server.BURNINGSPACE_ALLOWED_ORIGINS = f.p.publicClientOrigin;
-    server.BURNINGSPACE_TRUSTED_EDGE_PEERS = f.env.BURNINGSPACE_TRUSTED_EDGE_PEERS;
-    server.BURNINGSPACE_EDGE_ASSERTION_SECRET = randomBytes(32).toString('base64url');
+    const f = realFixture();
     const pg = f.m.services.postgres.environment;
-    for (const key of ['POSTGRES_PASSWORD', 'BURNINGSPACE_MIGRATOR_PASSWORD', 'BURNINGSPACE_RUNTIME_PASSWORD', 'BURNINGSPACE_BACKUP_PASSWORD']) pg[key] = randomBytes(32).toString('hex');
-    server.DATABASE_URL = `postgres://burningspace_runtime:${pg.BURNINGSPACE_RUNTIME_PASSWORD}@postgres:5432/burningspace`;
     expect(validatePersistentPlan(f.env, f.p, 'phase-a', f.m)).toBe(f.p);
     for (const mutation of [
       (m: any) => { m.services.server.environment.BURNINGSPACE_EDGE_ASSERTION_SECRET = 'none'; },

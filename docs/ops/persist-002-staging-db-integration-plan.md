@@ -324,12 +324,22 @@ and unknown fields.
 
 The GO binds actual operator locations; there is no mandatory secret-store path
 or new secret-manager product. Use private directories (0700), private files
-(0600 from creation), and no symlinks/shared directories. Tools run as UID/GID
-1000 and need read access to their projection and write access only to their
-private work directory. File-based smoke/proof operations require a GO-approved
-POSIX operator environment; Windows mode bits do not establish private DACLs,
-so those operations fail closed on Windows. The VPS needs no Node/npm/tsx or
-Git checkout.
+(0600 from creation), and no symlinks/shared directories. Real secret-bearing
+phase-a/phase-b preflight requires an approved POSIX workstation environment.
+Native Windows projection reads fail closed: POSIX mode bits cannot establish
+Windows DACL restrictions. Template/non-secret validation remains cross-platform.
+The immediate parent and every projection file must be owned by the invoking
+POSIX workstation UID, which is not necessarily 1000. File-based smoke/proof
+operations also require the approved POSIX environment.
+
+Tools retain UID/GID 1000:1000. Both /run/private and /work must be private,
+non-symlink directories owned by the current tools UID; projections must be
+private regular files owned by that UID. Input must contain exactly the selected
+operation's files. Backup additionally checks /work write/search access before
+starting database work. The VPS needs no Node/npm/tsx or Git checkout.
+
+NEVER resolve EACCES by chmod 0755/0644 or otherwise widening group/other
+permissions. Stop and correct the approved ownership/mount contract instead.
 
 Generate independent passwords through the existing private channel; URL-encode
 userinfo passwords. Do not echo/source files or put secret values in argv.
@@ -369,6 +379,33 @@ Disable shell tracing; do not retain rendered Compose JSON in ordinary evidence
 because it contains passwords. Use a clean controlled shell without inherited
 BURNINGSPACE_* overrides; preflight also checks effective bindings.
 
+Under a later GO, prepare new operation directories on the approved POSIX host.
+The GO must bind distinct absolute OP_INPUT/OP_WORK paths beneath a controlled
+parent that untrusted users cannot modify. Refuse existing paths, including
+dangling symlinks. For example, for the status operation (migrator.env only):
+
+~~~bash
+set -euo pipefail
+set +x
+umask 077
+test ! -e "$OP_INPUT" && test ! -L "$OP_INPUT"
+test ! -e "$OP_WORK" && test ! -L "$OP_WORK"
+sudo install -d -m 0700 -o 1000 -g 1000 "$OP_INPUT"
+sudo install -d -m 0700 -o 1000 -g 1000 "$OP_WORK"
+sudo install -m 0600 -o 1000 -g 1000 \
+  "$PRIVATE_DIR/migrator.env" "$OP_INPUT/migrator.env"
+~~~
+
+The source is an already-private, verified non-symlink projection transferred
+through the approved channel; never echo secret values or copy through a public
+temporary file. Use a fresh input directory for each operation and copy only its
+required projections using the same private creation procedure. Reuse the
+verified private backup work directory for restore verification. Host preparation
+may use the approved host administrator; the tools container never requires root.
+Workstation preflight files remain owned by the invoking workstation user; these
+host copies are explicitly owned by 1000:1000. Do not chown workstation inputs
+merely to match the container.
+
 ~~~bash
 runtime_compose() {
   docker compose --project-name burningspace-staging \
@@ -389,7 +426,7 @@ tools_compose() {
 }
 ~~~
 
-On the workstation, use the reviewed checkout and installed dependencies.
+On the approved POSIX workstation, use the reviewed checkout and installed dependencies.
 Feed rendered JSON through a private pipe/file, never ordinary evidence:
 
 ~~~bash
@@ -512,6 +549,18 @@ initialization. No new endpoint is needed; liveness alone is insufficient.
 
 ### Final socket-peer and admission evidence
 
+Before Deployment GO execution, perform a single bounded availability/version
+check in the approved host administrator context for the already-installed
+observation tools:
+
+~~~bash
+sudo sh -c 'command -v nsenter && command -v ss && nsenter --version && ss --version'
+~~~
+
+Missing tools stop this procedure pending a revised approved preparation plan.
+Do not install packages ad hoc during rollout. These instructions authorize no
+host mutation or host access in this repository readiness task.
+
 Identify the final server container ID/PID, networks, reviewed commit/digests,
 run ID and edge reference. During controlled traffic through real Caddy, use
 already-approved host tools to observe numeric established sockets inside the
@@ -526,7 +575,12 @@ sudo nsenter --target "$SERVER_PID" --net \
 
 Bound observation to at most 20 seconds/20 samples. Correlate one controlled
 request or WebSocket (no printed credential) with Caddy-side time/source
-observation. Record the actual Node socket peer, never a host-side socket or
+observation. Exclude or correlate away container-local /health healthcheck
+sockets and host-side direct curl/loopback probe sockets; their presence is not
+evidence of Caddy's peer. Correlate the selected server-netns socket specifically
+to the controlled real-Caddy request/window using timing and connection details.
+An undifferentiated ss listing or ambiguous overlap remains INCONCLUSIVE.
+Record the actual Node socket peer, never a host-side socket or
 Docker-subnet inference. No payload capture, verbose header logs, peer-debug
 endpoint or ad hoc host service. If observation is not discriminating, stop
 INCONCLUSIVE and obtain a revised GO procedure.

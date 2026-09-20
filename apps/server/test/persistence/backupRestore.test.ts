@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
-import { prepareRehearsal } from '../../scripts/restore-target.js';
+import { prepareRehearsal, assertRehearsalDatabase } from '../../scripts/restore-target.js';
 import { join, resolve as resolvePath } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -121,6 +121,38 @@ describe('backup / restore end-to-end (real Docker, real PostgreSQL, real pg_dum
   let sourceServer: ProductionServerHandle | undefined;
   let targetServer: ProductionServerHandle | undefined;
   let workDir: string | undefined;
+
+  it('refuses correctly named rehearsal cleanup and verification on marker, owner and CONNECT violations', async () => {
+    source = await startRoleSeparatedPostgres();
+    const name = `bs_rehearsal_${randomBytes(12).toString('hex')}`;
+    await prepareRehearsal(source.adminUrl, name, 'burningspace');
+    const targetAdmin = new URL(source.adminUrl); targetAdmin.pathname = `/${name}`;
+    const verify = () => withDirectConnection(targetAdmin.toString(), client => assertRehearsalDatabase(client, name, 'burningspace', true));
+    const sql = (query: string) => withDirectConnection(source!.adminUrl, client => client.query(query));
+    const reset = async () => {
+      await sql(`ALTER DATABASE "${name}" OWNER TO burningspace_migrator`);
+      await sql(`REVOKE ALL ON DATABASE "${name}" FROM PUBLIC, burningspace_runtime, burningspace_backup`);
+      await sql(`COMMENT ON DATABASE "${name}" IS 'burningspace:restore-rehearsal:burningspace:${name}'`);
+    };
+    await expect(verify()).resolves.toBeUndefined();
+    for (const mutation of [
+      `COMMENT ON DATABASE "${name}" IS NULL`,
+      `COMMENT ON DATABASE "${name}" IS 'wrong-marker'`,
+      `ALTER DATABASE "${name}" OWNER TO burningspace_admin`,
+      `GRANT CONNECT ON DATABASE "${name}" TO burningspace_runtime`,
+      `GRANT CONNECT ON DATABASE "${name}" TO PUBLIC`
+    ]) {
+      await sql(mutation);
+      await expect(verify()).rejects.toMatchObject({ code: 'RESTORE_ISOLATION' });
+      await expect(prepareRehearsal(source.adminUrl, name, 'burningspace', true)).rejects.toMatchObject({ code: 'RESTORE_ISOLATION' });
+      expect((await sql(`SELECT datname FROM pg_database WHERE datname='${name}'`)).rowCount).toBe(1);
+      await reset();
+      // Name, database, freshness and all other guards pass for this same target.
+      await expect(verify()).resolves.toBeUndefined();
+    }
+    await prepareRehearsal(source.adminUrl, name, 'burningspace', true);
+    expect((await sql(`SELECT datname FROM pg_database WHERE datname='${name}'`)).rowCount).toBe(0);
+  }, TEST_TIMEOUT_MS);
 
   afterEach(async () => {
     await targetServer?.shutdown('SIGTERM').catch(() => undefined);

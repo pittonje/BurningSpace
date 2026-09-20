@@ -116,6 +116,7 @@ export function validateAdmissionBundle(bundle: { a: AdmissionEvidence; b: Admis
   for (const key of ['runId', 'targetCommit', 'environmentId', 'topologyId', 'edgeConfigId', 'nodePeer'] as const) requireRollout([b,spoof,local,o].every(e => e[key] === a[key]), 'EVIDENCE_CORRELATION');
   requireRollout(a.serverOrigin === b.serverOrigin && a.serverOrigin === spoof.serverOrigin && [b,spoof,local].every(e => e.allowedOrigin === a.allowedOrigin), 'EVIDENCE_ORIGIN');
   requireRollout(a.sourceAddress === spoof.sourceAddress && a.sourceAddress === o.sourceAAddress && b.sourceAddress === o.sourceBAddress && admissionKey(a.sourceAddress) !== admissionKey(b.sourceAddress), 'DISTINCT_KEYS');
+  requireRollout([a, b].every(e => admissionKey(e.sourceAddress) !== admissionKey(local.sourceAddress)), 'LOCAL_DISTINCT_KEY');
   requireRollout(a.completedAt <= b.startedAt && b.completedAt <= spoof.startedAt && spoof.completedAt - a.startedAt <= 20_000, 'INCONCLUSIVE_TIMING');
   requireRollout(o.method === 'node-network-namespace-socket' && o.transport === 'real-caddy' && /^[a-f0-9]{64}$/u.test(o.serverContainerId) &&
     Number.isSafeInteger(o.observedAt) && Math.abs(o.observedAt - a.startedAt) <= 600_000 && Math.abs(local.startedAt - a.startedAt) <= 600_000, 'PEER_MEASUREMENT');

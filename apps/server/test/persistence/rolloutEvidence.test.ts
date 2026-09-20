@@ -38,6 +38,17 @@ describe('bounded rollout evidence', () => {
     const local = await phase('local-proof', { ...config, sourceAddress: '198.51.100.254', serverOrigin: 'http://127.0.0.1:2567' }, baseTime + 3000);
     const bundle = { a,b,spoof,local, observation: { runId: config.runId, targetCommit: config.targetCommit, environmentId: config.environmentId, topologyId: config.topologyId, edgeConfigId: config.edgeConfigId, method: 'node-network-namespace-socket' as const, transport: 'real-caddy' as const, serverContainerId: 'b'.repeat(64), observedAt: baseTime, nodePeer: config.nodePeer, sourceAAddress: a.sourceAddress, sourceBAddress: b.sourceAddress, peerEvidenceReference: 'peer-observation-01', sourceEvidenceReference: 'caddy-sources-01' }, proofLogs: ['edge_proof_missing','edge_proof_malformed','edge_proof_rejected'].map(reason => ({ timestamp: new Date(local.startedAt).toISOString(), event: 'admission_trusted_edge_assertion_rejected', reason })) };
     expect(() => validateAdmissionBundle(bundle)).not.toThrow();
+    for (const source of [a, b]) {
+      const changed = structuredClone(bundle);
+      changed.local.sourceAddress = `::ffff:${source.sourceAddress}`;
+      expect(() => validateAdmissionBundle(changed)).toThrow(expect.objectContaining({ code: 'LOCAL_DISTINCT_KEY' }));
+    }
+    const ipv6 = structuredClone(bundle);
+    ipv6.a.sourceAddress = ipv6.spoof.sourceAddress = ipv6.observation.sourceAAddress = '2001:db8:1:2::1';
+    ipv6.local.sourceAddress = '2001:db8:1:3::1';
+    expect(() => validateAdmissionBundle(ipv6)).not.toThrow();
+    ipv6.local.sourceAddress = '2001:db8:1:2::ffff';
+    expect(() => validateAdmissionBundle(ipv6)).toThrow(expect.objectContaining({ code: 'LOCAL_DISTINCT_KEY' }));
     for (const mutate of [
       (x: any) => { x.b.sourceAddress = x.a.sourceAddress; x.observation.sourceBAddress = x.a.sourceAddress; },
       (x: any) => { x.spoof.startedAt += 60_000; x.spoof.completedAt += 60_000; },

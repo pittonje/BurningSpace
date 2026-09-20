@@ -183,3 +183,76 @@ deployment-GO work. Repository tests cannot substitute for live evidence.
 6. Live PG private-network/volume/role evidence, migration/schema/domain/world readiness, quiesced backup, isolated same-cluster restore verification and explicit cleanup.
 
 Existing deferred QA-01/QA-02 archival/completeness work and edge-secret rotation remain outside this task. Fresh-auth diagnostic evidence remains INCONCLUSIVE by design; the bounded guest protocol is the acceptance path. Repository evidence does not pre-write deployed success.
+
+## REVIEW-FIX1 — consolidated pre-senior corrections (2026-09-20)
+
+Starting live PR #92 was OPEN, non-draft, at
+825f58d9d4921209b70b3831847abc6087d6aaf9 with a clean worktree. Its base and live
+main remained ac5ddaac7f70f261fe8357e3fa448ef61c7e56ad. This correction is one
+additional commit; R1–R4 history is preserved. This section is the current FIX1
+checkpoint; the packet evidence above remains historical.
+
+Review routing remains Architecture, Network, Security and QA, with consolidated
+Ops procedure review. Gameplay and Visual remain inapplicable: no gameplay,
+balance, protocol, assets or presentation changes. Review is still pending.
+No independent agents were invoked in this continuing implementation session.
+
+- M1: private projection reads fail closed on native Windows or absent POSIX UID.
+  Immediate parent and opened regular file require invoking-UID ownership and
+  no group/other access. Files are non-symlink, nonempty and bounded to 8192 bytes.
+  The generic reader has no fixed UID 1000 assumption.
+- M2: every tools operation validates private, owned /run/private and /work;
+  input contains exactly the operation's projections. Backup requires work write
+  access before database work. Host preparation specifies new 0700 directories
+  and 0600 projection copies owned by 1000:1000; workstation inputs remain owned
+  by the invoking POSIX user. Widening permissions to resolve EACCES is forbidden.
+- M3: discriminating phase-a TRUSTED_PEER negatives, positive tools-model controls
+  with independent security mutations, and real correctly named rehearsal
+  marker/owner/CONNECT isolation negatives exercise the named guards.
+- PGDG trust root: GnuPG inspects the downloaded key, then exact primary-key
+  fingerprint equality requires B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8 before
+  signed APT is enabled. Multiple primary keys fail equality. Verification tooling
+  is removed from the final image. Package-version pinning is unchanged.
+- Bounded LOW corrections: operation dispatch requires own-property membership;
+  local-proof keys must differ canonically from both public sources (including
+  mapped IPv4 and IPv6 /64 semantics). Docs require pre-GO nsenter/ss availability
+  and correlation excluding healthcheck/direct-loopback sockets from Caddy evidence.
+
+FIX1 file surface: three operator/evidence scripts, deploy/server.Dockerfile,
+four existing focused persistence tests, two additional focused test files
+(privateOperatorInput.test.ts and pgdgTrustRoot.test.ts), the integration plan
+and this task. No workflow change or larger file surface was necessary.
+
+FIX1 local validation:
+
+- Focused Windows contract/private-input/evidence/key tests: 45 passed, four
+  POSIX-only cases skipped. All 13 tests across private input, evidence and PGDG
+  guard suites passed in a disposable Linux container, including those skips.
+  Phase-a contract suite has 36 cases. Prototype keys fail with OPERATION, and
+  the isolation negatives fail specifically with RESTORE_ISOLATION.
+- Real PostgreSQL backup/restore: four tests passed. Immutable tools integration
+  passed directory permission/ownership refusals, migration/status/grants/bootstrap,
+  three role checks, backup, isolated restore and explicit cleanup. Native secret
+  argv/PGPASSFILE/output canaries passed; legacy secret-transport suite: 31 passed.
+- Tools Docker build reached and printed `PGDG full fingerprint verified` before
+  enabling the signed repository. Final local tools image runs as UID/GID 1000
+  with PostgreSQL 17 clients and no GnuPG/curl. Docker equality-guard tests reject
+  wrong/short/empty/multiple-primary-key fingerprints. Runtime image build and
+  packaged migration/non-root checks passed. No image was published.
+- Full Node 22.23.2 suite with dedicated disposable PostgreSQL and rebuilt tools:
+  **59 files passed; 725 tests passed; four POSIX-only tests skipped on Windows**
+  (all independently passed in Linux as above). No test failures.
+- Workspace build/typecheck, both operator/external script typechecks and operator
+  build passed. Existing client bundle-size warning remains.
+- Legacy preflight 56, edge preflight 108 and smoke three self-tests passed;
+  rendered persistent runtime/tools and legacy Compose template validation passed.
+- Protocol compatibility, movement, combat and network callback diagnostics passed.
+  Classifier 29 tests and governed-QA audit passed. Existing 41-file secret scan
+  and supplemental scan of all 12 FIX1 files passed; git diff --check passed.
+- No source gameplay/runtime, package, migration SQL or Caddy asset changes;
+  no public probes, host access, staging DB operations, publication or deployment.
+
+Next gates: fresh exact-head Core, fresh exact-head governed QA, bounded Copilot
+FIX1 delta verification, Claude clean-session senior consolidated review, then
+PA disposition. PUBLIC PERSISTENCE ROLLOUT remains BLOCKED. DEPLOYMENT remains
+NOT AUTHORIZED. These corrections are not deployed.

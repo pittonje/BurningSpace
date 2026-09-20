@@ -11,7 +11,7 @@ import { checkRuntime, checkMigrator, checkBackup } from './db-privilege-check.j
 import { performQuiescedBackup } from './backup-dump.js';
 import { restoreAndVerify } from './backup-restore-verify.js';
 import { prepareRehearsal, assertRehearsalName } from './restore-target.js';
-import { readPrivateProjection } from './private-operator-input.js';
+import { assertPrivateDirectory, readPrivateProjection } from './private-operator-input.js';
 
 export const OPERATION_PROJECTIONS: Record<string, readonly Projection[]> = {
   migrate: ['migrator'], status: ['migrator'], grants: ['migrator'], bootstrap: ['migrator'],
@@ -20,11 +20,14 @@ export const OPERATION_PROJECTIONS: Record<string, readonly Projection[]> = {
 };
 
 export async function runOperation(operation: string, target?: string): Promise<Record<string, unknown>> {
+  requireRollout(Object.hasOwn(OPERATION_PROJECTIONS, operation), 'OPERATION');
   const required = OPERATION_PROJECTIONS[operation];
   requireRollout(required && (!operation.startsWith('restore-') || target), 'OPERATION');
   requireRollout(operation.startsWith('restore-') || target === undefined, 'OPERATION_ARGUMENT');
   const source = 'burningspace';
   if (target) assertRehearsalName(target, source);
+  await assertPrivateDirectory('/run/private');
+  await assertPrivateDirectory('/work', operation === 'backup');
   requireRollout((await readdir('/run/private')).sort().join(',') === [...required].sort().map(x => `${x}.env`).join(','), 'OPERATION_PROJECTIONS');
   const inputs: Partial<Record<Projection, Record<string, string>>> = {};
   for (const role of required) inputs[role] = validateProjection(role, await readPrivateProjection(`/run/private/${role}.env`), operation === 'restore-verify' ? target : source);

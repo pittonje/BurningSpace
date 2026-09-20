@@ -40,8 +40,8 @@ it.skipIf(!image)('runs immutable native operations, same-cluster isolated resto
     };syncBuiltinESMExports();
     for(const [name,value] of Object.entries(files)) await writeFile('/run/private/'+name+'.env',value,{flag:'wx',mode:0o600});
     try { const evidence=await runOperation(operation,target);console.log(JSON.stringify({ok:true,...evidence,nativeInvocations})); }
-    catch { console.log(JSON.stringify({ok:false,code:'OPERATION_REJECTED'})); process.exitCode=1; }`;
-  const op = (operation: string, files: Record<string, string>, name?: string) => invoke(['run', '--rm', '-i', '--network', id, '--read-only', '--tmpfs', '/tmp', '--tmpfs', '/run/private:uid=1000,gid=1000,mode=0700', '-v', `${id}:/work`, '--entrypoint', 'node', image!, '--input-type=module', '-e', wrapper], JSON.stringify({ operation, target: name, files }));
+    catch(error) { console.log(JSON.stringify({ok:false,code:'OPERATION_REJECTED',reason:error.code})); process.exitCode=1; }`;
+  const op = (operation: string, files: Record<string, string>, name?: string, privateMode = '0700', workReadonly = false) => invoke(['run', '--rm', '-i', '--network', id, '--read-only', '--tmpfs', '/tmp', '--tmpfs', `/run/private:uid=1000,gid=1000,mode=${privateMode}`, '-v', `${id}:/work${workReadonly ? ':ro' : ''}`, '--entrypoint', 'node', image!, '--input-type=module', '-e', wrapper], JSON.stringify({ operation, target: name, files }));
   const migrator = { migrator: `BURNINGSPACE_MIGRATION_DATABASE_URL=${url('migrator')}` };
   const admin = { admin: `BURNINGSPACE_ADMIN_DATABASE_URL=${url('admin')}` };
   const backup = { backup: `BURNINGSPACE_BACKUP_DATABASE_URL=${url('backup')}` };
@@ -53,6 +53,19 @@ it.skipIf(!image)('runs immutable native operations, same-cluster isolated resto
     let ready = false;
     for (let i = 0; i < 30; i++) { const r = await invoke(['exec', id, 'pg_isready', '-U', 'burningspace_admin', '-d', 'burningspace']); if (!r.exitCode) { ready = true; break; } await new Promise(r => setTimeout(r, 500)); }
     expect(ready).toBe(true);
+    await checked(['run', '--rm', '--user', '0', '-v', `${id}:/work`, '--entrypoint', 'chown', image!, '1000:1000', '/work']);
+    const workMode = (mode: string) => checked(['run', '--rm', '-v', `${id}:/work`, '--entrypoint', 'chmod', image!, mode, '/work']);
+    await workMode('0700');
+    const refused = async (result: Awaited<ReturnType<typeof op>>, reason: string) => {
+      expect(result.exitCode).toBe(1); expect(JSON.parse(result.stdout)).toMatchObject({ code: 'OPERATION_REJECTED', reason });
+    };
+    await refused(await op('status', migrator, undefined, '0755'), 'PRIVATE_DIRECTORY');
+    await workMode('0755'); await refused(await op('status', migrator), 'PRIVATE_DIRECTORY'); await workMode('0700');
+    await workMode('0500'); await refused(await op('backup', { ...migrator, ...backup }), 'PRIVATE_DIRECTORY_WRITE'); await workMode('0700');
+    expect((await op('backup', { ...migrator, ...backup }, undefined, '0700', true)).exitCode).toBe(1);
+    // The immutable image must enforce invoking UID, even when mode is private.
+    await checked(['run', '--rm', '--user', '0', '-v', `${id}:/work`, '--entrypoint', 'chown', image!, '0:0', '/work']);
+    await refused(await op('status', migrator), 'PRIVATE_DIRECTORY');
     await checked(['run', '--rm', '--user', '0', '-v', `${id}:/work`, '--entrypoint', 'chown', image!, '1000:1000', '/work']);
     for (const operation of ['migrate', 'status', 'grants', 'bootstrap', 'check-migrator']) expect((await op(operation, migrator)).exitCode, operation).toBe(0);
     expect((await op('check-runtime', { 'runtime-db': `BURNINGSPACE_DATABASE_URL=${url('runtime')}` })).exitCode).toBe(0);
