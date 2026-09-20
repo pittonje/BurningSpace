@@ -124,9 +124,18 @@ also MERGED / CLOSED. PERSIST002-ROLLOUT-01 is MERGED / CLOSED through PR #92:
 repository rollout readiness is complete, including the persistent v3 contract,
 immutable role-scoped DB operations, isolated restore rehearsal, bounded rollout
 evidence and operator procedure. Persistence remains NOT DEPLOYED; public
-persistence rollout remains BLOCKED and deployment NOT AUTHORIZED. The next
-program gate is separate Deployment-GO preparation and authorization; this
-reconciliation grants no deployment authority. Use
+persistence rollout remains BLOCKED and deployment NOT AUTHORIZED.
+[PERSIST002-ROLLOUT-02](docs/tasks/persist-002-rollout-02-deployment-go-preparation.md)
+is OPEN; G1 is IMPLEMENTED / REVIEW PENDING. Its
+[packet/procedure specification](docs/ops/persist-002-deployment-go-packet.md)
+separates a bounded read-only survey, Publication GO, immutable publication
+evidence, final Deployment-GO preparation and PA GO/NO-GO. A separate ROLLOUT-03
+owns execution; preparation completion grants no deployment authority. Publication
+targets exact current main at Decision A, not the G1 baseline. The first rollout
+requires operator-only edge-first maintenance, final peer/proof evidence,
+stop-and-preserve recovery and two protected backup/full-rehearsal checkpoints.
+After G1 review, PA disposition and human merge, request bounded G2 read-only
+provider/host survey authorization; G1 grants neither survey nor either GO. Use
 [CURRENT](docs/handoffs/CURRENT.md) for exact task/review state and deferred mobile
 UX. Local GameScene remains preserved non-authoritative prototype material.
 

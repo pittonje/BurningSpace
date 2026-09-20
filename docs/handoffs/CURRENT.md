@@ -1,7 +1,51 @@
 # BurningSpace Current Handoff
 
 Last updated: 2026-09-20
-Updated by: Codex — PERSIST002-ROLLOUT-01 post-merge governance reconciliation
+Updated by: Codex — PERSIST002-ROLLOUT-02 G1 specification
+
+## PERSIST002-ROLLOUT-02 — OPEN
+
+**G1 IMPLEMENTED / REVIEW PENDING.**
+Task: [Persistence Deployment-GO Preparation](../tasks/persist-002-rollout-02-deployment-go-preparation.md).
+Specification: [Deployment-GO packet and procedure](../ops/persist-002-deployment-go-packet.md).
+Branch: `ops/persist002-rollout-02-go-preparation`.
+G1 baseline: `de5e39721eb1806f080e59f400836c4f25447c8a`; this is not the future
+publication target. Resolve the branch's actual PR/head/check state live; G1
+delivery is one docs-only commit and one PR, with no merge or auto-merge.
+
+G1 records the human PA's accepted operator-only containment, edge-first
+maintenance, real trusted-peer/proof bootstrap, preserved failed PG init,
+two mandatory backup/full-rehearsal checkpoints, bounded retry authority and
+separate old-arena service-mode fallback. Both backup sets remain protected
+until ROLLOUT-03 closes and PA explicitly authorizes disposition. Only capacity
+thresholds, the exact containment mechanism and the tools-package
+first-creation/safe-configuration fact remain unresolved for later evidence.
+
+The packet sequence is G1 specification; G2 separately authorized read-only
+provider/host survey; G3 Publication GO packet; G4 separately authorized
+publication/evidence; G5 final Deployment-GO packet; G6 PA GO/NO-GO.
+Decision A binds exact current main when issued after pre-publication changes
+are merged/reviewed. Main movement before dispatch requires reauthorization;
+movement afterward never silently substitutes the published candidate.
+ROLLOUT-03 alone owns deployment execution after separate explicit Decision B.
+ROLLOUT-02 completion does not grant deployment authority.
+
+Required next gates: exact-head Core, governed QA, independent consolidated
+Architecture/Network/Security/Ops-QA review, PA G1 disposition and human merge.
+Implementation is not independent review; no review agents were invoked in G1.
+Local docs-only validation passed: exact four-file scope, diff whitespace,
+34 added local links, source-fact transcription, phase/state coverage and
+authority/secret/live-value scans with manual review. No runtime tests or remote
+review result is claimed by this checkpoint.
+**After G1 merge, request bounded G2 read-only provider/host survey authorization.**
+No survey or either GO is granted by G1. No publication, provider/host access,
+secret generation, DB, Caddy or public probe occurred in G1.
+
+**PUBLIC PERSISTENCE ROLLOUT — BLOCKED. DEPLOYMENT — NOT AUTHORIZED.**
+Persistence is NOT DEPLOYED. Staging remains the earlier verified NON-PERSISTENT
+runtime; no fresh live verification is claimed. PERSIST-001, PERSIST-002,
+NET-02 and ROLLOUT-01 remain MERGED / CLOSED. The ROLLOUT-01 closure below is
+preserved; its next-action wording is now carried forward by this G1 section.
 
 ## PERSIST002-ROLLOUT-01 — MERGED / CLOSED
 
