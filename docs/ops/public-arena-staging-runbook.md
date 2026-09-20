@@ -2,11 +2,13 @@
 
 ## Scope and limitations
 
-This runbook operates the Public Arena Alpha only. The deployment is one
-server process with an in-memory world and one static client. It has no
-persistence, accounts, durable identity, campaign systems, or horizontal
-scaling. Restarting the server resets every active room and its world state.
-This is not the campaign MVP.
+The deployed OPS-002/v2 Public Arena remains non-persistent. The repository now
+contains durable identity/world persistence and needs a database for the current
+runtime. It is not campaign MVP or a horizontal-scaling deployment. Current
+local builds must use the CI integration overlay; base-only startup of the new
+server is incomplete. The [v3 persistent rollout sequence](persist-002-staging-db-integration-plan.md#future-operator-sequence--v3-persistent-profile)
+owns future real deployment, private inputs and stop-and-preserve recovery.
+Public persistence rollout is BLOCKED; deployment is NOT AUTHORIZED.
 
 ## Required infrastructure
 
@@ -39,7 +41,15 @@ two bind-port variables select loopback host ports. `NODE_ENV` remains
 Do not put credentials, tokens, certificates, SSH material, or private server
 addresses in the example file or repository.
 
-## Build and local validation
+## Historical v2 local lifecycle
+
+The commands below describe the old in-memory runtime. Do not run this base-only
+sequence against the current persistent server. The executable current CI recipe
+in .github/workflows/pr-checks.yml combines base + build + integration overlays,
+uses disposable PostgreSQL, explicit migration/grants/bootstrap/privilege checks,
+then readiness/smoke and disposal of that CI project's volumes. Real staging
+must instead use base + DB (+ tools for one-shots), never the CI build/integration
+overlays or their test credentials.
 
 ```sh
 docker compose --env-file deploy/.env.staging -f deploy/docker-compose.staging.yml -f deploy/docker-compose.staging.build.yml config
@@ -77,13 +87,16 @@ the client container, or weaken the exact allowlist to `*`.
 
 ## Shared-host deployment boundary
 
-The real shared-host path uses only `deploy/docker-compose.staging.yml`, an
+The legacy v2 shared-host path uses only `deploy/docker-compose.staging.yml`, an
 approved real environment inventory, and prebuilt digest-pinned images. It
 must never include `docker-compose.staging.build.yml`, a repository checkout,
 or `docker compose build`. The complete authorization, preflight, pull/up,
 validation, and rollback sequence lives in the
 [external staging runbook](public-arena-external-staging-runbook.md).
 
+The following rollback paragraph applies only to the legacy v2 profile. Persistent
+v3 recovery stops the candidate and preserves the DB volume/backups/evidence;
+switching to an old pre-persistence binary is forbidden as campaign rollback.
 Real deployment remains unauthorized until an exact environment-specific GO.
 When later authorized, rollback follows the exact mode bound by the external
 staging plan: first deployment restores the pre-BurningSpace state; subsequent
@@ -95,7 +108,8 @@ state is in memory.
 
 `GET /health` reports that the HTTP process is alive and remains available
 while shutdown is draining. `GET /ready` reports 200 only after configuration,
-security, transport, and listening are ready; it changes to 503 before
+security, transport, persistence initialization, exact schema/world validation,
+writer ownership and canonical room initialization are complete. It changes to 503 before
 graceful shutdown. Reverse-proxy routing and deployment verification should use
 readiness, while the Compose container healthcheck uses liveness.
 
@@ -131,7 +145,7 @@ result and never prints a reconnect token.
 ## Known limitations
 
 - one server process and no horizontal scaling;
-- no persistence; restart resets every active arena;
+- deployed v2 remains non-persistent; repository v3 persists identity/world membership but not a complete campaign;
 - no account identity;
 - reconnect works only during the current room and process lifetime;
 - no campaign state or campaign-MVP claim.

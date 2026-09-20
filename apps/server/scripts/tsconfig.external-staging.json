@@ -5,6 +5,7 @@
     "rootDir": "../../.."
   },
   "include": [
+    "external-staging-admission-smoke.ts",
     "external-staging-edge-contract-check.ts",
     "external-staging-edge-preflight.ts",
     "external-staging-preflight.ts",

@@ -514,8 +514,19 @@ dumps, or unbounded logs.
 
 ## Deployment boundary
 
-Caddy is not installed by this repository preparation. DNS is now configured
-and publicly verified; host installation, systemd changes, public 80/443
-activation, certificate requests, external validation, Phase B execution, and
-Deployment GO remain incomplete and unauthorized. Final private image
-publication is complete, but image pull/start remains post-GO.
+OPS-002 completed Caddy/TLS deployment and external validation on 2026-09-13;
+its original evidence remains the historical deployed baseline. The paragraph
+formerly here described pre-OPS-002 preparation and is no longer current status.
+This task performs no fresh host/DNS/TLS verification. Public staging remains the
+earlier non-persistent runtime; persistence is not deployed.
+
+NET-02 is MERGED / CLOSED in the repository. The next persistent profile follows
+the [v3 operator sequence](persist-002-staging-db-integration-plan.md#future-operator-sequence--v3-persistent-profile):
+actual socket-peer measurement on the final server topology, matching Node proof
+and existing root:root 0600 Caddy systemd credential, two-source admission proof,
+and separate host-loopback invalid-proof/log correlation. Do not infer a trusted
+peer from subnets or use none for acceptance. Credential/unit activation follows
+the existing approved restart procedure; a Caddy configuration reload alone does
+not update the systemd-loaded credential. No permanent diagnostic endpoint or
+header logger is introduced. Public persistence rollout remains BLOCKED and
+deployment NOT AUTHORIZED pending a separate environment-specific GO.

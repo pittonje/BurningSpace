@@ -1,7 +1,25 @@
 # BurningSpace Current Handoff
 
-Last updated: 2026-09-19
-Updated by: Post-merge governance reconciliation — PERSIST002-NET-02 repository-stage closure
+Last updated: 2026-09-20
+Updated by: Codex — PERSIST002-ROLLOUT-01 readiness implementation
+
+## Active repository task — PERSIST002-ROLLOUT-01
+
+See [the rollout readiness task](../tasks/persist-002-rollout-01-staging-readiness.md).
+Base: ac5ddaac7f70f261fe8357e3fa448ef61c7e56ad; branch:
+ops/persist002-rollout-01-readiness. R1 contract, R2 immutable operations, R3
+bounded evidence/provisioning and R4 operational reconciliation are complete.
+Local Node 22 suite: 57 files, 706 passing tests, one Windows POSIX-permission
+skip independently passing in Linux. Build/typecheck, v2/v3 preflights, 64-check
+real disposable Caddy contract, full disposable persistent Compose lifecycle,
+backup/restore and native argv/PGPASSFILE canaries pass. See the task's complete
+validation record and file inventory. Implementation awaits PR review; it does
+not establish deployed persistence or live admission evidence.
+No independent agents/reviewers were invoked during the four packets, as required
+by the implementation authorization. Next gates are exact-head Core, governed QA,
+independent consolidated Architecture/Network/Security/Ops/QA review and PA
+disposition. Public persistence rollout remains BLOCKED; deployment NOT AUTHORIZED.
+The historical checkpoints below keep their original evidence/status wording.
 
 ## Current state — Public Arena external staging: ONLINE
 
@@ -1230,6 +1248,17 @@ environment secret handling, and secret rotation.
 
 ## Current next safe action
 
-Prepare a separate rollout/deployment readiness gate for Product Architect
-review. Do not execute deployment; a later rollout requires separate Product
-Architect authorization.
+Complete ROLLOUT-01 review and Product Architect disposition using the active
+task above. Do not execute deployment; any later rollout needs a separate GO.
+# Historical ROLLOUT-01 R1–R3 checkpoint (2026-09-20)
+
+Active task: [PERSIST002-ROLLOUT-01](../tasks/persist-002-rollout-01-staging-readiness.md).
+Branch `ops/persist002-rollout-01-readiness`, exact base
+`ac5ddaac7f70f261fe8357e3fa448ef61c7e56ad`. R1 contract and R2 immutable operations
+implemented and locally verified; R3 bounded evidence/provisioning is also
+implemented and tested; R4 operational reconciliation pending. See the task for validation and
+the SQL LF packaging correction (canonical migration blob unchanged).
+NET-02 remains MERGED / CLOSED. Deployment NOT AUTHORIZED; public persistence
+rollout BLOCKED. Public staging remains the earlier non-persistent runtime.
+Reviewers are declared in the task and deferred until all four packets per the
+explicit implementation authorization; no independent agents are invoked.

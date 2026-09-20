@@ -2,7 +2,9 @@
 
 ## Scope and limitations
 
-This runbook separates OPS-002 repository preparation from any later controlled external execution. The Public Arena remains alpha and non-persistent: one in-memory authoritative server process and one static-client container, with no accounts, persistence, horizontal scaling, production SLA, or public-production launch. A server restart or rollback resets active rooms and world state.
+This runbook's v2 contract describes OPS-002 and the currently deployed non-persistent arena: one in-memory authoritative server process and one static-client container. A restart resets that deployed arena. OPS-002 deployment is complete; its evidence is historical and remains unchanged. Persistent runtime code and NET-02 are merged in the repository, but persistence is not deployed.
+
+The v3 persistent-public-arena profile uses the [persistent staging sequence](persist-002-staging-db-integration-plan.md#future-operator-sequence--v3-persistent-profile) and [ROLLOUT-01 readiness gate](../tasks/persist-002-rollout-01-staging-readiness.md). It has separate non-secret inventory and private role projections, immutable tools, final-topology measurement, backup/restore and stop-and-preserve recovery. The v2 sections below remain the legacy contract; they do not authorize or define persistent rollback. Public persistence rollout is BLOCKED; deployment is NOT AUTHORIZED.
 
 The existing [local/container staging runbook](public-arena-staging-runbook.md) remains the source for the bounded local Compose lifecycle. This document adds the shared-host staging, external edge, authorization, validation, and rollback contract. The selected provider and environment are recorded in the Phase B environment decision; that selection does not authorize deployment. The selected edge implementation and its repository validation contract are defined in the [Caddy edge runbook](public-arena-caddy-edge-runbook.md).
 
@@ -14,7 +16,7 @@ Phase B is controlled external execution. It may begin only after the Phase A im
 
 ## Execution-side binding
 
-All repository and TypeScript tooling executes on the Product
+For the original OPS-002/v2 controller, all repository and TypeScript tooling executes on the Product
 Architect/operator Windows workstation in Git for Windows Bash, specifically
 `C:\Program Files\Git\bin\bash.exe`, with a semantic Bash minimum of `3.0` for
 the used shell features. Record the actual observed version in evidence; exact
@@ -34,7 +36,12 @@ hashes authorize evidence-linked inventory field promotion; it is not
 represented as a live-evidence file directly consumed by the validator. The staging host must not receive a
 BurningSpace Git checkout/worktree, `node_modules`, npm installation, workspace
 validator build output, or external-smoke tooling. No step in this runbook
-authorizes npm or repository tooling on the VPS.
+authorizes npm or repository tooling on the VPS. The future v3 path additionally
+permits the reviewed immutable persistence-tools image as bounded DB-network
+one-shots under a later GO. It requires no host development checkout/dependencies.
+File-based provisioning and local-proof diagnostics use the GO-approved POSIX
+operator environment (Windows mode bits cannot prove private DACLs). Host-loopback
+diagnostics may use an approved SSH forward; the VPS needs no Node tooling.
 
 ## Required non-secret inventory
 

@@ -1,12 +1,14 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { RolloutError, validatePersistentPlan, validateProjection, requireRollout, type PersistentPlan } from './persistent-rollout-contract.js';
+import { readPrivateProjection } from './private-operator-input.js';
 
 type Mode = 'template' | 'phase-a' | 'phase-b';
 type RollbackMode = 'previous-approved-release' | 'bootstrap-no-previous-release';
 
-interface DeploymentPlan {
-  schemaVersion: number;
+interface LegacyDeploymentPlan {
+  schemaVersion: 2;
   environmentId: string;
   environmentClass: string;
   alphaNonPersistent: boolean;
@@ -30,10 +32,14 @@ interface DeploymentPlan {
   publicProductionLaunchAuthorized: boolean;
 }
 
+type DeploymentPlan = LegacyDeploymentPlan;
+type DeploymentPlanUnion = LegacyDeploymentPlan | PersistentPlan;
+
 interface ValidationOptions {
   mode: Mode;
   checkRepository?: (previous: string | undefined, target: string, mode: Mode) => void;
   composeModel?: unknown;
+  deploymentRoot?: string;
 }
 
 interface GitResult { status: number | null; stdout: string; }
@@ -372,6 +378,11 @@ function validate(env: Record<string, string>, rawPlan: unknown, options: Valida
     fail('PLAN_SHAPE', 'Deployment plan must be one JSON object.');
   }
   const planObject = rawPlan as Record<string, unknown>;
+  if ((rawPlan as DeploymentPlanUnion).schemaVersion === 3) {
+    const persistent = validatePersistentPlan(env, rawPlan, options.mode, options.composeModel, options.deploymentRoot);
+    if (options.mode !== 'template') (options.checkRepository ?? repositoryCheck)(undefined, persistent.targetCommit, options.mode);
+    return;
+  }
   assertSafeInventory(env, planObject);
   const rollbackMode = requireString(planObject.rollbackMode, 'ROLLBACK_MODE');
   if (rollbackMode !== 'previous-approved-release' && rollbackMode !== 'bootstrap-no-previous-release') {
@@ -902,11 +913,12 @@ function readComposeStdin(): unknown {
 }
 
 function toSafeError(error: unknown): { code: string; message: string } {
+  if (error instanceof RolloutError) return { code: error.code, message: error.message };
   if (error instanceof SafeValidationError) return { code: error.code, message: error.message.slice(0, 300) };
   return { code: 'UNEXPECTED', message: 'Unexpected bounded preflight failure.' };
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const startedAt = Date.now();
   if (args.includes('--self-test')) {
@@ -919,7 +931,22 @@ function main(): void {
   if (!args.includes('--compose-stdin')) fail('COMPOSE_REQUIRED', 'Rendered Compose JSON must be supplied through standard input.');
   const inputs = readInputs(argumentValue(args, '--env'), argumentValue(args, '--plan'));
   const mode = selected[0]!;
-  validate(inputs.env, inputs.plan, { mode, composeModel: readComposeStdin() });
+  const composeModel = readComposeStdin();
+  validate(inputs.env, inputs.plan, { mode, composeModel, deploymentRoot: args.includes('--deployment-root') ? argumentValue(args, '--deployment-root') : undefined });
+  if ((inputs.plan as DeploymentPlanUnion).schemaVersion === 3 && mode !== 'template') {
+    const directory = argumentValue(args, '--private-dir');
+    const bootstrap = validateProjection('bootstrap', await readPrivateProjection(resolve(directory, 'bootstrap.env')));
+    const migrator = validateProjection('migrator', await readPrivateProjection(resolve(directory, 'migrator.env')));
+    const runtime = validateProjection('runtime', await readPrivateProjection(resolve(directory, 'runtime.env')));
+    const backup = validateProjection('backup', await readPrivateProjection(resolve(directory, 'backup.env')));
+    const model = composeModel as { services: { server: { environment: Record<string, string> }; postgres: { environment: Record<string, string> } } };
+    const pg = model.services.postgres.environment;
+    requireRollout(pg.POSTGRES_PASSWORD === bootstrap.BURNINGSPACE_DB_ADMIN_PASSWORD && pg.BURNINGSPACE_MIGRATOR_PASSWORD === bootstrap.BURNINGSPACE_DB_MIGRATOR_PASSWORD &&
+      pg.BURNINGSPACE_RUNTIME_PASSWORD === bootstrap.BURNINGSPACE_DB_RUNTIME_PASSWORD && pg.BURNINGSPACE_BACKUP_PASSWORD === bootstrap.BURNINGSPACE_DB_BACKUP_PASSWORD &&
+      model.services.server.environment.DATABASE_URL === runtime.BURNINGSPACE_DATABASE_URL && model.services.server.environment.BURNINGSPACE_EDGE_ASSERTION_SECRET === runtime.BURNINGSPACE_EDGE_ASSERTION_SECRET &&
+      decodeURIComponent(new URL(migrator.BURNINGSPACE_MIGRATION_DATABASE_URL!).password) === bootstrap.BURNINGSPACE_DB_MIGRATOR_PASSWORD &&
+      decodeURIComponent(new URL(backup.BURNINGSPACE_BACKUP_DATABASE_URL!).password) === bootstrap.BURNINGSPACE_DB_BACKUP_PASSWORD, 'PRIVATE_CONFLICT');
+  }
   console.log(JSON.stringify({
     ok: true,
     event: 'external_staging_preflight_completed',
@@ -931,9 +958,7 @@ function main(): void {
   }));
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error: unknown) => {
   console.error(JSON.stringify({ ok: false, event: 'external_staging_preflight_failed', error: toSafeError(error) }));
   process.exitCode = 1;
-}
+});

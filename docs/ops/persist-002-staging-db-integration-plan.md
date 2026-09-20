@@ -134,29 +134,17 @@ through a restore), restores into a fresh target database with
 checksums, canonical world identity/state, row counts, credential
 active/revoked counts, foreign-key consistency, and expected constraints.
 
-Operator procedure for a real staging backup:
-
-```bash
-MIGRATION_DATABASE_URL=<burningspace_migrator connection string> \
-BACKUP_DATABASE_URL=<burningspace_backup connection string> \
-BURNINGSPACE_WORLD_SLUG=public-arena \
-BURNINGSPACE_BACKUP_OUTPUT_DIR=/path/to/backups \
-  npx tsx apps/server/scripts/backup-dump.ts
-```
-
-To restore into a **fresh, isolated** target database and verify it:
-
-```bash
-BURNINGSPACE_RESTORE_DUMP_PATH=/path/to/backups/<file>.dump \
-MIGRATION_DATABASE_URL=<target burningspace_migrator connection string> \
-  npx tsx apps/server/scripts/backup-restore-verify.ts
-```
-
-Never restore over the source database.
+Real staging uses the immutable tools sequence below. The former host npm/tsx
+examples are superseded. The VPS receives reviewed deployment assets and
+digest-pinned images. Backup needs separate migrator (fence) and backup (dump)
+projections together; restore needs the target migrator only. No password goes
+into pg client argv. Dumps contain credential hashes: retain/transfer encrypted
+copies with restricted access under the operator's existing controls.
 
 ### Supported connection format for these operator tools (SEC-FIX2)
 
-`MIGRATION_DATABASE_URL`/`BACKUP_DATABASE_URL` above must carry the
+The legacy direct-script MIGRATION_DATABASE_URL/BACKUP_DATABASE_URL and v3
+private BURNINGSPACE_*_DATABASE_URL projections must carry the
 database login password in the URI's **userinfo**
 (`postgres://user:password@127.0.0.1/db`), never as a `password=` or
 `sslpassword=` **query parameter**. Since PERSIST002-SEC-FIX2, all three
@@ -171,102 +159,42 @@ private-key passphrase) is not supported by this tooling's secret
 channel at all, which exists only for the ordinary database login
 password. An operator connection string that needs an encrypted
 client-certificate key is out of scope for these wrappers as they exist
-today.
+today. The v3 projection validator is stricter: it accepts only the internal
+postgres:5432 target, fixed matching role/database and no URL query parameters.
+The real tools image uses native clients; legacy disposable workstation tests
+may still use the Docker wrapper. Neither path places passwords in argv.
 
 ## Schema-compatibility rollback rule
 
-There is no automatic destructive downgrade path. If a deployed schema
-version must be rolled back, the only supported path is: stop the
-application, restore the most recent **verified** backup taken before the
-migration that needs to be undone, and re-verify with
-`backup-restore-verify.ts` before pointing a server at the restored
-database. Do not hand-edit `schema_migrations` or attempt to reverse-apply
-a migration's SQL.
+First persistence rollout recovery is **stop-and-preserve**: stop the failed
+candidate, preserve the PostgreSQL volume, verified backups and evidence, and
+accept controlled unavailability. The old non-persistent binary is not a
+compatible persistent-campaign rollback. No DOWN, ledger editing, database
+reinitialization or restore over source is allowed. A future return to the old
+arena is a separate PA-authorized service-mode fallback with matching client
+and edge handling.
 
-## Pre-rollout security gate — PERSIST002-NET-02 (MEDIUM, OPEN, BLOCKS PUBLIC PERSISTENCE ROLLOUT)
+## Current pre-rollout gate (2026-09-20)
 
-An independent Network review (NET-FIX1) found that the current
-fresh-auth/guest-identity rate limiting keys budgets off the raw transport
-peer address, and this deployment does not trust `X-Forwarded-For`,
-`X-Real-IP`, or `Forwarded` from any proxy in front of it. Behind a single
-effective transport peer (any shared NAT, load balancer, or reverse proxy
-that does not preserve distinct per-client peer addresses), every guest
-identity created through that peer shares one fresh-auth/guest budget. This
-is a **deployment availability constraint** — legitimate concurrent guests
-behind the same peer can throttle each other — **not an authentication
-bypass or a way to forge another identity's credential**.
+PERSIST002-NET-02 is **MERGED / CLOSED**, including the paired exact-peer and
+cryptographic edge-proof mitigation. See the
+[NET-02 closure](../tasks/persist-002-net-02-admission-budget-hardening.md) and
+[ROLLOUT-01 task](../tasks/persist-002-rollout-01-staging-readiness.md).
+The dated FIX sections below retain their historical checkpoint wording.
 
-Product Architect disposition (SEC-FIX1): deferring NET-02's
-**implementation** relative to repository merge is accepted; deferring it
-relative to **public persistence deployment** is not. Repository merge may
-be considered once the other acceptance gates for this task pass — a merge
-is not itself, and does not imply, a public persistence rollout, and no
-automatic deployment follows from it.
+Public persistence rollout is **BLOCKED**; deployment is **NOT AUTHORIZED**.
+Node honors Caddy's SET-overwritten peer only when both the exact socket peer
+and canonical edge proof validate. Ordinary forwarding headers remain untrusted;
+quotas are unchanged. Repository acceptance is distinct from deployment acceptance.
 
-Public persistence rollout to real staging requires, before it may proceed:
+Future acceptance requires actual Node-side socket observation on the final
+two-network server topology, controlled real-Caddy correlation, two distinct
+effective public admission keys, host-local invalid-proof rejection with fixed
+log reasons and unconsumed trusted quota, retained-credential smoke, verified
+backup/restore, and a separate environment-specific PA deployment GO.
+No live result is claimed in this document.
 
-- an implemented admission-budget mitigation (not merely documented);
-- spoof-resistance tests (an untrusted client cannot inject a fabricated
-  peer identity through whatever trusted-header/trust-boundary mechanism
-  the mitigation uses) and multi-client budget tests;
-- explicit Security/Ops acceptance of that mitigation;
-- a separate, explicit Product Architect deployment authorization.
-
-A publicly documented "bounded operating policy" (e.g. an acceptable
-concurrent-guest ceiling), an increased global rate-limit quota, or asking
-users to retry more slowly are each, on their own, **not an accepted
-mitigation** — they do not close this gate. Any future trusted-proxy
-mitigation must define its trust boundary explicitly (which specific proxy
-hop is trusted, and why nothing upstream of it can forge the header). Do
-**not** start trusting `X-Forwarded-For`/`X-Real-IP`/`Forwarded`, and do
-**not** raise fresh-auth/guest-identity rate-limit quotas, as a substitute
-for the mitigation above. NET-02 is not marked fixed, waived, or accepted
-by this document.
-
-### Mitigation implementation status (2026-09-19)
-
-The bounded mitigation is **implemented locally and awaiting PA delta
-inspection**. NET-02 is **NOT CLOSED**, and public persistence rollout remains
-**BLOCKED**. See
-[PERSIST002-NET-02 — Admission Budget Hardening](../tasks/persist-002-net-02-admission-budget-hardening.md)
-for the full behavioral contract.
-
-Trust boundary, stated explicitly as this gate requires:
-
-- The one trusted hop is the Caddy edge running on the same host, reached by
-  Node only over the loopback-published Docker port. Nothing upstream of Caddy
-  can forge the assertion, because Caddy SET-overwrites
-  `X-BurningSpace-Edge-Peer` with its own `{remote_host}` on the public server
-  route (`header_up` without `+`), discarding any client-supplied value.
-- Node honors that header **only** when the canonical direct
-  `request.socket.remoteAddress` is listed in
-  `BURNINGSPACE_TRUSTED_EDGE_PEERS`. From any other peer the header is ignored
-  entirely and the direct peer keys the budget, so the header alone grants no
-  authority. This is proven by a real multi-client test that runs the fixed
-  code without trusted-edge configuration and shows the two clients colliding
-  again.
-- `X-Forwarded-For`, `X-Real-IP` and `Forwarded` are still **not** trusted and
-  are not consumed for admission identity anywhere. `trusted_proxies` remains
-  unused.
-- No rate-limit quota was raised. Guest identity stays capacity 3 / 1 per 60 s
-  and fresh auth stays capacity 10 / 1 per second, with the same 10,000-bucket
-  cap and 600,000 ms idle eviction.
-
-Rollout-time requirement that is deliberately **not** satisfied in the
-repository: `BURNINGSPACE_TRUSTED_EDGE_PEERS` must be set to the exact IP
-literal of the direct socket peer the server container actually observes for
-edge traffic, measured inside the target container during the separately
-authorized rollout task. The committed examples carry the explicit
-direct-peer-only sentinel `none`; the live Docker gateway address is
-deliberately not guessed here, and `none` or an omitted value is **never**
-rollout acceptance. `deploy/docker-compose.staging.yml` makes the variable a
-required substitution so the real path cannot silently default.
-
-Still outstanding for this gate: exact-head Core SUCCESS, governed QA, and
-independent Architecture / Network / Security / QA review of the mitigation,
-then explicit Security/Ops acceptance, PA acceptance, human merge, and a
-separate PA deployment authorization. Merging the mitigation is not deployment
-permission.
+### Historical implementation checkpoints
 
 ### PA FIX2 — the trusted peer is not proof of Caddy (2026-09-19)
 
@@ -371,71 +299,372 @@ persistent volume and role-separated credentials. It is not a
 high-availability, replicated, or automatically-failed-over database, and
 nothing in this document should be read as claiming otherwise.
 
-## Future operator sequence (real staging, separately authorized)
+## Future operator sequence — v3 persistent profile
 
-This is preparation only — every step below requires a separate,
-explicit authorization before it touches the real shared-host staging
-environment.
+**Not authorized for execution by ROLLOUT-01.** Host access, image publication,
+pull/start, database creation/mutation, edge activation and public probes all
+require a later deployment GO. Current staging remains the earlier non-persistent
+runtime. The unchanged v2 legacy plan must not be used for this persistent path.
 
-1. Confirm the `deploy/server.Dockerfile` prerequisite above has been fixed
-   and a new server image built and published.
-2. Prepare restricted secrets: generate the four passwords
-   (`BURNINGSPACE_DB_ADMIN_PASSWORD`, `BURNINGSPACE_DB_MIGRATOR_PASSWORD`,
-   `BURNINGSPACE_DB_RUNTIME_PASSWORD`, `BURNINGSPACE_DB_BACKUP_PASSWORD`)
-   using an operator secret manager. Never commit them; fill in a copy of
-   `deploy/staging.db.env.example` only in the operator's own secret store.
-3. Preserve the existing shared-host `server`/`client` services untouched
-   until the steps below complete.
-4. Start PostgreSQL only, internal-only:
-   `docker compose --env-file <real secrets file> -f deploy/docker-compose.staging.db.yml up -d postgres`.
-5. Verify no DB port is published on the host (`docker port` should show
-   nothing for `postgres`).
-6. Run the migration as `burningspace_migrator`:
-   `MIGRATION_DATABASE_URL=<...> npx tsx apps/server/scripts/db-migrate.ts`.
-7. Apply runtime/backup grants as `burningspace_migrator`:
-   `npx tsx apps/server/scripts/persistence-tooling.ts` helpers, or
-   directly `psql -f deploy/postgres/apply-runtime-grants.sql`.
-8. Bootstrap the canonical world explicitly:
-   `MIGRATION_DATABASE_URL=<...> npx tsx apps/server/scripts/world-bootstrap.ts`.
-9. Run `apps/server/scripts/db-privilege-check.ts` against the real roles
-   and confirm every assertion passes.
-10. Take and verify an initial backup (see above) before any real traffic
-    is ever accepted.
-11. Add the real `DATABASE_URL` (using `burningspace_runtime`, never
-    `burningspace_migrator`) to the operator secret store. Since SEC-FIX1,
-    the running server only ever reads `DATABASE_URL` for every runtime
-    connection (schema check, writer/maintenance, and the HTTP identity/
-    gameplay pool) and never falls back to `MIGRATION_DATABASE_URL` even if
-    that variable is still set in the process environment from steps 6/8
-    above — there is nothing to remember to unset between the migration
-    steps and starting the server.
-12. Start or replace the `server` service only under a separately
-    authorized rollout step, combining
-    `deploy/docker-compose.staging.yml` with
-    `deploy/docker-compose.staging.db.yml` (never with
-    `deploy/docker-compose.staging.integration.yml`, which is CI-only).
-13. Check `/health` and `/ready`.
-14. Run a persistence-aware external smoke
-    (`apps/server/scripts/external-staging-smoke.ts`) — see the retained
-    smoke credential note below.
-15. Rollback boundary: if any step from 12 onward fails, stop the new
-    server, leave the previous state in place, and do not proceed until
-    the failure is understood. Destructive rollback of the database itself
-    is only ever a restore from a verified backup (see above) — never an
-    automatic downgrade.
+### Release and input authority
 
-## Retained smoke-credential procedure (future)
+Bind a reviewed main commit and publication evidence for server, client and
+persistence-tools built from that same revision. Verify immutable image digests,
+OCI revision and platform against that evidence on the host; a matching name is
+insufficient. PG17 is pinned in the v3 template. Migration authority is version 1,
+001_persistent_identity_foundation.sql, SHA-256
+66bfea878d6113f4f27f4d20e7430de4dd07c97f97408ebbfe25868a46a4f72b.
+Schema/domain are exactly 1; world slug is public-arena.
 
-`apps/server/scripts/external-staging-smoke.ts` accepts an optional
-`BURNINGSPACE_SMOKE_CREDENTIAL` environment variable. When set, the smoke
-run reuses that operator-provided durable identity instead of creating a
-new guest identity through the public `/identity/guest` boundary on every
-run — this avoids accumulating an unbounded number of durable guest rows
-in the real staging database purely from routine smoke checks.
+Copy the v3 non-secret inventory/plan examples to ignored workstation files.
+Bind origins, images, commit, edge reference and GO. Phase A/template keep
+execution false; only a later GO permits phase B true. Production authorization
+stays false. Reject alphaNonPersistent, previous-arena rollback images, secrets
+and unknown fields.
 
-To provision one: run the smoke script once against real staging without
-`BURNINGSPACE_SMOKE_CREDENTIAL` set (it will create and use a synthetic
-guest identity), capture that guest's credential out-of-band through the
-operator's own secret store (the script itself never prints or logs it),
-and set `BURNINGSPACE_SMOKE_CREDENTIAL` in the operator's secret store for
-subsequent runs. Never commit this credential to the repository.
+The GO binds actual operator locations; there is no mandatory secret-store path
+or new secret-manager product. Use private directories (0700), private files
+(0600 from creation), and no symlinks/shared directories. Real secret-bearing
+phase-a/phase-b preflight requires an approved POSIX workstation environment.
+Native Windows projection reads fail closed: POSIX mode bits cannot establish
+Windows DACL restrictions. Template/non-secret validation remains cross-platform.
+The immediate parent and every projection file must be owned by the invoking
+POSIX workstation UID, which is not necessarily 1000. File-based smoke/proof
+operations also require the approved POSIX environment.
+
+Tools retain UID/GID 1000:1000. Both /run/private and /work must be private,
+non-symlink directories owned by the current tools UID; projections must be
+private regular files owned by that UID. Input must contain exactly the selected
+operation's files. Backup additionally checks /work write/search access before
+starting database work. The VPS needs no Node/npm/tsx or Git checkout.
+
+NEVER resolve EACCES by chmod 0755/0644 or otherwise widening group/other
+permissions. Stop and correct the approved ownership/mount contract instead.
+
+Generate independent passwords through the existing private channel; URL-encode
+userinfo passwords. Do not echo/source files or put secret values in argv.
+Create separate dotenv files with exactly these keys:
+
+| File | Permitted keys |
+| --- | --- |
+| bootstrap.env | BURNINGSPACE_DB_ADMIN_PASSWORD, BURNINGSPACE_DB_MIGRATOR_PASSWORD, BURNINGSPACE_DB_RUNTIME_PASSWORD, BURNINGSPACE_DB_BACKUP_PASSWORD |
+| migrator.env | BURNINGSPACE_MIGRATION_DATABASE_URL |
+| runtime.env | BURNINGSPACE_DATABASE_URL, BURNINGSPACE_EDGE_ASSERTION_SECRET |
+| backup.env | BURNINGSPACE_BACKUP_DATABASE_URL |
+| admin.env | BURNINGSPACE_ADMIN_DATABASE_URL (create/drop only) |
+| runtime-db.env | BURNINGSPACE_DATABASE_URL (runtime privilege check only) |
+
+Connections use fixed matching burningspace_admin/migrator/runtime/backup roles,
+internal host postgres, port 5432 and database burningspace; only the rehearsal
+migrator URL selects its new target database. Empty/example/CI/test/sentinel
+credentials and URL query transport fail validation. Preflight compares the
+four ordinary projections with the effective Compose environment, including
+password conflicts. Each tools directory contains only its operation's files.
+Keep smoke credentials and the raw diagnostic proof separate. Caddy retains
+the approved root:root 0600 systemd credential source and LoadCredential
+transport. Secret hashes are not evidence.
+
+### Compose and preflight
+
+Transfer only the reviewed deployment asset bundle. Its root holds the Compose
+files and postgres/init/001-burningspace-roles.sh at that exact relative path;
+verify init asset bytes/hash against the reviewed release. Always use base,
+then DB, then optional tools overlay. DB-only Compose is incomplete. Build and
+integration overlays are CI-only. There is no restore overlay.
+
+The later GO binds these non-secret path variables: DEPLOY_DIR (asset root),
+INVENTORY (v3 inventory), PRIVATE_DIR (private projections), OP_INPUT (directory
+for exactly one operation's projections), OP_WORK (new private backup directory).
+Disable shell tracing; do not retain rendered Compose JSON in ordinary evidence
+because it contains passwords. Use a clean controlled shell without inherited
+BURNINGSPACE_* overrides; preflight also checks effective bindings.
+
+Under a later GO, prepare new operation directories on the approved POSIX host.
+The GO must bind distinct absolute OP_INPUT/OP_WORK paths beneath a controlled
+parent that untrusted users cannot modify. Refuse existing paths, including
+dangling symlinks. For example, for the status operation (migrator.env only):
+
+~~~bash
+set -euo pipefail
+set +x
+umask 077
+test ! -e "$OP_INPUT" && test ! -L "$OP_INPUT"
+test ! -e "$OP_WORK" && test ! -L "$OP_WORK"
+sudo install -d -m 0700 -o 1000 -g 1000 "$OP_INPUT"
+sudo install -d -m 0700 -o 1000 -g 1000 "$OP_WORK"
+sudo install -m 0600 -o 1000 -g 1000 \
+  "$PRIVATE_DIR/migrator.env" "$OP_INPUT/migrator.env"
+~~~
+
+The source is an already-private, verified non-symlink projection transferred
+through the approved channel; never echo secret values or copy through a public
+temporary file. Use a fresh input directory for each operation and copy only its
+required projections using the same private creation procedure. Reuse the
+verified private backup work directory for restore verification. Host preparation
+may use the approved host administrator; the tools container never requires root.
+Workstation preflight files remain owned by the invoking workstation user; these
+host copies are explicitly owned by 1000:1000. Do not chown workstation inputs
+merely to match the container.
+
+~~~bash
+runtime_compose() {
+  docker compose --project-name burningspace-staging \
+    --env-file "$INVENTORY" --env-file "$PRIVATE_DIR/bootstrap.env" \
+    --env-file "$PRIVATE_DIR/runtime.env" \
+    -f "$DEPLOY_DIR/docker-compose.staging.yml" \
+    -f "$DEPLOY_DIR/docker-compose.staging.db.yml" "$@"
+}
+tools_compose() {
+  BURNINGSPACE_OPERATION_INPUT_DIR="$OP_INPUT" \
+  BURNINGSPACE_OPERATION_WORK_DIR="$OP_WORK" \
+  docker compose --project-name burningspace-staging --profile operator \
+    --env-file "$INVENTORY" --env-file "$PRIVATE_DIR/bootstrap.env" \
+    --env-file "$PRIVATE_DIR/runtime.env" \
+    -f "$DEPLOY_DIR/docker-compose.staging.yml" \
+    -f "$DEPLOY_DIR/docker-compose.staging.db.yml" \
+    -f "$DEPLOY_DIR/docker-compose.staging.tools.yml" "$@"
+}
+~~~
+
+On the approved POSIX workstation, use the reviewed checkout and installed dependencies.
+Feed rendered JSON through a private pipe/file, never ordinary evidence:
+
+~~~bash
+npx tsx apps/server/scripts/external-staging-preflight.ts --phase-a \
+  --env deploy/.env.persistence --plan deploy/external-staging-persistence-plan.json \
+  --private-dir "$PRIVATE_DIR" --deployment-root "$DEPLOY_DIR" --compose-stdin \
+  < "$PRIVATE_RENDERED_COMPOSE"
+~~~
+
+Repeat with --phase-b only after GO, execution=true, and the workstation checkout
+equals the approved target on origin/main. DEPLOY_DIR is the exact host asset
+root. Validate runtime and operator-profile models. The host may render them
+with the functions above and transfer sensitive output privately to the
+workstation; no host validator/development installation is required. Retain
+only fixed validator results. Verify the approved asset hashes separately.
+
+### Database and candidate sequence
+
+Use set -euo pipefail. Every failure aborts before the next mutation; commands
+below are future GO instructions, not an authorization to execute them now.
+
+1. Preserve the running old arena and OPS-002 evidence. If needed for initial
+   candidate configuration, observe its actual socket peer under controlled
+   Caddy traffic. This is an observed provisional address, never a subnet guess,
+   and is not final-topology acceptance.
+2. Under the later publication/pull authorization, pull approved server/client/
+   tools/PG digests and verify source revision/platform/RepoDigests. Follow the
+   existing bounded registry-login procedure; no host build.
+3. Validate models/private projections, then start only PostgreSQL:
+
+~~~bash
+runtime_compose up -d --no-deps postgres
+runtime_compose ps postgres
+docker port "$(runtime_compose ps -q postgres)"
+~~~
+
+The final command must show no host port. Verify internal network, named durable
+volume, exact init mount and healthy PG status; bound health waiting to 100
+seconds. Never reinitialize an existing volume. Server depends_on is not added.
+
+4. Put only migrator.env in OP_INPUT. Run each one-shot and require exit zero:
+
+~~~bash
+tools_compose run --rm --no-deps persistence-tools migrate
+tools_compose run --rm --no-deps persistence-tools status
+tools_compose run --rm --no-deps persistence-tools grants
+tools_compose run --rm --no-deps persistence-tools bootstrap
+tools_compose run --rm --no-deps persistence-tools check-migrator
+~~~
+
+5. Select separate OP_INPUT directories containing only runtime-db.env or only
+   backup.env and run check-runtime and check-backup respectively. Retain only
+   fixed counts/booleans.
+6. Before the persistent candidate accepts traffic, select a fresh OP_WORK and
+   an OP_INPUT containing only migrator.env plus backup.env:
+
+~~~bash
+tools_compose run --rm --no-deps persistence-tools backup
+~~~
+
+The tool exclusively reserves rehearsal.dump (0600), fences the quiesced source,
+and writes the private manifest. Existing files/live writers fail closed.
+Do not overwrite partial backups; preserve verified encrypted copies under the
+GO's retention/access policy.
+
+7. Select OP_INPUT containing only admin.env and create a unique target:
+
+~~~bash
+RESTORE_TARGET="bs_rehearsal_$(openssl rand -hex 12)"
+tools_compose run --rm --no-deps persistence-tools restore-prepare "$RESTORE_TARGET"
+~~~
+
+This is a separate database in the same PG17 cluster, owned by migrator and
+denied to PUBLIC/runtime/backup. CREATE refuses existing names. Before restore,
+the verifier checks its marker/name/owner/CONNECT denial and absence of user
+relations/application schemas. Source data is untouched.
+
+8. Select a separate migrator.env whose database is RESTORE_TARGET (same cluster
+   and role), mount only that projection and the backup work directory:
+
+~~~bash
+tools_compose run --rm --no-deps persistence-tools restore-verify "$RESTORE_TARGET"
+~~~
+
+Require zero exit and schema/domain/world/count/FK/constraint evidence. The
+reviewed image's canonical migrations are checked as well as the manifest.
+Never connect the public application to this target. After success, explicitly
+select admin.env only and clean up:
+
+~~~bash
+tools_compose run --rm --no-deps persistence-tools restore-cleanup "$RESTORE_TARGET"
+~~~
+
+Cleanup refuses source/unmarked/wrong-owner targets and never uses FORCE. On
+failure stop and preserve evidence; disposition stays explicit. A partial
+CREATE lacking a marker needs separately reviewed administrator disposition,
+not a generic destructive retry.
+
+9. Only after preceding gates and the later candidate-start GO:
+
+~~~bash
+runtime_compose up -d --no-deps server client
+curl --fail --max-time 5 http://127.0.0.1:2567/health
+curl --fail --max-time 5 http://127.0.0.1:2567/ready
+~~~
+
+Use the GO-bound port if different. Existing /ready gates persistence boot,
+exact schema/world/domain validation, writer ownership and canonical room
+initialization. No new endpoint is needed; liveness alone is insufficient.
+
+10. Measure on the FINAL candidate topology before acceptance. On peer mismatch,
+    stop candidate, bind the observed literal, revalidate, restart under GO and
+    repeat. Prior-topology observation never satisfies this gate. Follow the
+    Caddy credential/unit/config activation runbook under the later GO; none is
+    never public-persistence acceptance.
+11. Complete the evidence protocol and retained-credential smoke below. On any
+    post-start failure: runtime_compose stop server. Preserve volume, backups,
+    private inputs and evidence; accept controlled downtime. No old-image switch,
+    source restore, DOWN, ledger edits, volume removal or database reset.
+
+### Final socket-peer and admission evidence
+
+Before Deployment GO execution, perform a single bounded availability/version
+check in the approved host administrator context for the already-installed
+observation tools:
+
+~~~bash
+sudo sh -c 'command -v nsenter && command -v ss && nsenter --version && ss --version'
+~~~
+
+Missing tools stop this procedure pending a revised approved preparation plan.
+Do not install packages ad hoc during rollout. These instructions authorize no
+host mutation or host access in this repository readiness task.
+
+Identify the final server container ID/PID, networks, reviewed commit/digests,
+run ID and edge reference. During controlled traffic through real Caddy, use
+already-approved host tools to observe numeric established sockets inside the
+actual server network namespace:
+
+~~~bash
+SERVER_ID="$(runtime_compose ps -q server)"
+SERVER_PID="$(docker inspect --format '{{.State.Pid}}' "$SERVER_ID")"
+sudo nsenter --target "$SERVER_PID" --net \
+  ss -Hntp state established '( sport = :2567 )'
+~~~
+
+Bound observation to at most 20 seconds/20 samples. Correlate one controlled
+request or WebSocket (no printed credential) with Caddy-side time/source
+observation. Exclude or correlate away container-local /health healthcheck
+sockets and host-side direct curl/loopback probe sockets; their presence is not
+evidence of Caddy's peer. Correlate the selected server-netns socket specifically
+to the controlled real-Caddy request/window using timing and connection details.
+An undifferentiated ss listing or ambiguous overlap remains INCONCLUSIVE.
+Record the actual Node socket peer, never a host-side socket or
+Docker-subnet inference. No payload capture, verbose header logs, peer-debug
+endpoint or ad hoc host service. If observation is not discriminating, stop
+INCONCLUSIVE and obtain a revised GO procedure.
+
+Use two real public paths with different IPv4 addresses or IPv6 /64s. Ordinary
+ISP plus independent cellular is a useful default, not a provider requirement.
+Two devices behind one NAT do not qualify. Actual addresses must come from
+controlled Caddy-side observation; runner labels/forwarded-header claims cannot
+establish distinctness.
+
+Each runner's non-secret JSON has exactly the AdmissionConfig fields exported
+by external-staging-admission-smoke.ts: runId (32 hex), targetCommit (40 hex),
+environmentId, topologyId, edgeConfigId, serverOrigin, allowedOrigin,
+sourceAddress, nodePeer. Bind the same run/topology/commit/edge. Synchronize
+clocks and arrange a quiet, fully refilled window, then coordinate:
+
+~~~bash
+# Source A: three invalid-body 400s, then 429.
+npx tsx apps/server/scripts/external-staging-admission-smoke.ts a-exhaust source-a.json > a.json
+# Source B while A stays exhausted: one 400.
+npx tsx apps/server/scripts/external-staging-admission-smoke.ts b-isolation source-b.json > b.json
+# Source A: control and four spoof-negative 429s.
+npx tsx apps/server/scripts/external-staging-admission-smoke.ts a-spoof source-a.json > spoof.json
+~~~
+
+All phases must finish within 20 seconds in order. Requests have 1500 ms
+deadlines, 512-byte response caps, body exactly {}, no retry/redirect. They
+create zero durable guests. Ambiguous timing, shared keys or unexpected
+responses are INCONCLUSIVE. Arrange a new quiet/refill window before any
+reviewed rerun. Fresh-auth remains explicitly INCONCLUSIVE; the deterministic
+guest proof is the required path.
+
+The separate local-proof phase must reach the actual host loopback-published
+Node path. From the approved POSIX operator environment, a separately authorized
+SSH local forward to host 127.0.0.1:<Node port> permits this without Node tooling
+on the VPS, a new host service, or tools-container host networking. Correlate its
+actual Node peer too. In local-proof.json use the forward's exact 127.0.0.1 HTTP
+origin and an unused controlled synthetic source (e.g. 198.51.100.254), preserving
+all other evidence bindings. Pass the actual canonical raw proof through a
+separate 0600 private file:
+
+~~~bash
+npx tsx apps/server/scripts/external-staging-admission-smoke.ts \
+  local-proof local-proof.json "$PRIVATE_PROOF_FILE" > local.json
+~~~
+
+Four rejected proofs (missing/malformed/canonical-incorrect/repeated) must leave
+three correct-proof invalid bodies getting 400 before the fourth gets 429.
+Use a quiet log window so diagnostic rate suppression does not hide required
+reasons. Retain only bounded timestamp/event/reason records for
+admission_trusted_edge_assertion_rejected with edge_proof_missing,
+edge_proof_malformed and edge_proof_rejected inside the phase window.
+Never retain headers, proof values, credentials or secret hashes.
+
+Assemble {a,b,spoof,local,observation,proofLogs} using the strict PeerObservation
+schema, full server container ID, timestamp and references to retained non-secret
+socket/source observations, then validate:
+
+~~~bash
+npx tsx apps/server/scripts/external-staging-admission-smoke.ts validate evidence-bundle.json
+~~~
+
+This validates consistency of supplied evidence; independent review must inspect
+the referenced observations. It cannot manufacture/certify a measurement or
+grant deployment permission.
+
+### Retained smoke credential
+
+In the approved POSIX operator environment, use an existing private directory
+and a new output filename. The file is exclusively reserved at 0600 before the
+single issuance request; no credential reaches stdout/logs/evidence:
+
+~~~bash
+npx tsx apps/server/scripts/external-staging-smoke.ts \
+  --provision-credential "$PRIVATE_SMOKE_FILE"
+BURNINGSPACE_SMOKE_CREDENTIAL_FILE="$PRIVATE_SMOKE_FILE" \
+  npx tsx apps/server/scripts/external-staging-smoke.ts
+~~~
+
+Set the existing BURNINGSPACE_EXTERNAL_SMOKE_CLIENT_ORIGIN, SERVER_ORIGIN,
+ALLOWED_ORIGIN and HOSTILE_ORIGIN variables using the full prefix for each.
+Provisioning needs SERVER_ORIGIN and ALLOWED_ORIGIN. External smoke requires
+retained input; only explicit loopback runs may create a temporary identity.
+An existing output is refused before issuance. Failure leaves a private reserved
+file for explicit disposition. Never capture a credential from ordinary smoke
+output. Provisioning creates one durable guest and is separate from the zero-row
+admission diagnostic.

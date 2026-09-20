@@ -1,5 +1,7 @@
 import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { randomBytes } from 'node:crypto';
+import { prepareRehearsal } from '../../scripts/restore-target.js';
 import { join, resolve as resolvePath } from 'node:path';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
@@ -284,11 +286,16 @@ describe('operator tool secret transport (PERSIST002-SEC-03, real Docker, real P
       });
       expect(manifest.world.worldId).toBe(bootstrap.world.worldId);
 
-      target = await startRoleSeparatedPostgres();
+      const rehearsalName = `bs_rehearsal_${randomBytes(12).toString('hex')}`;
+      await prepareRehearsal(source.adminUrl, rehearsalName, 'burningspace');
+      const rehearsalUrl = new URL(source.migratorUrl);
+      rehearsalUrl.pathname = `/${rehearsalName}`;
+      target = { ...source, migratorUrl: rehearsalUrl.toString(), stop: async () => {} };
       const restoreResult = await restoreAndVerify({
         dumpPath,
         manifestPath,
         targetMigratorUrl: target.migratorUrl,
+        sourceDatabase: 'burningspace',
         grantsSqlPath: grantsSqlWorkPath
       });
       expect(restoreResult.world.worldId).toBe(bootstrap.world.worldId);

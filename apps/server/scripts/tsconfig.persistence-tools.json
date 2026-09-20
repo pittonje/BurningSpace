@@ -5,6 +5,7 @@
     "rootDir": "../../.."
   },
   "include": [
+    "persistence-operator.ts",
     "backup-dump.ts",
     "backup-restore-verify.ts",
     "db-privilege-check.ts",
