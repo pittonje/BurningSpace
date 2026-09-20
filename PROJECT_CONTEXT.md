@@ -1,6 +1,6 @@
 # BurningSpace Project Context
 
-Last updated: 2026-09-13
+Last updated: 2026-09-20
 
 ## Purpose of this document
 
@@ -120,10 +120,13 @@ and fenced session/world lifecycle. See
 The registry now has 39 accepted decisions under explicit delegated PA authority;
 independent Architecture/Security review APPROVED and PERSIST-001 acceptance is
 complete. PERSIST-001 and PERSIST-002 are MERGED / CLOSED; PERSIST002-NET-02 is
-also MERGED / CLOSED. PERSIST002-ROLLOUT-01 is the active repository readiness
-task: explicit persistent v3 contract, immutable role-scoped DB operations,
-isolated restore rehearsal and bounded rollout evidence. Public persistence
-rollout remains BLOCKED and deployment NOT AUTHORIZED. Use
+also MERGED / CLOSED. PERSIST002-ROLLOUT-01 is MERGED / CLOSED through PR #92:
+repository rollout readiness is complete, including the persistent v3 contract,
+immutable role-scoped DB operations, isolated restore rehearsal, bounded rollout
+evidence and operator procedure. Persistence remains NOT DEPLOYED; public
+persistence rollout remains BLOCKED and deployment NOT AUTHORIZED. The next
+program gate is separate Deployment-GO preparation and authorization; this
+reconciliation grants no deployment authority. Use
 [CURRENT](docs/handoffs/CURRENT.md) for exact task/review state and deferred mobile
 UX. Local GameScene remains preserved non-authoritative prototype material.
 
@@ -134,7 +137,7 @@ DOCARCH-005 — Role and Model Portability remains deferred. Use
 
 - Branch protection and possible CI-004 remain dedicated CI work.
 - AGENT-004 and detailed role/model portability remain deferred to DOCARCH-005.
-- Persistence rollout awaits ROLLOUT-01 review, PA disposition and a separate deployment GO; broad accounts and campaign systems remain deferred.
+- Persistence rollout awaits a separate Deployment-GO preparation/authorization step and live acceptance evidence; repository readiness is MERGED / CLOSED. Broad accounts and campaign systems remain deferred.
 - Exact unresolved balance parameters remain outside the accepted mechanics until separately approved.
 
 ## Safe resumption

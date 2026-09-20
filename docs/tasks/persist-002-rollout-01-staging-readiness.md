@@ -1,11 +1,45 @@
 # PERSIST002-ROLLOUT-01 — Persistent staging rollout readiness
 
-Status: IMPLEMENTATION COMPLETE / REVIEW PENDING (design PA accepted). Public persistence rollout
-BLOCKED; deployment NOT AUTHORIZED. NET-02 is MERGED / CLOSED. Public staging
-continues to run the earlier non-persistent runtime.
+Status: **MERGED / CLOSED — REPOSITORY READINESS COMPLETE**.
+PUBLIC PERSISTENCE ROLLOUT — **BLOCKED**; DEPLOYMENT — **NOT AUTHORIZED**.
+Persistence is NOT DEPLOYED. Public staging remains the previously verified
+non-persistent runtime. NET-02 is MERGED / CLOSED.
 
-Canonical base: `ac5ddaac7f70f261fe8357e3fa448ef61c7e56ad`.
-Branch: `ops/persist002-rollout-01-readiness`.
+Implementation base: `ac5ddaac7f70f261fe8357e3fa448ef61c7e56ad`.
+Implementation branch: `ops/persist002-rollout-01-readiness`.
+
+## Final repository closure — 2026-09-20
+
+- [PR #92](https://github.com/pittonje/BurningSpace/pull/92) was human-merged following PA exact-head merge authorization.
+- Approved source: `ec3d0ffc93669a419c854066af0a2ed87fa2b399`.
+- Merge commit: `cb1d713d09db2ae19d6c95ea6dc9a9593953f4e1`.
+- Parents, in order: `ac5ddaac7f70f261fe8357e3fa448ef61c7e56ad`, then `ec3d0ffc93669a419c854066af0a2ed87fa2b399`.
+- Source tree and merge tree both equal `a9cba7959f23b7dbc979783bd548478642dd33e9`: tree equivalence **PASS**.
+- Final exact-source [Core 35481899311](https://github.com/pittonje/BurningSpace/actions/runs/35481899311): **SUCCESS**.
+- Final exact-source [governed Claude QA 35481899305](https://github.com/pittonje/BurningSpace/actions/runs/35481899305): **SUCCESS**, Approved with suggestions, blockers: None.
+- Final local source evidence: **60 files / 727 tests passed**, with all 21 Windows POSIX-only skips separately passed in Linux. These are source-head results, not fresh runs for this docs-only reconciliation.
+
+Independent review/PA evidence supplied separately from GitHub automated runs:
+FIX1 closed M1 private Windows/input handling, M2 UID/directory contracts, M3
+discriminating negatives and the PGDG full-fingerprint trust-root correction.
+Senior consolidated review on `b8a05f8da437ab5ec8f509d0dc2ddc13538ba29b` approved
+Architecture and Database/Backup/Recovery; Network/Security/Ops/QA were approved
+with suggestions, with one MEDIUM M-1 in raw edge-proof private-file handling.
+FIX2 at the final source head closed M-1. Targeted independent Security/Network/QA
+review: **APPROVE**, no blockers, HIGH or MEDIUM findings; exact head ready for PA
+disposition. PA authorized that exact head for merge; the human merge completed.
+
+R1–R4, FIX1 and FIX2 detailed records and the original scope/reviewer declaration
+below are historical checkpoints. Their pending-review/future-merge wording is
+superseded by this closure. Frozen technical decisions remain applicable, and
+the current gate disposition below distinguishes satisfied repository gates
+from future live acceptance. No deployment occurred. Next safe program action:
+prepare a separate persistence Deployment-GO gate/packet; no GO is authorized here.
+
+Docs-only reconciliation routing: Architecture recommended and normal governed
+QA/PA disposition. No separate Network/Security/Gameplay/Visual rerouting is
+needed because only provenance/status records change; runtime and design remain
+unchanged.
 
 ## Scope and review routing (declared before implementation)
 
@@ -173,14 +207,21 @@ deployment-GO work. Repository tests cannot substitute for live evidence.
 - Earlier attempts are not hidden: Node 24 default-pool IPC failure and native thread-pool crash prompted the supported Node 22 rerun. Full validation exposed one legacy restore fixture still using the old target, corrected here. A run overlapping the final Compose validator edits was discarded; the frozen-code Node 22 run above is the accepted local result.
 - No gameplay/identity/limiter/Caddy trust code or SQL migration content changed. No VPS, staging DB, public rollout probes, DNS/TLS changes, publication workflow or deployment was executed.
 
-## Gates still required
+## Current gate disposition
 
-1. Exact final PR-head Core SUCCESS and governed QA.
-2. Independent consolidated Architecture/Network/Security/Ops/QA review, then PA disposition and human merge consideration. No independent agents were invoked during implementation.
-3. Separate deployment GO binding environment, toolchain, operator private locations, immutable image provenance and stop-and-preserve recovery.
-4. Actual final-topology Node socket observation through controlled real Caddy; real source-address evidence proving distinct effective admission keys.
-5. Live A/B/spoof and host-loopback invalid-proof/log correlation, no durable rows from the invalid-body probes, retained credential provisioning and multiplayer smoke.
-6. Live PG private-network/volume/role evidence, migration/schema/domain/world readiness, quiesced backup, isolated same-cluster restore verification and explicit cleanup.
+Repository-stage gates are **SATISFIED**: exact-head Core/governed QA,
+independent consolidated review including the targeted FIX2 closure, and PA
+disposition/human merge. See the final closure above for exact evidence bindings.
+
+Future deployment/live-acceptance gates remain **OUTSTANDING**, not completed evidence:
+
+1. Separate persistence Deployment GO binding environment, toolchain, final topology, private operator locations and stop-and-preserve recovery. Preparation of that gate/packet is the next safe action; this reconciliation does not authorize GO or execution.
+2. Image publication and immutable provenance for the approved release; private credentials and Caddy credential activation under the separate GO.
+3. PostgreSQL private-network/volume/role setup, migrations, grants, bootstrap and schema/domain/world readiness.
+4. Quiesced backup, isolated same-cluster restore rehearsal, verification and explicit cleanup.
+5. Exact final-topology Node socket peer observed through controlled real Caddy; two real sources with distinct effective admission keys.
+6. Live A/B/spoof probes and local invalid-proof/log evidence, including zero durable rows from invalid-body probes.
+7. Retained credential provisioning, multiplayer smoke and persistence continuity after application restart.
 
 Existing deferred QA-01/QA-02 archival/completeness work and edge-secret rotation remain outside this task. Fresh-auth diagnostic evidence remains INCONCLUSIVE by design; the bounded guest protocol is the acceptance path. Repository evidence does not pre-write deployed success.
 
